@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { SECTION_COLORS, Waveform } from "../components/Waveform";
@@ -246,7 +247,7 @@ export function SongsView() {
   };
 
   return (
-    <div className="view split">
+    <Panes id="songs" sizes={[420, null]} className="view">
       <div className="pane">
         <h2>Songs</h2>
         <div
@@ -326,6 +327,6 @@ export function SongsView() {
         {ctx.menu}
       </div>
       <div className="pane">{song ? <SongDetail song={song} /> : <p className="hint">Lade einen Song hoch, um ihn zu analysieren.</p>}</div>
-    </div>
+    </Panes>
   );
 }

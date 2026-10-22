@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useMemo, useState } from "react";
 import { api } from "../api";
 import { levelForPwm, pwmOf, SERIES } from "../calibration";
@@ -186,7 +187,7 @@ export function CalibrationView() {
   const darkFloor = levelForPwm(cal.min_level + 1, cal);
 
   return (
-    <div className="view split-right" style={{ gridTemplateColumns: "1fr minmax(360px, 420px)" }}>
+    <Panes id="calibration" sizes={[null, 400]} className="view">
       <div className="pane">
         <div className="row between">
           <h2>Kalibrierung</h2>
@@ -353,6 +354,6 @@ export function CalibrationView() {
           </Field>
         </div>
       </div>
-    </div>
+    </Panes>
   );
 }

@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { bounds, geometryPath, polygonArea, round, wallLength } from "../geometry";
@@ -346,7 +347,7 @@ export function RoomView() {
     });
 
   return (
-    <div className="view split">
+    <Panes id="room" sizes={[400, null]} className="view">
       <div className="pane">
         <h2>Raum</h2>
         <Field label="Projektname">
@@ -549,8 +550,8 @@ export function RoomView() {
           Projekt löschen
         </button>
       </div>
-      <div className="pane flush" style={{ display: "grid", gridTemplateRows: "minmax(0, 1.1fr) minmax(0, 1fr)", overflow: "hidden" }}>
-        <div style={{ position: "relative", borderBottom: "1px solid var(--line)", minHeight: 0, overflow: "hidden" }}>
+      <Panes id="room-right" dir="col" sizes={[null, 380]}>
+        <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
           <FloorPlanEditor
             room={room}
             onChange={setFloor}
@@ -593,7 +594,7 @@ export function RoomView() {
             <span className="badge">3D-Ansicht</span>
           </div>
         </div>
-      </div>
-    </div>
+      </Panes>
+    </Panes>
   );
 }

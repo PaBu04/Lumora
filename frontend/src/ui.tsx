@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Vec3 } from "./types";
 
 export function NumberInput({
@@ -102,6 +103,29 @@ export function Field({ label, children, stack }: { label: ReactNode; children: 
       <label>{label}</label>
       <div>{children}</div>
     </div>
+  );
+}
+
+/** Dialog over the app; closes on Escape, the ✕ button or a click next to it. */
+export function Modal({ title, onClose, children, width = 760 }: { title: string; onClose: () => void; children: ReactNode; width?: number }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onClose]);
+  return createPortal(
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width }} role="dialog" aria-label={title}>
+        <div className="modal-head">
+          <strong>{title}</strong>
+          <button className="btn ghost icon" title="Schließen (Esc)" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -212,6 +236,13 @@ export function Icon({ name }: { name: string }) {
     stop: <rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" />,
     plus: <path d="M12 5v14M5 12h14" />,
     trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
+    info: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 11v6M12 7.5v.5" />
+      </>
+    ),
+    spark: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z" />,
   };
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" width={18} height={18}>

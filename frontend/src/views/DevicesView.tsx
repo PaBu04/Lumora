@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useState } from "react";
 import { api } from "../api";
 import { uid } from "../geometry";
@@ -421,7 +422,7 @@ export function DevicesView() {
   const known = new Set(project.controllers.map((c) => c.host.split(":")[0]));
 
   return (
-    <div className="view split-right">
+    <Panes id="devices" sizes={[null, 360]} className="view">
       <div className="pane">
         <div className="row between">
           <h2>Controller (WLED)</h2>
@@ -507,6 +508,6 @@ export function DevicesView() {
           </div>
         </div>
       </div>
-    </div>
+    </Panes>
   );
 }

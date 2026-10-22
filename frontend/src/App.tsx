@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "./api";
 import { useStore, type Tab } from "./store";
-import { Icon } from "./ui";
+import { Icon, Modal } from "./ui";
 // views are loaded on demand so the first paint does not wait for three.js
-const AiView = lazy(() => import("./views/AiView").then((m) => ({ default: m.AiView })));
+const McpInfo = lazy(() => import("./views/AiView").then((m) => ({ default: m.McpInfo })));
 const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
 const DevicesView = lazy(() => import("./views/DevicesView").then((m) => ({ default: m.DevicesView })));
 const FixturesView = lazy(() => import("./views/FixturesView").then((m) => ({ default: m.FixturesView })));
@@ -18,7 +18,6 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "calibration", label: "Kalibrierung", icon: "calibrate" },
   { id: "songs", label: "Songs", icon: "music" },
   { id: "shows", label: "Shows", icon: "show" },
-  { id: "ai", label: "KI / MCP", icon: "ai" },
 ];
 
 function Welcome() {
@@ -137,6 +136,24 @@ function StatusArea() {
   );
 }
 
+function McpButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="btn ghost small" title="Eigene KI-Programme (Claude Desktop, Claude Code …) über MCP verbinden" onClick={() => setOpen(true)}>
+        <Icon name="info" /> MCP
+      </button>
+      {open && (
+        <Modal title="KI-Programme über MCP verbinden" onClose={() => setOpen(false)}>
+          <Suspense fallback={<p className="hint">Lade…</p>}>
+            <McpInfo />
+          </Suspense>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** Where frames go: only the 3D preview, or also to the LEDs. */
 function ModeSwitch() {
   const mode = useStore((s) => s.playback?.mode);
@@ -194,17 +211,18 @@ export function App() {
         <div className="spacer" />
         {project && <StatusArea />}
         {project && <ModeSwitch />}
+        <McpButton />
       </header>
       <nav className="sidebar">
         {NAV.map((n) => (
-          <button key={n.id} className={`nav-btn${tab === n.id ? " active" : ""}`} disabled={!project && n.id !== "ai"} onClick={() => setTab(n.id)}>
+          <button key={n.id} className={`nav-btn${tab === n.id ? " active" : ""}`} disabled={!project} onClick={() => setTab(n.id)}>
             <Icon name={n.icon} />
             {n.label}
           </button>
         ))}
       </nav>
       <main className="main">
-        {ready && !project && tab !== "ai" ? (
+        {ready && !project ? (
           <Welcome />
         ) : (
           <Suspense fallback={<div className="welcome hint">Lade…</div>}>
@@ -214,7 +232,6 @@ export function App() {
             {tab === "calibration" && <CalibrationView />}
             {tab === "songs" && <SongsView />}
             {tab === "shows" && <ShowsView />}
-            {tab === "ai" && <AiView />}
           </Suspense>
         )}
       </main>

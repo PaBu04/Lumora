@@ -10,7 +10,8 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - Grundriss als 2D-Skizze (Ecken ziehen, einfügen, löschen, Vorlagen) plus Raumhöhe – oder ein Foto /
   einen Bauplan hochladen, Maßstab über zwei Punkte festlegen und die Ecken nachzeichnen.
 - LED-Strips als Linien, Bezier-Kurven, Bögen, Kreise und Matrizen; Presets (Deckenumrandung, Wandleiste,
-  Eckstreifen, Deckenring, Wand-Matrix, Herz); Punkte per 3D-Gizmo verschieben (rastet an Wänden, Boden, Decke ein),
+  Eckstreifen, Deckenring, Wand-Matrix, Herz mit Größe und Drehung); Punkte per 3D-Gizmo verschieben (rastet an
+  Wänden, Boden, Decke ein),
   ganze Strips verschieben, Punkte per Drag-and-Drop umsortieren.
 - 3D-Ansicht perspektivisch oder orthografisch, Achsenkreuz (X/Y/Z) zum Orientieren.
 - Betrachter (im Reiter *Raum*) mit Position und Blickrichtung: Effekte können „von links nach rechts durchs
@@ -35,7 +36,8 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - **Synchronisation:** Sync-Test (Klick auf jeden Beat + LED-Blitz) zum Einstellen von Audio- und Controller-Latenz.
 
 **Musik**
-- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten, Abschnitten (Intro/Strophe/Refrain/
+- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten, Trommeltreffern (Kick, Snare, Hi-Hat),
+  Abschnitten (Intro/Strophe/Refrain/
   Break/Bridge/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2 und auf 0,1 BPM genau.
 - Optional genauere Beat-Erkennung mit dem neuronalen Modell *beat_this* (`pip install -e ".[ml]"`).
 - **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –
@@ -44,9 +46,15 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 **Shows**
 - Grafischer Timeline-Editor: Clips ziehen, kürzen, an Beats/Takte einrasten, Mehrfachauswahl, Kopieren/Einfügen,
   Ebenen; Inspektor mit Reglern, Farbwählern, Paletten und den Modi Wert / Audio / LFO / Keyframes; Ziel-Editor.
-- 14 Effekte, eigene Effekte als Python/numpy-Shader (laufen in einem eigenen Prozess), **Looks** als
+- 16 Effekte, darunter *Hits* (kurze LED-Segmente leuchten auf Kick/Snare/Hi-Hat auf) und *Sweep* (ein Lichtband
+  läuft durch den ganzen Raum, z. B. vom Boden zur Decke, über alle Strips hinweg). Muster lassen sich in Metern
+  entlang der Strips legen (Achse `s`), damit lange und kurze Strips gleich aussehen.
+- Der Betrachter sieht nicht alle LEDs: Ziele „im Blick“ / „hinter mir“ trennen Detail-Effekte von Raumlicht.
+- Eigene Effekte als Python/numpy-Shader (laufen in einem eigenen Prozess), **Looks** als
   wiederverwendbare Clip-Gruppen mit Zeiten in Beats (vier mitgeliefert, eigene aus jeder Auswahl).
-- Starter-Show aus der Songstruktur, 3D-Vorschau mit Bloom und Betrachter-Sicht.
+- Starter-Show aus Songstruktur und Raum: dunkle Grundstimmung, jeder sichtbare Strip mit eigenem Effekt,
+  Trommeltreffer und Raum-Sweeps; die Prüfung warnt vor zu heller oder zu gleichförmiger Show.
+- 3D-Vorschau mit Bloom und Betrachter-Sicht; alle Bereiche lassen sich an den Trennlinien größer/kleiner ziehen.
 - **Export** als FSEQ-v2-Paket für xLights / Falcon Player (kalibrierte Werte, Audio, Kanal-Zuordnung).
 
 **KI**
@@ -110,8 +118,9 @@ wie seine Pins schaffen; `/sim/stats` meldet empfangene und angezeigte FPS).
 
 ## KI
 
-**In der App** (Seite *KI / MCP*): Song wählen, Wunsch beschreiben, *Show generieren*. Der Fortschritt erscheint
-live; das Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf.
+**In der App** (*Shows → Mit KI*): Song wählen, Wunsch beschreiben, *Show generieren*. Der Fortschritt erscheint
+live; das Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf. Die Verbindungsdaten für eigene
+KI-Programme zeigt der Knopf *MCP* oben rechts.
 
 **Eigener Client:** MCP-Endpunkt `http://127.0.0.1:8000/mcp`
 - Claude Code: `claude mcp add --transport http lightshow http://127.0.0.1:8000/mcp`
@@ -120,7 +129,7 @@ live; das Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf.
 
 Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effects`, `get_show_format`,
 `create_show`, `add_clips`, `update_clips`, `remove_clips`, `update_show`, `delete_show`, `validate`,
-`analyze_power`, `list_looks`, `apply_look`, `list_show_versions`, `restore_show_version`, `write_shader`,
+`analyze_light`, `analyze_power`, `list_looks`, `apply_look`, `list_show_versions`, `restore_show_version`, `write_shader`,
 `get_shader`, `get_shader_api`, `render_snapshot`, `render_timeline`, `preview`, `playback`.
 
 ## Show-Format (Kurzfassung)
@@ -129,18 +138,19 @@ Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effec
 {
   "name": "Party", "song_id": "…",
   "layers": [
-    { "name": "Base", "clips": [
-      { "start": 0, "end": 16.5, "effect": "noise", "params": { "palette": "ocean", "brightness": 0.2 } } ] },
-    { "name": "Beat", "clips": [
-      { "start": 16.5, "end": 48, "effect": "pulse", "blend": "add",
-        "params": { "color": "#ff0080", "trigger": "beat", "decay": 0.15 },
-        "target": { "tags": ["ceiling"] } } ] }
+    { "name": "Raum", "clips": [
+      { "start": 0, "end": 48, "effect": "noise", "params": { "palette": "ocean", "brightness": 0.08 },
+        "target": { "view": "indirect" } } ] },
+    { "name": "Drums", "clips": [
+      { "start": 16.5, "end": 48, "effect": "hits", "blend": "max",
+        "params": { "trigger": "kick", "palette": ["#40c0ff", "#ffffff"], "count": 3, "size": 12, "decay": 0.2 },
+        "target": { "tags": ["wall"], "view": "direct" } } ] }
   ]
 }
 ```
 
-Helligkeiten sind wahrgenommen: dunkle Szenen 0,05–0,25, normal 0,3–0,7, Akzente 0,8–1,0, nichts unter 0,03.
-Die vollständige Beschreibung liefert `get_show_format` bzw. die Seite *KI / MCP*.
+Helligkeiten sind wahrgenommen: Grundstimmung 0,03–0,15, Akzente 0,6–1,0, nichts unter 0,03. Lange Strips
+hellen den ganzen Raum auf und brauchen weniger. Die vollständige Beschreibung liefert `get_show_format`.
 
 ## Architektur
 

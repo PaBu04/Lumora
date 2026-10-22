@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useState } from "react";
 import { makePreset, moveItem, PRESETS, round, wallLength, type PresetId } from "../geometry";
 import { useStore } from "../store";
@@ -396,7 +397,7 @@ export function FixturesView() {
   };
 
   return (
-    <div className="view split">
+    <Panes id="fixtures" sizes={[400, null]} className="view">
       <div className="pane">
         <div className="row between">
           <h2>LED-Strips</h2>
@@ -452,6 +453,6 @@ export function FixturesView() {
           <span className="badge">Strip anklicken, dann einen Punkt oder die Raute in der Mitte (ganzer Strip) an den Pfeilen ziehen</span>
         </div>
       </div>
-    </div>
+    </Panes>
   );
 }

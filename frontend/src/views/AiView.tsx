@@ -4,9 +4,9 @@ import { useStore } from "../store";
 import { formatTime } from "../ui";
 
 const EXAMPLES = [
-  "Ruhiger Start in Blautönen, im Refrain auf jeden Beat pulsieren, bei Drops Wellen von links nach rechts durch mein Blickfeld.",
-  "Atmosphärisch und dunkel: langsame Farbwolken, nur Akzente auf den Taktanfängen, Höhepunkt im letzten Refrain.",
-  "Party: kräftige Farben, Lauflichter im Takt, kurze Stroboskop-Momente vor jedem Refrain.",
+  "Dunkel und atmosphärisch: im Intro nur leichtes Glimmen, im Refrain Treffer auf Kick und Snare auf den Strips vor mir, die Strips hinter mir nur als Raumfarbe, bei Drops ein Lichtband vom Boden zur Decke.",
+  "Ruhig und warm in Bernstein und Rot: wenige, langsame Bewegungen, Akzente nur auf den Taktanfängen, Höhepunkt im letzten Refrain.",
+  "Party: kräftige Farben, viel Abwechslung zwischen den Strips, Hi-Hats als Glitzern, kurze Blitze im ganzen Raum vor jedem Refrain.",
 ];
 
 /** Minimal inline markdown: **bold** and `code`. */
@@ -27,7 +27,7 @@ function Md({ text }: { text: string }) {
   );
 }
 
-function Generator() {
+export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   const slug = useStore((s) => s.slug);
   const songs = useStore((s) => s.songs);
   const shows = useStore((s) => s.shows);
@@ -170,6 +170,7 @@ function Generator() {
               onClick={async () => {
                 setPlayback(await api.load(slug, run.show_ids[run.show_ids.length - 1]));
                 setTab("shows");
+                onOpenShow?.();
               }}
             >
               Show öffnen
@@ -188,73 +189,61 @@ const TOOLS: [string, string][] = [
   ["list_effects / get_show_format", "Effektbibliothek und Show-Format"],
   ["create_show, add_clips, update_clips, remove_clips, update_show", "Shows programmieren"],
   ["write_shader / get_shader_api", "Eigene Effekte in Python/numpy"],
-  ["validate / analyze_power", "Fehler, Hinweise und Strombedarf prüfen"],
+  ["validate / analyze_light / analyze_power", "Fehler, Helligkeit, Abwechslung und Strombedarf prüfen"],
   ["list_looks / apply_look", "Wiederverwendbare Clip-Gruppen (in Beats) einsetzen"],
   ["list_show_versions / restore_show_version", "Versionen ansehen und zurückrollen"],
   ["render_snapshot / render_timeline", "Bilder zur Selbstkontrolle der KI"],
   ["preview / playback", "Show in der App abspielen"],
 ];
 
-export function AiView() {
+/** How to connect an own AI client (Claude Desktop, Claude Code, ...) to the app's MCP server. */
+export function McpInfo() {
   const slug = useStore((s) => s.slug);
   const origin = location.port === "5173" ? `${location.protocol}//${location.hostname}:8000` : location.origin;
   const url = `${origin}/mcp`;
   const desktop = JSON.stringify({ mcpServers: { lightshow: { command: "npx", args: ["-y", "mcp-remote", url] } } }, null, 2);
   return (
-    <div className="view">
-      <div className="pane" style={{ maxWidth: 900 }}>
-        <h2>KI-Shows</h2>
-        <div className="card">
-          <strong>Show mit KI erstellen</strong>
-          <Generator />
-        </div>
-        <details className="fold">
-          <summary>
-            <span>Eigener KI-Client über MCP</span>
-            <span className="unit">für Claude Desktop, Claude Code und andere KI-Programme</span>
-          </summary>
-          <p className="hint" style={{ fontSize: 14 }}>
-            Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die
-            Musikanalyse und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.
-          </p>
-          <div className="card">
-            <strong>MCP-Endpunkt</strong>
-            <pre className="code">{url}</pre>
-            <p className="hint">Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.</p>
-          </div>
-          <div className="card">
-            <strong>Claude Code</strong>
-            <pre className="code">claude mcp add --transport http lightshow {url}</pre>
-          </div>
-          <div className="card">
-            <strong>Claude Desktop</strong>
-            <p className="hint">In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):</p>
-            <pre className="code">{desktop}</pre>
-          </div>
-          <div className="card">
-            <strong>Beispiel-Auftrag</strong>
-            <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
-              {`Schau dir mit get_overview mein Projekt${slug ? ` „${slug}"` : ""} an und analysiere den Song.
-Erstelle eine Show, die im Intro ruhig mit Blautönen beginnt, im Refrain auf jeden Beat
-pulsiert und bei Drops Wellen von links nach rechts durch mein Blickfeld schickt.
-Prüfe das Ergebnis mit render_timeline und starte danach preview.`}
-            </pre>
-          </div>
-          <h3 style={{ marginTop: 14 }}>Werkzeuge</h3>
-          <table className="grid">
-            <tbody>
-              {TOOLS.map(([k, v]) => (
-                <tr key={k}>
-                  <td>
-                    <code>{k}</code>
-                  </td>
-                  <td className="unit">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </details>
+    <>
+      <p className="hint" style={{ fontSize: 13.5, marginTop: 0 }}>
+        Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die Musikanalyse
+        und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.
+      </p>
+      <div className="card">
+        <strong>MCP-Endpunkt</strong>
+        <pre className="code">{url}</pre>
+        <p className="hint">Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.</p>
       </div>
-    </div>
+      <div className="card">
+        <strong>Claude Code</strong>
+        <pre className="code">claude mcp add --transport http lightshow {url}</pre>
+      </div>
+      <div className="card">
+        <strong>Claude Desktop</strong>
+        <p className="hint">In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):</p>
+        <pre className="code">{desktop}</pre>
+      </div>
+      <div className="card">
+        <strong>Beispiel-Auftrag</strong>
+        <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
+          {`Schau dir mit get_overview mein Projekt${slug ? ` „${slug}"` : ""} an und analysiere den Song.
+Erstelle eine dunkle Show: im Intro nur Glimmen, im Refrain Treffer auf Kick und Snare auf den
+Strips vor mir, die Strips hinter mir nur als Raumfarbe. Prüfe mit analyze_light und render_timeline
+und starte danach preview.`}
+        </pre>
+      </div>
+      <h3 style={{ marginTop: 14 }}>Werkzeuge</h3>
+      <table className="grid">
+        <tbody>
+          {TOOLS.map(([k, v]) => (
+            <tr key={k}>
+              <td>
+                <code>{k}</code>
+              </td>
+              <td className="unit">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

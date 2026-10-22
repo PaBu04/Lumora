@@ -1,3 +1,4 @@
+import { Panes } from "../components/Panes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { SERIES } from "../calibration";
@@ -11,8 +12,9 @@ import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type Sna
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show } from "../types";
-import { Field, formatTime, Icon, useContextMenu } from "../ui";
+import { Field, formatTime, Icon, Modal, useContextMenu } from "../ui";
 import { moveItem } from "../geometry";
+import { AiGenerator } from "./AiView";
 
 function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   const slug = useStore((s) => s.slug)!;
@@ -445,6 +447,8 @@ export function ShowsView() {
   const [zoom, setZoom] = useState(1);
   const [pick, setPick] = useState("pulse");
   const [creating, setCreating] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiRun = useStore((s) => s.aiRun);
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
   const ctx = useContextMenu();
   const bumpShowRevision = useStore((s) => s.bumpShowRevision);
@@ -590,14 +594,26 @@ export function ShowsView() {
   const defaultEffect = effects.find((e) => e.id === pick) ?? { id: pick };
 
   return (
-    <div className="view" style={{ gridTemplateColumns: "230px minmax(0, 1fr) 380px" }}>
+    <Panes id="shows" sizes={[240, null, 380]} className="view">
       <div className="pane">
-        <div className="row between" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>Shows</h2>
-          <button className={`btn small${creating ? " active" : " primary"}`} onClick={() => setCreating(!creating)}>
+        <h2>Shows</h2>
+        <div className="row" style={{ marginBottom: 12, flexWrap: "nowrap" }}>
+          <button className={`btn small grow${creating ? " active" : " primary"}`} onClick={() => setCreating(!creating)}>
             {creating ? "Abbrechen" : "+ Neue Show"}
           </button>
+          <button
+            className={`btn small grow${aiRun?.status === "running" ? " active" : ""}`}
+            title="Show von Claude erstellen lassen (dein Claude-Abo, keine API-Kosten)"
+            onClick={() => setAiOpen(true)}
+          >
+            <Icon name="spark" /> {aiRun?.status === "running" ? "KI arbeitet…" : "Mit KI"}
+          </button>
         </div>
+        {aiOpen && (
+          <Modal title="Show mit KI erstellen" onClose={() => setAiOpen(false)} width={820}>
+            <AiGenerator onOpenShow={() => setAiOpen(false)} />
+          </Modal>
+        )}
         {creating && <NewShowForm onCreated={open} onClose={() => setCreating(false)} />}
         <LiveInputCard />
         {show && <ExportCard slug={slug} showId={show.id} />}
@@ -651,7 +667,7 @@ export function ShowsView() {
         {ctx.menu}
       </div>
 
-      <div className="pane flush" style={{ display: "grid", gridTemplateRows: "minmax(160px, 1fr) auto auto minmax(170px, 36vh)", minWidth: 0 }}>
+      <Panes id="shows-mid" dir="col" sizes={[null, 320]} min={120}>
         <div style={{ position: "relative" }}>
           <div className="canvas-wrap">
             <Scene3D viewerCam={viewerCam} />
@@ -666,6 +682,7 @@ export function ShowsView() {
             </button>
           </div>
         </div>
+        <div className="player-area">
         <Transport duration={duration} analysis={analysis} />
         {show ? (
           <div className="editor-toolbar">
@@ -747,7 +764,8 @@ export function ShowsView() {
             <span className="hint">Show links auswählen oder erstellen.</span>
           </div>
         )}
-      </div>
+        </div>
+      </Panes>
 
       <div className="pane" style={{ display: "flex", flexDirection: "column" }}>
         <div className="row" style={{ marginBottom: 12 }}>
@@ -788,6 +806,6 @@ export function ShowsView() {
           {panel === "shader" && <ShaderPanel slug={slug} />}
         </div>
       </div>
-    </div>
+    </Panes>
   );
 }
