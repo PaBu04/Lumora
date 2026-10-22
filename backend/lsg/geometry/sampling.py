@@ -50,12 +50,7 @@ def _bezier_points(geom: BezierGeometry) -> np.ndarray:
     parts = []
     for k in range(0, len(pts) - 1, 3):
         p0, p1, p2, p3 = pts[k : k + 4]
-        seg = (
-            (1 - t) ** 3 * p0
-            + 3 * (1 - t) ** 2 * t * p1
-            + 3 * (1 - t) * t**2 * p2
-            + t**3 * p3
-        )
+        seg = (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t**2 * p2 + t**3 * p3
         parts.append(seg if not parts else seg[1:])
     return np.concatenate(parts)
 

@@ -39,10 +39,14 @@ def click_track(path: Path, bpm: float = 100.0, seconds: float = 60.0) -> Path:
 def sync_features(bpm: float, seconds: float) -> AudioFeatures:
     beats = np.arange(0.0, seconds - 0.1, 60.0 / bpm)
     analysis = Analysis(
-        duration=seconds, bpm=bpm, beats=beats.round(4).tolist(), downbeats=beats[::4].round(4).tolist(),
+        duration=seconds,
+        bpm=bpm,
+        beats=beats.round(4).tolist(),
+        downbeats=beats[::4].round(4).tolist(),
         onsets=beats.round(4).tolist(),
         sections=[Section(start=0.0, end=seconds, name="verse", label="A", energy=0.5)],
-        frame_rate=10.0, features={k: [0.5] * int(seconds * 10) for k in ("rms", "low", "mid", "high", "onset")},
+        frame_rate=10.0,
+        features={k: [0.5] * int(seconds * 10) for k in ("rms", "low", "mid", "high", "onset")},
         waveform=[0.0],
     )
     return AudioFeatures(analysis)
@@ -50,10 +54,27 @@ def sync_features(bpm: float, seconds: float) -> AudioFeatures:
 
 def sync_show(seconds: float) -> Show:
     return Show(
-        id=SYNC_SHOW_ID, name="Sync-Test", duration=seconds,
-        layers=[Layer(name="Flash", clips=[
-            Clip(start=0, end=seconds, effect="pulse", params={"color": "#ffffff", "trigger": "beat", "decay": 0.05, "brightness": 0.8}),
-            Clip(start=0, end=seconds, effect="pulse", blend="add",
-                 params={"color": "#ff0060", "trigger": "bar", "decay": 0.08, "brightness": 0.6}),
-        ])],
+        id=SYNC_SHOW_ID,
+        name="Sync-Test",
+        duration=seconds,
+        layers=[
+            Layer(
+                name="Flash",
+                clips=[
+                    Clip(
+                        start=0,
+                        end=seconds,
+                        effect="pulse",
+                        params={"color": "#ffffff", "trigger": "beat", "decay": 0.05, "brightness": 0.8},
+                    ),
+                    Clip(
+                        start=0,
+                        end=seconds,
+                        effect="pulse",
+                        blend="add",
+                        params={"color": "#ff0060", "trigger": "bar", "decay": 0.08, "brightness": 0.6},
+                    ),
+                ],
+            )
+        ],
     )

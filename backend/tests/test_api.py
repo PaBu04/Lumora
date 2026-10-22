@@ -7,8 +7,13 @@ from fastapi.testclient import TestClient
 from lsg.app import create_app
 
 FIXTURES = [
-    {"id": "front", "name": "Front", "geometry": {"type": "polyline", "points": [[0.2, 4, 2.4], [4.8, 4, 2.4]]},
-     "leds_per_meter": 30, "tags": ["ceiling"]},
+    {
+        "id": "front",
+        "name": "Front",
+        "geometry": {"type": "polyline", "points": [[0.2, 4, 2.4], [4.8, 4, 2.4]]},
+        "leds_per_meter": 30,
+        "tags": ["ceiling"],
+    },
     {"id": "ring", "name": "Ring", "geometry": {"type": "circle", "center": [2.5, 2, 2.5], "radius": 0.5}, "led_count": 24},
 ]
 
@@ -69,7 +74,9 @@ def test_song_show_playback_flow(client):
     assert [i for i in issues if i["severity"] == "error"] == []
     png = client.get(f"/api/projects/{slug}/shows/{show['id']}/snapshot.png", params={"t": 40}).content
     assert png[:4] == b"\x89PNG"
-    png = client.get(f"/api/projects/{slug}/shows/{show['id']}/timeline.png", params={"start": 0, "end": 20, "width": 200}).content
+    png = client.get(
+        f"/api/projects/{slug}/shows/{show['id']}/timeline.png", params={"start": 0, "end": 20, "width": 200}
+    ).content
     assert png[:4] == b"\x89PNG"
 
     with client.websocket_connect("/ws") as ws:

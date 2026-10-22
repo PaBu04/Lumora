@@ -187,7 +187,9 @@ class Chase(Effect):
 
 class Wave(Effect):
     id, name = "wave", "Wave"
-    description = "Soft bands travelling along an axis, e.g. axis 'azimuth' sweeps left to right through the viewer's field of view."
+    description = (
+        "Soft bands travelling along an axis, e.g. axis 'azimuth' sweeps left to right through the viewer's field of view."
+    )
     params = (
         Param("color", "color", "#00a0ff", "wave colour"),
         Param("axis", "axis", "x", "direction of travel", dynamic=False),
@@ -211,7 +213,14 @@ class Ripple(Effect):
     params = (
         Param("color", "color", "#ff00ff", "ring colour"),
         Param("center", "point", "viewer", "origin: [x, y, z] in metres, 'viewer' or 'center'"),
-        Param("trigger", "enum", "beat", "beat / bar / onset or interval", options=("beat", "bar", "onset", "interval"), dynamic=False),
+        Param(
+            "trigger",
+            "enum",
+            "beat",
+            "beat / bar / onset or interval",
+            options=("beat", "bar", "onset", "interval"),
+            dynamic=False,
+        ),
         Param("interval", "number", 1.0, "seconds between rings when trigger = interval", 0.05, 30.0),
         Param("speed", "number", 4.0, "ring speed in metres per second", 0.1, 50.0),
         Param("width", "number", 0.4, "ring thickness in metres", 0.02, 10.0),
@@ -342,7 +351,9 @@ class Noise(Effect):
 
 class Spotlight(Effect):
     id, name = "spotlight", "Spotlight"
-    description = "Lights the LEDs around a viewing direction (azimuth/elevation as seen by the viewer). Animate with keyframes or lfo."
+    description = (
+        "Lights the LEDs around a viewing direction (azimuth/elevation as seen by the viewer). Animate with keyframes or lfo."
+    )
     params = (
         Param("color", "color", "#ffffff", "spot colour"),
         Param("azimuth", "number", 0.0, "degrees, 0 = straight ahead, negative = left", -180.0, 180.0),
@@ -387,8 +398,20 @@ class Split(Effect):
 EFFECTS: dict[str, Effect] = {
     e.id: e
     for e in (
-        Solid(), Gradient(), Rainbow(), Pulse(), Strobe(), Chase(), Wave(), Ripple(),
-        Sparkle(), Fade(), Vu(), Noise(), Spotlight(), Split(),
+        Solid(),
+        Gradient(),
+        Rainbow(),
+        Pulse(),
+        Strobe(),
+        Chase(),
+        Wave(),
+        Ripple(),
+        Sparkle(),
+        Fade(),
+        Vu(),
+        Noise(),
+        Spotlight(),
+        Split(),
     )
 }
 

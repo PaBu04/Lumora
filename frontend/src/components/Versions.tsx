@@ -25,10 +25,11 @@ export function Versions({ showId, limit = 40 }: { showId?: string; limit?: numb
   const project = useStore((s) => s.project);
   const notify = useStore((s) => s.notify);
   const [versions, setVersions] = useState<Version[] | null>(null);
+  const projectDep = showId ? null : project; // project edits add project versions
 
   useEffect(() => {
     (showId ? api.showVersions(slug, showId) : api.projectVersions(slug)).then(setVersions).catch(() => setVersions([]));
-  }, [slug, showId, rev, showId ? null : project]);
+  }, [slug, showId, rev, projectDep]);
 
   if (!versions) return <p className="hint">Lade Verlauf…</p>;
   if (versions.length === 0) return <p className="hint">Noch keine Versionen.</p>;

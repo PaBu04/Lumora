@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useStore, type Tab } from "./store";
 import { Icon } from "./ui";
-import { AiView } from "./views/AiView";
-import { CalibrationView } from "./views/CalibrationView";
-import { DevicesView } from "./views/DevicesView";
-import { FixturesView } from "./views/FixturesView";
-import { RoomView } from "./views/RoomView";
-import { ShowsView } from "./views/ShowsView";
-import { SongsView } from "./views/SongsView";
+// views are loaded on demand so the first paint does not wait for three.js
+const AiView = lazy(() => import("./views/AiView").then((m) => ({ default: m.AiView })));
+const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
+const DevicesView = lazy(() => import("./views/DevicesView").then((m) => ({ default: m.DevicesView })));
+const FixturesView = lazy(() => import("./views/FixturesView").then((m) => ({ default: m.FixturesView })));
+const RoomView = lazy(() => import("./views/RoomView").then((m) => ({ default: m.RoomView })));
+const ShowsView = lazy(() => import("./views/ShowsView").then((m) => ({ default: m.ShowsView })));
+const SongsView = lazy(() => import("./views/SongsView").then((m) => ({ default: m.SongsView })));
 
 const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "room", label: "Raum", icon: "room" },
@@ -187,7 +188,7 @@ export function App() {
         {ready && !project && tab !== "ai" ? (
           <Welcome />
         ) : (
-          <>
+          <Suspense fallback={<div className="welcome hint">Lade…</div>}>
             {tab === "room" && <RoomView />}
             {tab === "fixtures" && <FixturesView />}
             {tab === "devices" && <DevicesView />}
@@ -195,7 +196,7 @@ export function App() {
             {tab === "songs" && <SongsView />}
             {tab === "shows" && <ShowsView />}
             {tab === "ai" && <AiView />}
-          </>
+          </Suspense>
         )}
       </main>
       <div className="toasts">

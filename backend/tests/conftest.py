@@ -1,7 +1,7 @@
 import pytest
 
-from lsg.audio.demo import make_demo_track
 from lsg.audio.analysis import analyse_file
+from lsg.audio.demo import make_demo_track
 from lsg.model.controller import Controller, FixtureMapping
 from lsg.model.fixture import CircleGeometry, Fixture, MatrixGeometry, PolylineGeometry
 from lsg.model.project import Project
@@ -23,14 +23,28 @@ def project() -> Project:
         room=Room(floor=[(0, 0), (5, 0), (5, 4), (0, 4)], height=2.5),
         viewer=Viewer(position=(2.5, 0.5, 1.6), yaw_deg=90),
         fixtures=[
-            Fixture(id="north", name="North wall", geometry=PolylineGeometry(points=[(0.2, 4, 2.4), (4.8, 4, 2.4)]),
-                    leds_per_meter=30, tags=["wall", "ceiling"]),
-            Fixture(id="west", name="West wall", geometry=PolylineGeometry(points=[(0, 0.5, 2.4), (0, 3.8, 2.4)]),
-                    leds_per_meter=30, tags=["wall"]),
-            Fixture(id="ring", name="Ring", geometry=CircleGeometry(center=(2.5, 2, 2.5), radius=0.6), led_count=40,
-                    tags=["ceiling"]),
-            Fixture(id="panel", name="Panel", geometry=MatrixGeometry(origin=(2, 3.95, 1.8), col_dir=(1, 0, 0),
-                    row_dir=(0, 0, -1), cols=8, rows=8, pitch=0.05)),
+            Fixture(
+                id="north",
+                name="North wall",
+                geometry=PolylineGeometry(points=[(0.2, 4, 2.4), (4.8, 4, 2.4)]),
+                leds_per_meter=30,
+                tags=["wall", "ceiling"],
+            ),
+            Fixture(
+                id="west",
+                name="West wall",
+                geometry=PolylineGeometry(points=[(0, 0.5, 2.4), (0, 3.8, 2.4)]),
+                leds_per_meter=30,
+                tags=["wall"],
+            ),
+            Fixture(
+                id="ring", name="Ring", geometry=CircleGeometry(center=(2.5, 2, 2.5), radius=0.6), led_count=40, tags=["ceiling"]
+            ),
+            Fixture(
+                id="panel",
+                name="Panel",
+                geometry=MatrixGeometry(origin=(2, 3.95, 1.8), col_dir=(1, 0, 0), row_dir=(0, 0, -1), cols=8, rows=8, pitch=0.05),
+            ),
         ],
         controllers=[Controller(id="c1", host="127.0.0.1", mappings=[FixtureMapping(fixture_id="north")])],
     )

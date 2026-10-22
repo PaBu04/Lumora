@@ -95,8 +95,6 @@ class Fixture(BaseModel):
     geometry: Geometry
     led_type: LedType = LedType.WS2812B
     leds_per_meter: float = Field(default=60.0, gt=0, le=1000)
-    led_count: int | None = Field(
-        default=None, ge=1, description="Overrides leds_per_meter; ignored for matrices"
-    )
+    led_count: int | None = Field(default=None, ge=1, description="Overrides leds_per_meter; ignored for matrices")
     reverse: bool = Field(default=False, description="Data input is at the geometric end")
     tags: list[str] = Field(default_factory=list)

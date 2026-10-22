@@ -105,8 +105,9 @@ def _local_ip() -> str:
         s.close()
 
 
-async def run(name: str, leds: int, http_port: int, ddp_port: int, rgbw: bool, mdns: bool,
-              stop: asyncio.Event | None = None) -> None:
+async def run(
+    name: str, leds: int, http_port: int, ddp_port: int, rgbw: bool, mdns: bool, stop: asyncio.Event | None = None
+) -> None:
     sim = SimState(leds, rgbw)
     loop = asyncio.get_running_loop()
     transport, _ = await loop.create_datagram_endpoint(lambda: DdpProtocol(sim), local_addr=("0.0.0.0", ddp_port))
@@ -114,13 +115,18 @@ async def run(name: str, leds: int, http_port: int, ddp_port: int, rgbw: bool, m
     if mdns:
         ip = _local_ip()
         info = ServiceInfo(
-            "_wled._tcp.local.", f"{name}._wled._tcp.local.", addresses=[socket.inet_aton(ip)],
-            port=http_port, properties={"mac": name}, server=f"{name.lower()}.local.",
+            "_wled._tcp.local.",
+            f"{name}._wled._tcp.local.",
+            addresses=[socket.inet_aton(ip)],
+            port=http_port,
+            properties={"mac": name},
+            server=f"{name.lower()}.local.",
         )
         azc = AsyncZeroconf()
         await azc.async_register_service(info)
     server = uvicorn.Server(uvicorn.Config(make_app(sim, name), host="0.0.0.0", port=http_port, log_level="warning"))
     print(f"WLED simulator {name}: http :{http_port}, ddp udp :{ddp_port}, {leds} LEDs{' RGBW' if rgbw else ''}", flush=True)
+
     async def watch_stop():
         await stop.wait()
         server.should_exit = True

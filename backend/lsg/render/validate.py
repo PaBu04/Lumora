@@ -35,15 +35,33 @@ def validate_show(
     duration = renderer.duration
     for layer, c in show.clips():
         if duration and c.start >= duration:
-            issues.append({"severity": "warning", "clip": c.id, "layer": layer.name,
-                           "message": f"clip starts after the end of the song ({duration:.1f}s)"})
+            issues.append(
+                {
+                    "severity": "warning",
+                    "clip": c.id,
+                    "layer": layer.name,
+                    "message": f"clip starts after the end of the song ({duration:.1f}s)",
+                }
+            )
         if c.fade_in + c.fade_out > c.end - c.start + 1e-6:
-            issues.append({"severity": "warning", "clip": c.id, "layer": layer.name,
-                           "message": "fade_in + fade_out is longer than the clip"})
+            issues.append(
+                {
+                    "severity": "warning",
+                    "clip": c.id,
+                    "layer": layer.name,
+                    "message": "fade_in + fade_out is longer than the clip",
+                }
+            )
     for cc in renderer.clips:
         if cc.view.n == 0:
-            issues.append({"severity": "warning", "clip": cc.clip.id, "layer": layer_of.get(cc.clip.id),
-                           "message": "target selects no LEDs"})
+            issues.append(
+                {
+                    "severity": "warning",
+                    "clip": cc.clip.id,
+                    "layer": layer_of.get(cc.clip.id),
+                    "message": "target selects no LEDs",
+                }
+            )
 
     # run every clip a few times to surface runtime errors (bad shader output etc.)
     for cc in renderer.clips:
@@ -62,9 +80,15 @@ def validate_show(
     for layer, c in show.clips():
         b = c.params.get("brightness")
         if isinstance(b, (int, float)) and 0 < b * c.opacity < max(0.03, cutoff * 2):
-            issues.append({"severity": "warning", "clip": c.id, "layer": layer.name,
-                           "message": f"brightness {b * c.opacity:.3f} is at the very bottom of the LED range: it will look "
-                                      "the same as neighbouring dim levels or switch off. Use >= 0.03 (perceived)."})
+            issues.append(
+                {
+                    "severity": "warning",
+                    "clip": c.id,
+                    "layer": layer.name,
+                    "message": f"brightness {b * c.opacity:.3f} is at the very bottom of the LED range: it will look "
+                    "the same as neighbouring dim levels or switch off. Use >= 0.03 (perceived).",
+                }
+            )
 
     if power and project.controllers and (project.power.total_budget_ma or any(c.budget_ma for c in project.controllers)):
         from lsg.output.pipeline import OutputPipeline

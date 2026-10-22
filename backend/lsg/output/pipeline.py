@@ -53,9 +53,11 @@ class OutputPipeline:
         self.table = table
         self.plans = plan_controllers(project, table)
         type_of_fixture = {f.id: LED_TYPES.index(f.led_type) for f in project.fixtures}
-        self.led_type_idx = np.array(
-            [type_of_fixture[table.fixture_ids[i]] for i in table.fixture_index], dtype=np.int8
-        ) if table.count else np.zeros(0, np.int8)
+        self.led_type_idx = (
+            np.array([type_of_fixture[table.fixture_ids[i]] for i in table.fixture_index], dtype=np.int8)
+            if table.count
+            else np.zeros(0, np.int8)
+        )
         self.cal: list[LedCalibration] = [project.calibration[t] for t in LED_TYPES]
         self._residual: dict[str, np.ndarray] = {}
         self._spatial: dict[str, np.ndarray] = {}
@@ -169,7 +171,9 @@ class OutputPipeline:
             stats.total_ma += limited_ma
             stats.total_requested_ma += ma
             stats.controllers[plan.controller.id] = {
-                "ma": round(limited_ma), "requested_ma": round(ma), "scale": round(scale, 3),
+                "ma": round(limited_ma),
+                "requested_ma": round(ma),
+                "scale": round(scale, 3),
                 "budget_ma": plan.controller.budget_ma,
             }
         return outputs, stats

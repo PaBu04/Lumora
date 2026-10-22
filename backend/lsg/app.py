@@ -16,8 +16,9 @@ from lsg.mcp_server import create_mcp
 from lsg.state import AppState
 
 
-def create_app(data_dir: Path | None = None, audio: str | None = None, fps: float | None = None,
-               frontend: Path | None = None) -> FastAPI:
+def create_app(
+    data_dir: Path | None = None, audio: str | None = None, fps: float | None = None, frontend: Path | None = None
+) -> FastAPI:
     st = AppState(data_dir or config.DATA_DIR, audio or config.AUDIO_BACKEND, fps or config.FPS)
     mcp = create_mcp(st)
     mcp_app = mcp.streamable_http_app(streamable_http_path="/mcp", host=config.HOST)

@@ -42,7 +42,9 @@ def test_target_selection(project):
     assert len(high) == 40  # only the ring hangs at 2.5 m
     left = select_leds(Target(where=[Range(field="azimuth", max=-30)]), table, project)
     assert set(table.fixture_index[left]) >= {table.fixture_ids.index("west")}
-    assert len(select_leds(Target(fixtures=["north"], invert=True), table, project)) == table.count - len(range(north.start, north.stop))
+    assert len(select_leds(Target(fixtures=["north"], invert=True), table, project)) == table.count - len(
+        range(north.start, north.stop)
+    )
 
 
 def test_every_effect_renders_with_defaults(project, demo_analysis):
@@ -127,21 +129,25 @@ def render(t, leds, audio, params):
 
 def test_shader_runs(project):
     shader = Shader("hue_sweep", SHADER)
-    r = make_renderer(project, [Clip(start=0, end=5, effect="shader:hue_sweep", params={"speed": 0.3})],
-                      shaders={"hue_sweep": shader})
+    r = make_renderer(
+        project, [Clip(start=0, end=5, effect="shader:hue_sweep", params={"speed": 0.3})], shaders={"hue_sweep": shader}
+    )
     f = r.render(1.0)
     assert not r.errors and f.max() > 0
 
 
-@pytest.mark.parametrize("src", [
-    "import os\ndef render(t, leds, audio, params): return 0",
-    "def render(t, leds, audio, params):\n    while True: pass",
-    "def render(t, leds, audio, params): return open('x')",
-    "def render(t, leds, audio, params): return leds.__class__",
-    "def render(t, leds, audio, params): return np.load('x')",
-    "x = 1",
-    "def render(:",
-])
+@pytest.mark.parametrize(
+    "src",
+    [
+        "import os\ndef render(t, leds, audio, params): return 0",
+        "def render(t, leds, audio, params):\n    while True: pass",
+        "def render(t, leds, audio, params): return open('x')",
+        "def render(t, leds, audio, params): return leds.__class__",
+        "def render(t, leds, audio, params): return np.load('x')",
+        "x = 1",
+        "def render(:",
+    ],
+)
 def test_shader_sandbox_rejects(src):
     with pytest.raises(ShaderError):
         Shader("bad", src)
@@ -160,12 +166,19 @@ def test_shader_runtime_errors_are_contained(project):
 
 def test_validate_show(project):
     table = build_led_table(project)
-    show = Show(layers=[Layer(name="L", clips=[
-        Clip(id="ok", start=0, end=5, effect="solid"),
-        Clip(id="bad", start=0, end=5, effect="wave", params={"speed": "fast"}),
-        Clip(id="empty", start=0, end=5, effect="solid", target=Target(where=[Range(field="z", min=10)])),
-        Clip(id="late", start=40, end=50, effect="solid"),
-    ])])
+    show = Show(
+        layers=[
+            Layer(
+                name="L",
+                clips=[
+                    Clip(id="ok", start=0, end=5, effect="solid"),
+                    Clip(id="bad", start=0, end=5, effect="wave", params={"speed": "fast"}),
+                    Clip(id="empty", start=0, end=5, effect="solid", target=Target(where=[Range(field="z", min=10)])),
+                    Clip(id="late", start=40, end=50, effect="solid"),
+                ],
+            )
+        ]
+    )
     issues = validate_show(show, project, table, AudioFeatures(None, 30), {})
     by = {i["clip"]: i for i in issues}
     assert by["bad"]["severity"] == "error" and "speed" in by["bad"]["message"]
@@ -180,7 +193,13 @@ def test_render_performance(project):
 
     big = project.model_copy(deep=True)
     for k in range(6):
-        big.fixtures.append(Fixture(id=f"f{k}", geometry=PolylineGeometry(points=[(0.1, 0.1 + k * 0.5, 0.3), (4.9, 0.1 + k * 0.5, 2.3)]), leds_per_meter=144))
+        big.fixtures.append(
+            Fixture(
+                id=f"f{k}",
+                geometry=PolylineGeometry(points=[(0.1, 0.1 + k * 0.5, 0.3), (4.9, 0.1 + k * 0.5, 2.3)]),
+                leds_per_meter=144,
+            )
+        )
     effects = ["noise", "wave", "sparkle", "chase", "ripple", "rainbow", "pulse", "spotlight", "gradient", "split"]
     r = make_renderer(big, [Clip(start=0, end=60, effect=e, blend="add") for e in effects])
     assert r.table.count > 4500
@@ -196,6 +215,9 @@ def test_snapshots(project, demo_analysis):
     _, a = demo_analysis
     r = make_renderer(project, [Clip(start=0, end=20, effect="rainbow", params={"axis": "azimuth"})], features=AudioFeatures(a))
     frame = r.render(2.0)
-    for png in (render_viewer_image(project, r.table, frame), render_top_image(project, r.table, frame),
-                render_timeline_image(r, 0, 10, width=200)):
+    for png in (
+        render_viewer_image(project, r.table, frame),
+        render_top_image(project, r.table, frame),
+        render_timeline_image(r, 0, 10, width=200),
+    ):
         assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 1000

@@ -5,6 +5,7 @@ preview (WebSocket) and - in live mode - via DDP to the WLED controllers.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import struct
@@ -17,24 +18,24 @@ from fastapi import WebSocket
 
 from lsg.audio.features import AudioFeatures
 from lsg.geometry.led_table import LedTable, build_led_table
+from lsg.model.calibration import LedCalibration
 from lsg.model.project import Project
 from lsg.model.show import Show
-from lsg.output.ddp import DdpSender
-from lsg.model.calibration import LedCalibration
 from lsg.output.curve import duty_to_lightness
+from lsg.output.ddp import DdpSender
 from lsg.output.pipeline import FrameStats, OutputPipeline
 from lsg.output.wled import resolve_host
 from lsg.playback.patterns import KINDS, pattern_frame
 from lsg.playback.sync import SYNC_SHOW_ID, click_track, sync_features, sync_show
-
-SYNC_SECONDS = 60.0
-MONITOR_SECONDS = 3.0
 from lsg.render.engine import Renderer
 
 if TYPE_CHECKING:
     from lsg.state import AppState
 
 log = logging.getLogger(__name__)
+
+SYNC_SECONDS = 60.0
+MONITOR_SECONDS = 3.0
 
 UI_FPS = 30.0
 KEEPALIVE_FPS = 10.0  # live mode while paused: keep WLED in realtime mode
@@ -103,10 +104,8 @@ class PlaybackSession:
             self._monitor_task.cancel()
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         self.player.close()
         self.sender.close()
 
@@ -152,10 +151,8 @@ class PlaybackSession:
         analysis = self.app.songs.analysis(show.song_id) if show.song_id else None
         duration = None
         if show.song_id and analysis is None:
-            try:
+            with contextlib.suppress(KeyError):
                 duration = self.app.songs.get(show.song_id).duration
-            except KeyError:
-                pass
         shaders, _ = self.app.show_store(lo.project_slug).load_shaders()
         features = AudioFeatures(analysis, duration)
         lo.renderer = await asyncio.to_thread(Renderer, lo.project, lo.table, show, features, shaders)
@@ -205,7 +202,9 @@ class PlaybackSession:
     async def _build_sync_renderer(self) -> None:
         lo = self.loaded
         show = sync_show(SYNC_SECONDS)
-        lo.renderer = await asyncio.to_thread(Renderer, lo.project, lo.table, show, sync_features(self.sync["bpm"], SYNC_SECONDS), {})
+        lo.renderer = await asyncio.to_thread(
+            Renderer, lo.project, lo.table, show, sync_features(self.sync["bpm"], SYNC_SECONDS), {}
+        )
         lo.show = show
 
     async def start_sync(self, bpm: float = 100.0) -> None:
@@ -368,11 +367,13 @@ class PlaybackSession:
             if lo is None or not lo.pipeline.plans or not (self.clients or self.mode == "live"):
                 continue
             try:
-                results = await asyncio.gather(*(
-                    controller_status(p.controller.host, p.pixel_count, self.fps, self.mode == "live")
-                    for p in lo.pipeline.plans
-                ))
-                self.controller_status = {p.controller.id: r for p, r in zip(lo.pipeline.plans, results)}
+                results = await asyncio.gather(
+                    *(
+                        controller_status(p.controller.host, p.pixel_count, self.fps, self.mode == "live")
+                        for p in lo.pipeline.plans
+                    )
+                )
+                self.controller_status = {p.controller.id: r for p, r in zip(lo.pipeline.plans, results, strict=False)}
             except asyncio.CancelledError:
                 raise
             except Exception:

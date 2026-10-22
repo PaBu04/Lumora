@@ -44,5 +44,3 @@ def plan_controllers(project: Project, table: LedTable) -> list[ControllerPlan]:
             white[np.concatenate(w_idx)] = True
         plans.append(ControllerPlan(c, n, t, p, white))
     return plans
-
-

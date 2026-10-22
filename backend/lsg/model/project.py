@@ -40,9 +40,7 @@ class Project(BaseModel):
                 available = counts[m.fixture_id] - m.fixture_offset
                 count = available if m.count is None else m.count
                 if count <= 0 or count > available:
-                    raise ValueError(
-                        f"controller {c.name!r}: mapping of fixture {m.fixture_id!r} exceeds its LEDs"
-                    )
+                    raise ValueError(f"controller {c.name!r}: mapping of fixture {m.fixture_id!r} exceeds its LEDs")
                 span = (m.start, m.start + count)
                 for other in used:
                     if span[0] < other[1] and other[0] < span[1]:

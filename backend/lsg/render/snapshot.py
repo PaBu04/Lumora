@@ -31,7 +31,8 @@ def _room_edges(project: Project) -> list[tuple[np.ndarray, np.ndarray]]:
     edges = []
     for w in project.room.walls:
         a, b = np.array([*w.start, 0.0]), np.array([*w.end, 0.0])
-        edges += [(a, b), (a + [0, 0, h], b + [0, 0, h]), (a, a + [0, 0, h])]
+        up = np.array([0.0, 0.0, h])  # numpy vector addition, not list concatenation
+        edges += [(a, b), (a + up, b + up), (a, a + up)]
     return edges
 
 
@@ -41,7 +42,9 @@ def _glow(base: np.ndarray, layer: np.ndarray, radius: float) -> np.ndarray:
     return np.clip(base + layer + 1.6 * blurred, 0, 1)
 
 
-def render_viewer_image(project: Project, table: LedTable, colors: np.ndarray, width: int = 960, height: int = 540, fov_deg: float = 100.0) -> bytes:
+def render_viewer_image(
+    project: Project, table: LedTable, colors: np.ndarray, width: int = 960, height: int = 540, fov_deg: float = 100.0
+) -> bytes:
     """What the audience sees (perspective from the viewer position)."""
     forward, right, up = viewer_basis(project.viewer)
     eye = np.asarray(project.viewer.position, dtype=np.float64)
@@ -115,7 +118,7 @@ def render_top_image(project: Project, table: LedTable, colors: np.ndarray | Non
         c = colors[i] if colors is not None else np.array([0.9, 0.9, 0.9])
         col = tuple(int(v * 255) for v in c) if c.max() > 0.02 else OFF_LED
         draw.ellipse([x - 2, y - 2, x + 2, y + 2], fill=col)
-    for k, fid in enumerate(table.fixture_ids):
+    for _k, fid in enumerate(table.fixture_ids):
         sl = table.fixture_slice(fid)
         if sl.stop > sl.start:
             p = table.pos[sl.start]
@@ -140,7 +143,9 @@ def render_timeline_image(renderer: Renderer, start: float, end: float, width: i
     data = np.zeros((len(rows), width, 3), dtype=np.float32)
     for j, t in enumerate(times):
         data[:, j] = renderer.render(float(t))[rows]
-    body = Image.fromarray((data * 255).astype(np.uint8)).resize((width, max(len(rows), 1) * max(1, 300 // max(len(rows), 1))), Image.NEAREST)
+    body = Image.fromarray((data * 255).astype(np.uint8)).resize(
+        (width, max(len(rows), 1) * max(1, 300 // max(len(rows), 1))), Image.NEAREST
+    )
 
     img = Image.new("RGB", (label_w + width, header + body.height), BG)
     img.paste(body, (label_w, header))

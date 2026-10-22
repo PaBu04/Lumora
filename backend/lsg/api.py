@@ -54,6 +54,7 @@ def _show(st: AppState, slug: str, show_id: str) -> Show:
 
 # projects
 
+
 class NewProject(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     room: Room | None = None
@@ -153,6 +154,7 @@ def fixture_preview(fixture: dict = Body(...)):
 
 # shows
 
+
 class NewShow(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     song_id: str | None = None
@@ -174,8 +176,14 @@ def list_shows(request: Request, slug: str):
     st = state(request)
     _project(st, slug)
     return [
-        {"id": s.id, "name": s.name, "song_id": s.song_id, "description": s.description,
-         "clips": sum(len(l.clips) for l in s.layers), "layers": len(s.layers)}
+        {
+            "id": s.id,
+            "name": s.name,
+            "song_id": s.song_id,
+            "description": s.description,
+            "clips": sum(len(l.clips) for l in s.layers),
+            "layers": len(s.layers),
+        }
         for s in st.show_store(slug).list()
     ]
 
@@ -321,6 +329,7 @@ def timeline(request: Request, slug: str, show_id: str, start: float = 0.0, end:
 
 # shaders
 
+
 @router.get("/projects/{slug}/shaders")
 def list_shaders(request: Request, slug: str):
     st = state(request)
@@ -363,13 +372,16 @@ async def delete_shader(request: Request, slug: str, name: str):
 
 # songs
 
+
 @router.get("/songs")
 def list_songs(request: Request):
     return state(request).songs.list()
 
 
 @router.post("/songs")
-async def upload_song(request: Request, file: UploadFile = File(...), title: str | None = Form(None), artist: str | None = Form(None)):
+async def upload_song(
+    request: Request, file: UploadFile = File(...), title: str | None = Form(None), artist: str | None = Form(None)
+):
     st = state(request)
     try:
         song = await asyncio.to_thread(st.songs.add, file.file, file.filename or "upload.mp3", title, artist)
@@ -477,6 +489,7 @@ def song_audio(request: Request, song_id: str):
 
 # settings
 
+
 class SettingsBody(BaseModel):
     beat_tracker: str | None = None
 
@@ -502,12 +515,14 @@ def put_settings(request: Request, body: SettingsBody):
 
 # effects
 
+
 @router.get("/effects")
 def effects():
     return {"effects": catalog(), "palettes": PALETTES, "shader_api": SHADER_API}
 
 
 # playback
+
 
 class LoadBody(BaseModel):
     project: str
@@ -634,6 +649,7 @@ async def playback_test(request: Request, body: TestBody):
 
 # devices
 
+
 @router.get("/devices/discover")
 async def discover(seconds: float = Query(3.0, ge=0.5, le=15)):
     return await wled.discover(seconds)
@@ -648,6 +664,7 @@ async def device_info(host: str):
 
 
 # websocket
+
 
 async def websocket_endpoint(ws: WebSocket):
     st: AppState = ws.app.state.lsg

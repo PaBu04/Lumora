@@ -74,8 +74,15 @@ def wled():
 def setup_project(base: str, controllers: list | None = None) -> str:
     slug = httpx.post(base + "/api/projects", json={"name": "Live"}).json()["slug"]
     p = httpx.get(f"{base}/api/projects/{slug}").json()
-    p["fixtures"] = [{"id": "s1", "name": "Strip", "geometry": {"type": "polyline", "points": [[0, 3, 2], [4, 3, 2]]},
-                      "led_count": 120, "tags": ["wall"]}]
+    p["fixtures"] = [
+        {
+            "id": "s1",
+            "name": "Strip",
+            "geometry": {"type": "polyline", "points": [[0, 3, 2], [4, 3, 2]]},
+            "led_count": 120,
+            "tags": ["wall"],
+        }
+    ]
     p["controllers"] = controllers or []
     r = httpx.put(f"{base}/api/projects/{slug}", json=p)
     assert r.status_code == 200, r.text
@@ -86,8 +93,10 @@ def test_live_output_reaches_wled(server, wled):
     http_port, ddp_port = wled
     info = httpx.get(f"{server}/api/devices/info", params={"host": f"127.0.0.1:{http_port}"}).json()
     assert info["led_count"] == 200 and info["name"] == "Sim"
-    slug = setup_project(server, [{"id": "c1", "host": f"127.0.0.1:{http_port}", "port": ddp_port,
-                                   "mappings": [{"fixture_id": "s1", "start": 10}]}])
+    slug = setup_project(
+        server,
+        [{"id": "c1", "host": f"127.0.0.1:{http_port}", "port": ddp_port, "mappings": [{"fixture_id": "s1", "start": 10}]}],
+    )
     show = httpx.post(f"{server}/api/projects/{slug}/shows", json={"name": "S", "template": "empty"}).json()
     show["duration"] = 30
     show["layers"] = [{"name": "L", "clips": [{"start": 0, "end": 30, "effect": "solid", "params": {"color": "#ff0000"}}]}]
@@ -115,7 +124,7 @@ def test_live_output_reaches_wled(server, wled):
     httpx.post(f"{server}/api/playback/test", json={"enabled": True, "fixture_id": "s1", "kind": "steps"})
     time.sleep(0.4)
     frame = httpx.get(f"http://127.0.0.1:{http_port}/sim/frame").json()["data"]
-    assert sorted(set(frame[30:(10 + 120) * 3]) - {0}) == [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128, 192, 255]
+    assert sorted(set(frame[30 : (10 + 120) * 3]) - {0}) == [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128, 192, 255]
 
     # sync test: click track loops, LEDs flash; the controller monitor reports the simulator
     st = httpx.post(f"{server}/api/playback/sync", json={"enabled": True, "bpm": 120}).json()
@@ -141,8 +150,17 @@ def test_mcp_tools(server):
     async def run():
         async with Client(f"{server}/mcp") as c:
             tools = {t.name for t in (await c.list_tools()).tools}
-            assert {"get_overview", "get_song_analysis", "create_show", "add_clips", "render_snapshot",
-                    "render_timeline", "write_shader", "validate", "preview"} <= tools
+            assert {
+                "get_overview",
+                "get_song_analysis",
+                "create_show",
+                "add_clips",
+                "render_snapshot",
+                "render_timeline",
+                "write_shader",
+                "validate",
+                "preview",
+            } <= tools
 
             ov = (await c.call_tool("get_overview", {})).structured_content
             assert ov["project"] == slug and ov["fixtures"][0]["led_count"] == 120
@@ -156,17 +174,30 @@ def test_mcp_tools(server):
 
             created = (await c.call_tool("create_show", {"name": "AI", "song_id": song["id"]})).structured_content
             sid = created["show_id"]
-            res = (await c.call_tool("add_clips", {"show_id": sid, "layer": "Base", "clips": [
-                {"id": "w", "start": 0, "end": 16, "effect": "wave", "params": {"axis": "azimuth", "beats": 2}},
-                {"id": "bad", "start": 0, "end": 16, "effect": "wave", "params": {"axis": "sideways"}},
-            ]})).structured_content
+            res = (
+                await c.call_tool(
+                    "add_clips",
+                    {
+                        "show_id": sid,
+                        "layer": "Base",
+                        "clips": [
+                            {"id": "w", "start": 0, "end": 16, "effect": "wave", "params": {"axis": "azimuth", "beats": 2}},
+                            {"id": "bad", "start": 0, "end": 16, "effect": "wave", "params": {"axis": "sideways"}},
+                        ],
+                    },
+                )
+            ).structured_content
             assert res["ok"] and any(i["clip"] == "bad" for i in res["issues"])
-            res = (await c.call_tool("update_clips", {"show_id": sid, "updates": [{"id": "bad", "params": {"axis": "u"}}]})).structured_content
+            res = (
+                await c.call_tool("update_clips", {"show_id": sid, "updates": [{"id": "bad", "params": {"axis": "u"}}]})
+            ).structured_content
             assert res["issues"] == []
 
             shader = "def render(t, leds, audio, params):\n    return hsv(leds.u + t, 1, audio.rms)"
             assert (await c.call_tool("write_shader", {"name": "hue", "code": shader})).structured_content["ok"]
-            bad = (await c.call_tool("write_shader", {"name": "bad", "code": "def render(t, leds, audio, params):\n    return 1/0"})).structured_content
+            bad = (
+                await c.call_tool("write_shader", {"name": "bad", "code": "def render(t, leds, audio, params):\n    return 1/0"})
+            ).structured_content
             assert not bad["ok"] and "ZeroDivision" in bad["error"]
 
             img = await c.call_tool("render_snapshot", {"show_id": sid, "t": 4.0})

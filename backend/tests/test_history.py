@@ -11,7 +11,11 @@ from lsg.storage.show_store import ShowStore
 
 
 def make_show(n: int) -> Show:
-    return Show(id="s1", name="S", layers=[Layer(id="l1", name="L", clips=[Clip(id=f"c{i}", start=i, end=i + 1, effect="solid") for i in range(n)])])
+    return Show(
+        id="s1",
+        name="S",
+        layers=[Layer(id="l1", name="L", clips=[Clip(id=f"c{i}", start=i, end=i + 1, effect="solid") for i in range(n)])],
+    )
 
 
 def test_ui_saves_coalesce_but_ai_saves_do_not(tmp_path, monkeypatch):

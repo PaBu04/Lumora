@@ -1,8 +1,9 @@
 """Effect parameter specs and the compilation of (possibly dynamic) parameter values."""
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -13,8 +14,17 @@ from lsg.render.context import AXES, RenderContext
 ParamType = str  # number | color | palette | axis | enum | bool | point
 
 AUDIO_SOURCES = (
-    "rms", "low", "mid", "high", "onset",
-    "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy",
+    "rms",
+    "low",
+    "mid",
+    "high",
+    "onset",
+    "beat_phase",
+    "bar_phase",
+    "beat_decay",
+    "bar_decay",
+    "onset_decay",
+    "section_energy",
 )
 LFO_SHAPES = ("sine", "triangle", "saw", "square")
 EASES = ("linear", "smooth", "step")

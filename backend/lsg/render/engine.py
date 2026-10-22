@@ -5,8 +5,9 @@ three always show the same thing.
 """
 
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -135,8 +136,14 @@ class Renderer:
             if env <= 0:
                 continue
             ctx = RenderContext(
-                t=t, lt=lt, duration=c.end - c.start, leds=cc.view, audio=audio,
-                features=self.features, seed=cc.seed, viewer_pos=self.viewer_pos,
+                t=t,
+                lt=lt,
+                duration=c.end - c.start,
+                leds=cc.view,
+                audio=audio,
+                features=self.features,
+                seed=cc.seed,
+                viewer_pos=self.viewer_pos,
             )
             try:
                 params = {k: fn(ctx) for k, fn in cc.params.items()}

@@ -17,9 +17,14 @@ def starter_show(name: str, song_id: str | None, analysis: Analysis | None, dura
             name=name,
             song_id=song_id,
             description="Starter show (song not analysed yet)",
-            layers=[Layer(name="Base", clips=[
-                Clip(start=0, end=end, effect="noise", params={"palette": "ocean", "brightness": 0.6}),
-            ])],
+            layers=[
+                Layer(
+                    name="Base",
+                    clips=[
+                        Clip(start=0, end=end, effect="noise", params={"palette": "ocean", "brightness": 0.6}),
+                    ],
+                )
+            ],
         )
 
     base, rhythm, accent = Layer(name="Base"), Layer(name="Rhythm"), Layer(name="Accents")
@@ -36,24 +41,82 @@ def starter_show(name: str, song_id: str | None, analysis: Analysis | None, dura
         high = s.energy >= loud and s.name not in ("intro", "outro")
 
         if high:
-            base.clips.append(Clip(start=start, end=end, effect="gradient", fade_in=fade,
-                                   params={"palette": palette, "axis": "azimuth", "beats": 8, "brightness": 0.45}))
-            rhythm.clips.append(Clip(start=start, end=end, effect="pulse", blend="add",
-                                     params={"color": color, "trigger": "beat", "decay": 0.18, "brightness": 0.9}))
-            accent.clips.append(Clip(start=start, end=end, effect="ripple", blend="add",
-                                     params={"color": "#ffffff", "trigger": "bar", "speed": 5, "width": 0.5, "brightness": 0.8}))
+            base.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="gradient",
+                    fade_in=fade,
+                    params={"palette": palette, "axis": "azimuth", "beats": 8, "brightness": 0.45},
+                )
+            )
+            rhythm.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="pulse",
+                    blend="add",
+                    params={"color": color, "trigger": "beat", "decay": 0.18, "brightness": 0.9},
+                )
+            )
+            accent.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="ripple",
+                    blend="add",
+                    params={"color": "#ffffff", "trigger": "bar", "speed": 5, "width": 0.5, "brightness": 0.8},
+                )
+            )
         elif s.name in ("intro", "outro"):
-            base.clips.append(Clip(start=start, end=end, effect="noise", fade_in=fade, fade_out=fade,
-                                   params={"palette": palette, "speed": 0.2, "brightness": {"audio": "rms", "min": 0.2, "max": 0.7}}))
-            accent.clips.append(Clip(start=start, end=end, effect="sparkle", blend="add",
-                                     params={"density": {"audio": "high", "min": 0.0, "max": 0.08}, "brightness": 0.7}))
+            base.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="noise",
+                    fade_in=fade,
+                    fade_out=fade,
+                    params={"palette": palette, "speed": 0.2, "brightness": {"audio": "rms", "min": 0.2, "max": 0.7}},
+                )
+            )
+            accent.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="sparkle",
+                    blend="add",
+                    params={"density": {"audio": "high", "min": 0.0, "max": 0.08}, "brightness": 0.7},
+                )
+            )
         else:
-            base.clips.append(Clip(start=start, end=end, effect="noise", fade_in=fade,
-                                   params={"palette": palette, "speed": 0.4, "brightness": 0.35}))
-            rhythm.clips.append(Clip(start=start, end=end, effect="chase", blend="add",
-                                     params={"color": color, "count": 2, "beats": 4, "width": 0.3, "brightness": 0.8}))
-            accent.clips.append(Clip(start=start, end=end, effect="pulse", blend="add",
-                                     params={"color": color, "trigger": "bar", "decay": 0.4, "brightness": 0.5}))
+            base.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="noise",
+                    fade_in=fade,
+                    params={"palette": palette, "speed": 0.4, "brightness": 0.35},
+                )
+            )
+            rhythm.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="chase",
+                    blend="add",
+                    params={"color": color, "count": 2, "beats": 4, "width": 0.3, "brightness": 0.8},
+                )
+            )
+            accent.clips.append(
+                Clip(
+                    start=start,
+                    end=end,
+                    effect="pulse",
+                    blend="add",
+                    params={"color": color, "trigger": "bar", "decay": 0.4, "brightness": 0.5},
+                )
+            )
 
-    return Show(name=name, song_id=song_id, description="Starter show generated from the song structure",
-                layers=[base, rhythm, accent])
+    return Show(
+        name=name, song_id=song_id, description="Starter show generated from the song structure", layers=[base, rhythm, accent]
+    )

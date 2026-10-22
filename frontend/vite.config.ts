@@ -14,6 +14,17 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 1200,
+    rolldownOptions: {
+      output: {
+        // keep the big, rarely changing libraries in their own cacheable chunks
+        advancedChunks: {
+          groups: [
+            { name: "three", test: /node_modules[\/](three|@react-three|postprocessing|three-stdlib|maath|troika|camera-controls)/ },
+            { name: "react", test: /node_modules[\/](react|react-dom|scheduler|zustand)[\/]/ },
+          ],
+        },
+      },
+    },
   },
 });

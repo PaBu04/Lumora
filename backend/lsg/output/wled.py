@@ -51,11 +51,17 @@ async def controller_status(host: str, pixels: int, sending_fps: float, live: bo
     arch = str(info.get("arch") or "").lower()
     limit = next((v for k, v in LED_LIMITS.items() if arch.startswith(k)), None)
     if limit and pixels > limit:
-        warnings.append(f"{pixels} LEDs an einem {arch.upper()}: über ca. {limit} sinkt die Bildrate (Strips auf mehrere Controller verteilen)")
+        warnings.append(
+            f"{pixels} LEDs an einem {arch.upper()}: über ca. {limit} sinkt die Bildrate "
+            "(Strips auf mehrere Controller verteilen)"
+        )
     if info.get("rssi") is not None and info["rssi"] < -75:
         warnings.append(f"schwaches WLAN ({info['rssi']} dBm): Pakete können verloren gehen")
     if live and info.get("fps") and info["fps"] < 0.8 * sending_fps:
-        warnings.append(f"WLED zeigt {info['fps']} FPS bei {sending_fps:.0f} gesendeten: Frames gehen verloren oder der Controller ist überlastet")
+        warnings.append(
+            f"WLED zeigt {info['fps']} FPS bei {sending_fps:.0f} gesendeten: "
+            "Frames gehen verloren oder der Controller ist überlastet"
+        )
     return {"ok": True, "info": info, "warnings": warnings}
 
 

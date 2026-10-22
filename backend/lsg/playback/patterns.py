@@ -24,8 +24,8 @@ def _segments(n: int, k: int) -> list[slice]:
     size = (n - gap * (k - 1)) / k
     out = []
     for i in range(k):
-        a = int(round(i * (size + gap)))
-        b = int(round(i * (size + gap) + size))
+        a = round(i * (size + gap))
+        b = round(i * (size + gap) + size)
         out.append(slice(a, max(a + 1, b) if n > i else a))
     return out
 
@@ -51,6 +51,6 @@ def pattern_frame(kind: str, table: LedTable, fixture_ids: list[str], params: di
             frame[sl] = color * float(params.get("level", 0.7))
         else:
             levels = {"steps": RAW_STEPS, "ramp": RAMP_STEPS, "dark": DARK_STEPS}[kind]
-            for seg, level in zip(_segments(n, len(levels)), levels):
+            for seg, level in zip(_segments(n, len(levels)), levels, strict=False):
                 frame[sl.start + seg.start : sl.start + seg.stop] = color * level
     return frame, raw

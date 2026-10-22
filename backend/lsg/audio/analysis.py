@@ -4,6 +4,7 @@ All curves are normalised to 0..1 so effects and the AI can use them without kno
 the loudness of the recording.
 """
 
+import itertools
 from pathlib import Path
 
 import librosa
@@ -143,11 +144,11 @@ def _sections(
             continue
         if all(abs(i - p) >= min_gap for p in picked):
             picked.append(int(i))
-    bounds = [0.0] + sorted(float(frame_times[seg_starts[i]]) for i in picked) + [duration]
+    bounds = [0.0, *sorted(float(frame_times[seg_starts[i]]) for i in picked), duration]
 
     # mean feature vector + energy per section
     vecs, energies = [], []
-    for a, b in zip(bounds[:-1], bounds[1:]):
+    for a, b in itertools.pairwise(bounds):
         m = (frame_times >= a) & (frame_times < b)
         sl = np.flatnonzero(m)
         vecs.append(
@@ -170,7 +171,7 @@ def _sections(
     high = np.percentile(energies, 70) if len(energies) > 2 else max(energies)
     sections = []
     seen_chorus = False
-    for i, (a, b) in enumerate(zip(bounds[:-1], bounds[1:])):
+    for i, (a, b) in enumerate(itertools.pairwise(bounds)):
         e = energies[i]
         if i == 0 and e < high and len(bounds) > 3:
             name = "intro"
@@ -210,8 +211,9 @@ def analyse_file(path: Path | str, beat_tracker: str = "librosa") -> Analysis:
     return result.model_copy(update={"beat_note": note}) if note else result
 
 
-def analyse_signal(y: np.ndarray, beats: np.ndarray | None = None, downbeats: np.ndarray | None = None,
-                   beat_source: str = "librosa") -> Analysis:
+def analyse_signal(
+    y: np.ndarray, beats: np.ndarray | None = None, downbeats: np.ndarray | None = None, beat_source: str = "librosa"
+) -> Analysis:
     duration = len(y) / SR
     spec = np.abs(librosa.stft(y, n_fft=2048, hop_length=HOP))
     freqs = librosa.fft_frequencies(sr=SR, n_fft=2048)
@@ -301,6 +303,4 @@ def scale_tempo(analysis: Analysis, factor: float) -> Analysis:
     start %= 4
     new_downbeats = new_beats[start::4]
     bpm = 60.0 / float(np.polyfit(np.arange(len(new_beats)), new_beats, 1)[0])
-    return analysis.model_copy(
-        update={"beats": _round(new_beats), "downbeats": _round(new_downbeats), "bpm": round(bpm, 2)}
-    )
+    return analysis.model_copy(update={"beats": _round(new_beats), "downbeats": _round(new_downbeats), "bpm": round(bpm, 2)})

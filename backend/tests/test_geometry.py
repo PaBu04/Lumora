@@ -93,8 +93,14 @@ def test_matrix_serpentine_order():
 
 def test_matrix_column_major_progressive():
     geom = MatrixGeometry(
-        origin=(0, 0, 0), col_dir=(1, 0, 0), row_dir=(0, 1, 0), cols=2, rows=2, pitch=1,
-        serpentine=False, column_major=True,
+        origin=(0, 0, 0),
+        col_dir=(1, 0, 0),
+        row_dir=(0, 1, 0),
+        cols=2,
+        rows=2,
+        pitch=1,
+        serpentine=False,
+        column_major=True,
     )
     pos = sample_fixture(Fixture(geometry=geom))
     np.testing.assert_allclose(pos[:, :2], [(0, 0), (0, 1), (1, 0), (1, 1)])

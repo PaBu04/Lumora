@@ -117,16 +117,25 @@ def create_mcp(st: AppState) -> MCPServer:
             pos = table.pos[sl]
             az, el, dist = table.azimuth[sl], table.elevation[sl], table.distance[sl]
             length = None if isinstance(f.geometry, MatrixGeometry) else round(curve_length(f.geometry), 3)
-            out.append({
-                "id": f.id, "name": f.name, "type": f.geometry.type, "tags": f.tags,
-                "led_type": f.led_type.value, "led_count": sl.stop - sl.start, "length_m": length,
-                "first_led": np.round(pos[0], 2).tolist(), "last_led": np.round(pos[-1], 2).tolist(),
-                "bbox_min": np.round(pos.min(axis=0), 2).tolist(), "bbox_max": np.round(pos.max(axis=0), 2).tolist(),
-                "azimuth_range": [round(float(az.min()), 1), round(float(az.max()), 1)],
-                "elevation_range": [round(float(el.min()), 1), round(float(el.max()), 1)],
-                "distance_range": [round(float(dist.min()), 2), round(float(dist.max()), 2)],
-                "azimuth_first_last": [round(float(az[0]), 1), round(float(az[-1]), 1)],
-            })
+            out.append(
+                {
+                    "id": f.id,
+                    "name": f.name,
+                    "type": f.geometry.type,
+                    "tags": f.tags,
+                    "led_type": f.led_type.value,
+                    "led_count": sl.stop - sl.start,
+                    "length_m": length,
+                    "first_led": np.round(pos[0], 2).tolist(),
+                    "last_led": np.round(pos[-1], 2).tolist(),
+                    "bbox_min": np.round(pos.min(axis=0), 2).tolist(),
+                    "bbox_max": np.round(pos.max(axis=0), 2).tolist(),
+                    "azimuth_range": [round(float(az.min()), 1), round(float(az.max()), 1)],
+                    "elevation_range": [round(float(el.min()), 1), round(float(el.max()), 1)],
+                    "distance_range": [round(float(dist.min()), 2), round(float(dist.max()), 2)],
+                    "azimuth_first_last": [round(float(az[0]), 1), round(float(az[-1]), 1)],
+                }
+            )
         return out
 
     async def notify(slug: str, show_id: str) -> None:
@@ -137,7 +146,7 @@ def create_mcp(st: AppState) -> MCPServer:
             return st.show_store(slug).get(show_id)
         except KeyError:
             names = [f"{s.id} ({s.name})" for s in st.show_store(slug).list()]
-            raise KeyError(f"unknown show {show_id!r}; shows: {names}")
+            raise KeyError(f"unknown show {show_id!r}; shows: {names}") from None
 
     def issues_for(slug: str, p, table, show: Show) -> list[dict[str, Any]]:
         shaders, _ = st.show_store(slug).load_shaders()
@@ -149,8 +158,12 @@ def create_mcp(st: AppState) -> MCPServer:
         issues = await asyncio.to_thread(issues_for, slug, p, table, show)
         await notify(slug, show.id)
         return {
-            "ok": True, "show_id": show.id, "version": version, "layers": [l.name for l in show.layers],
-            "clips": sum(len(l.clips) for l in show.layers), "issues": issues,
+            "ok": True,
+            "show_id": show.id,
+            "version": version,
+            "layers": [l.name for l in show.layers],
+            "clips": sum(len(l.clips) for l in show.layers),
+            "issues": issues,
         }
 
     # ---- reading ----
@@ -163,33 +176,50 @@ def create_mcp(st: AppState) -> MCPServer:
         return {
             "project": slug,
             "projects": st.projects.list(),
-            "room": {"floor_polygon": p.room.floor, "height": p.room.height,
-                     "bounds": {"x": [x0, x1], "y": [y0, y1], "z": [0, h]}},
+            "room": {
+                "floor_polygon": p.room.floor,
+                "height": p.room.height,
+                "bounds": {"x": [x0, x1], "y": [y0, y1], "z": [0, h]},
+            },
             "viewer": p.viewer.model_dump(),
             "led_count": table.count,
             "fixtures": fixture_summaries(p, table),
             "tags": sorted({t for f in p.fixtures for t in f.tags}),
-            "songs": [{"id": s.id, "title": s.title, "artist": s.artist, "duration": s.duration, "analysis": s.status}
-                      for s in st.songs.list()],
+            "songs": [
+                {"id": s.id, "title": s.title, "artist": s.artist, "duration": s.duration, "analysis": s.status}
+                for s in st.songs.list()
+            ],
             "shows": [{"id": s.id, "name": s.name, "song_id": s.song_id} for s in st.show_store(slug).list()],
             "shaders": st.show_store(slug).shader_names(),
             "brightness": {
                 "model": "perceived 0..1 (0.5 looks half as bright), converted to PWM by the calibration curve",
                 "calibration": {
-                    t.value: {"curve": c.curve, "min_pwm": c.min_level, "off_below": c.cutoff,
-                              "pwm_at": {str(v): round(pwm_of_level(v, c), 1) for v in (0.05, 0.1, 0.25, 0.5, 1.0)}}
-                    for t, c in p.calibration.items() if any(f.led_type == t for f in p.fixtures)
+                    t.value: {
+                        "curve": c.curve,
+                        "min_pwm": c.min_level,
+                        "off_below": c.cutoff,
+                        "pwm_at": {str(v): round(pwm_of_level(v, c), 1) for v in (0.05, 0.1, 0.25, 0.5, 1.0)},
+                    }
+                    for t, c in p.calibration.items()
+                    if any(f.led_type == t for f in p.fixtures)
                 },
                 "recommended": {"dark": [0.05, 0.25], "normal": [0.3, 0.7], "accent": [0.8, 1.0], "avoid_below": 0.03},
             },
             "power": {
                 "volts": p.power.volts,
                 "total_budget_ma": p.power.total_budget_ma,
-                "controllers": [{"id": c.id, "name": c.name, "budget_ma": c.budget_ma,
-                                 "fixtures": [m.fixture_id for m in c.mappings]} for c in p.controllers],
-                "full_white_ma": round(sum(
-                    p.calibration[f.led_type].ma_per_channel * 3 * len(range(table.fixture_slice(f.id).start, table.fixture_slice(f.id).stop))
-                    for f in p.fixtures)),
+                "controllers": [
+                    {"id": c.id, "name": c.name, "budget_ma": c.budget_ma, "fixtures": [m.fixture_id for m in c.mappings]}
+                    for c in p.controllers
+                ],
+                "full_white_ma": round(
+                    sum(
+                        p.calibration[f.led_type].ma_per_channel
+                        * 3
+                        * len(range(table.fixture_slice(f.id).start, table.fixture_slice(f.id).stop))
+                        for f in p.fixtures
+                    )
+                ),
             },
             "coordinates": "metres, z up, floor z=0; azimuth negative = left of viewer, elevation positive = up",
         }
@@ -198,13 +228,15 @@ def create_mcp(st: AppState) -> MCPServer:
     def get_led_positions(fixture_id: str, stride: int = 1, project: str | None = None) -> dict[str, Any]:
         """Per-LED data of one fixture in data order: position [x,y,z], azimuth, elevation, distance, u.
         Use stride > 1 to thin out long strips."""
-        _, p, table = project_and_table(project)
+        _, _p, table = project_and_table(project)
         if fixture_id not in table.fixture_ids:
             return _err(KeyError(f"unknown fixture {fixture_id!r}; fixtures: {table.fixture_ids}"))
         sl = table.fixture_slice(fixture_id)
         idx = np.arange(sl.start, sl.stop)[:: max(1, stride)]
         return {
-            "fixture_id": fixture_id, "count": sl.stop - sl.start, "stride": max(1, stride),
+            "fixture_id": fixture_id,
+            "count": sl.stop - sl.start,
+            "stride": max(1, stride),
             "index": (idx - sl.start).tolist(),
             "pos": np.round(table.pos[idx], 3).tolist(),
             "azimuth": np.round(table.azimuth[idx], 1).tolist(),
@@ -214,8 +246,9 @@ def create_mcp(st: AppState) -> MCPServer:
         }
 
     @mcp.tool()
-    def get_song_analysis(song_id: str, start: float = 0.0, end: float | None = None, resolution_hz: float = 4.0,
-                          include_onsets: bool = False) -> dict[str, Any]:
+    def get_song_analysis(
+        song_id: str, start: float = 0.0, end: float | None = None, resolution_hz: float = 4.0, include_onsets: bool = False
+    ) -> dict[str, Any]:
         """Music analysis: bpm, beats, downbeats (bar starts), sections (intro/verse/chorus/bridge/break/outro with
         similarity labels and energy) and loudness curves (rms, low, mid, high, onset; 0..1) resampled to
         resolution_hz inside [start, end]. Request long songs in windows."""
@@ -230,7 +263,10 @@ def create_mcp(st: AppState) -> MCPServer:
         res = min(max(resolution_hz, 0.5), 20.0)
         times = np.arange(start, end, 1.0 / res)
         f = AudioFeatures(a)
-        in_win = lambda xs: [x for x in xs if start <= x < end]
+
+        def in_win(xs):
+            return [x for x in xs if start <= x < end]
+
         out = {
             "song": {"id": song.id, "title": song.title, "artist": song.artist, "duration": a.duration},
             "bpm": a.bpm,
@@ -262,9 +298,17 @@ def create_mcp(st: AppState) -> MCPServer:
     def list_shows(project: str | None = None) -> list[dict[str, Any]]:
         """Shows of the project."""
         slug = st.resolve_project(project)
-        return [{"id": s.id, "name": s.name, "song_id": s.song_id, "description": s.description,
-                 "layers": [l.name for l in s.layers], "clips": sum(len(l.clips) for l in s.layers)}
-                for s in st.show_store(slug).list()]
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "song_id": s.song_id,
+                "description": s.description,
+                "layers": [l.name for l in s.layers],
+                "clips": sum(len(l.clips) for l in s.layers),
+            }
+            for s in st.show_store(slug).list()
+        ]
 
     @mcp.tool()
     def get_show(show_id: str, project: str | None = None) -> dict[str, Any]:
@@ -278,8 +322,14 @@ def create_mcp(st: AppState) -> MCPServer:
     # ---- writing ----
 
     @mcp.tool()
-    async def create_show(name: str, song_id: str | None = None, template: str = "empty",
-                          layers: list[dict] | None = None, description: str = "", project: str | None = None) -> dict[str, Any]:
+    async def create_show(
+        name: str,
+        song_id: str | None = None,
+        template: str = "empty",
+        layers: list[dict] | None = None,
+        description: str = "",
+        project: str | None = None,
+    ) -> dict[str, Any]:
         """Create a show for a song. template: 'empty' or 'starter' (rule-based show from the song structure).
         Optionally pass layers directly (same format as in get_show_format). Returns the show id and issues."""
         slug = st.resolve_project(project)
@@ -439,8 +489,12 @@ def create_mcp(st: AppState) -> MCPServer:
             from lsg.output.pipeline import OutputPipeline
             from lsg.output.power import analyse_power
 
-            report = analyse_power(renderer_for(slug, p, table, show), OutputPipeline(p, table), fps=min(max(fps, 0.5), 10.0),
-                                   brightness=st.session.output.brightness)
+            report = analyse_power(
+                renderer_for(slug, p, table, show),
+                OutputPipeline(p, table),
+                fps=min(max(fps, 0.5), 10.0),
+                brightness=st.session.output.brightness,
+            )
             report.pop("times")
             report["curves"] = {k: v[:: max(1, int(len(v) / 120))] for k, v in report["curves"].items()}
             report["total_curve"] = report["total_curve"][:: max(1, int(len(report["total_curve"]) / 120))]

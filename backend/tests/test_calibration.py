@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import pytest
 
@@ -30,7 +32,7 @@ def test_dim_values_stay_visible():
     # coarse dark steps stay distinguishable; finer ones (1 % -> 2 %) are less than one PWM
     # step apart and need dithering - 8 bit PWM cannot resolve them otherwise
     levels = [pwm_of_level(x, cal) for x in (0.02, 0.05, 0.1, 0.2)]
-    assert all(b - a >= 0.5 for a, b in zip(levels, levels[1:]))
+    assert all(b - a >= 0.5 for a, b in itertools.pairwise(levels))
     assert pwm_of_level(0.03, cal) - pwm_of_level(0.02, cal) < 1.0
     assert pwm_of_level(1.0, cal) == pytest.approx(255)
     assert pwm_of_level(1.0, LedCalibration(max_level=128)) == pytest.approx(128)
@@ -134,11 +136,18 @@ def test_power_analysis_and_validation(project):
 
     project.controllers = [Controller(id="c", host="x", budget_ma=1500, mappings=[FixtureMapping(fixture_id="north")])]
     table = build_led_table(project)
-    show = Show(duration=10, layers=[Layer(clips=[
-        Clip(start=0, end=5, effect="solid", params={"color": "#ffffff", "brightness": 0.1}),
-        Clip(start=5, end=10, effect="solid", params={"color": "#ffffff"}),
-        Clip(id="dim", start=0, end=2, effect="solid", params={"brightness": 0.01}),
-    ])])
+    show = Show(
+        duration=10,
+        layers=[
+            Layer(
+                clips=[
+                    Clip(start=0, end=5, effect="solid", params={"color": "#ffffff", "brightness": 0.1}),
+                    Clip(start=5, end=10, effect="solid", params={"color": "#ffffff"}),
+                    Clip(id="dim", start=0, end=2, effect="solid", params={"brightness": 0.01}),
+                ]
+            )
+        ],
+    )
     r = Renderer(project, table, show, AudioFeatures(None, 10), {})
     report = analyse_power(r, OutputPipeline(project, table), fps=2)
     c = report["controllers"]["c"]

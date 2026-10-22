@@ -29,9 +29,7 @@ def _segments_intersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> bool:
 def polygon_area(points: list[Vec2]) -> float:
     """Signed area (positive = counter-clockwise)."""
     n = len(points)
-    return 0.5 * sum(
-        points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1] for i in range(n)
-    )
+    return 0.5 * sum(points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1] for i in range(n))
 
 
 class Room(BaseModel):

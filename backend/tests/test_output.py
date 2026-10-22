@@ -1,14 +1,13 @@
 import socket
 import struct
-import time
 
 import numpy as np
 
 from lsg.geometry.led_table import build_led_table
+from lsg.model.calibration import LedCalibration
 from lsg.model.controller import Controller, FixtureMapping
 from lsg.model.fixture import LedType
 from lsg.output.ddp import DdpSender, build_packets, parse_packet
-from lsg.model.calibration import LedCalibration
 from lsg.output.pipeline import OutputPipeline
 
 
@@ -33,7 +32,11 @@ def test_mapping_and_encoding(project):
     project.fixtures[0].led_type = LedType.SK6812_RGBW
     project.controllers = [
         Controller(id="a", host="x", rgbw=True, mappings=[FixtureMapping(fixture_id="north", start=10, count=5)]),
-        Controller(id="b", host="y", mappings=[FixtureMapping(fixture_id="ring"), FixtureMapping(fixture_id="west", start=40, fixture_offset=2)]),
+        Controller(
+            id="b",
+            host="y",
+            mappings=[FixtureMapping(fixture_id="ring"), FixtureMapping(fixture_id="west", start=40, fixture_offset=2)],
+        ),
     ]
     # identity curve so byte values are easy to predict
     for t in project.calibration:
