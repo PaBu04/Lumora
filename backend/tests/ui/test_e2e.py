@@ -130,6 +130,7 @@ def test_full_workflow(env):
     page.fill(".card:has-text('Manuell hinzufügen') input", env["sim"].replace("http://", ""))
     page.click(".card:has-text('Manuell hinzufügen') button:has-text('Hinzufügen')")
     page.wait_for_selector("text=Zuordnung")
+    page.click("summary:has-text('Erweitert')")
     port = page.locator(".field:has-text('DDP-Port') input")
     port.fill(str(env["ddp"]))
     port.press("Enter")
@@ -148,6 +149,7 @@ def test_full_workflow(env):
 
     # show: starter template, play live
     page.click("nav >> text=Shows")
+    page.click("button:has-text('+ Neue Show')")
     page.fill(".card input[type=text]", "E2E Show")
     page.click("button:has-text('Erstellen')")
     page.wait_for_selector(".tl-clip")

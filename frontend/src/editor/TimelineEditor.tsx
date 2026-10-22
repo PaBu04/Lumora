@@ -26,7 +26,7 @@ const EFFECT_COLORS: Record<string, string> = {
   solid: "#64748b",
   gradient: "#0ea5e9",
   rainbow: "#a855f7",
-  pulse: "#ff2d95",
+  pulse: "#f472b6",
   strobe: "#cbd5e1",
   chase: "#f59e0b",
   wave: "#06b6d4",
@@ -412,7 +412,7 @@ export function TimelineEditor({
           )}
         </div>
 
-        {snapLine !== null && <div className="tl-playhead" style={{ left: x(snapLine), background: "#00d4ff", width: 1 }} />}
+        {snapLine !== null && <div className="tl-playhead" style={{ left: x(snapLine), background: "#93a2ff", width: 1 }} />}
         <div className="tl-playhead" style={{ left: x(t) }} />
       </div>
     </div>

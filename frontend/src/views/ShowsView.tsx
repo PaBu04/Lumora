@@ -330,7 +330,7 @@ function LiveInputCard() {
         <strong>Live-Eingang</strong>
         {live && <span className="badge ok">{live.bpm.toFixed(0)} BPM</span>}
       </div>
-      <p className="hint">Ohne vorbereiteten Song: reagiert in Echtzeit auf Musik, die der PC abspielt (Browser, Spotify …) oder auf ein Mikrofon.</p>
+      <p className="hint">Reagiert in Echtzeit auf Musik vom PC (Browser, Spotify …) oder ein Mikrofon.</p>
       {live ? (
         <>
           <div className="unit" title={live.device} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>
@@ -399,8 +399,8 @@ function ExportCard({ slug, showId }: { slug: string; showId: string }) {
   const ready = (project?.controllers.length ?? 0) > 0;
   return (
     <div className="card">
-      <strong>Export (xLights / FPP)</strong>
-      <p className="hint">FSEQ-Sequenz mit kalibrierten Werten, Audio und Kanal-Zuordnung als ZIP – z. B. zum Abspielen ohne PC auf einem Falcon Player.</p>
+      <strong>Exportieren</strong>
+      <p className="hint">Für xLights oder einen Falcon Player – die Show läuft dann ohne PC.</p>
       <div className="row" style={{ flexWrap: "nowrap" }}>
         <select value={fps} onChange={(e) => setFps(+e.target.value)} style={{ width: 90 }}>
           {[20, 25, 40, 50].map((f) => (
@@ -658,7 +658,6 @@ export function ShowsView() {
           </div>
           <div className="overlay">
             <span className="badge">{show ? show.name : "Keine Show geladen"}</span>
-            {pb && pb.render_ms > 0 && <span className="badge">{pb.render_ms.toFixed(1)} ms/Frame</span>}
             {Object.keys(errors).length > 0 && <span className="badge err">{Object.keys(errors).length} Clip-Fehler</span>}
           </div>
           <div className="overlay right">

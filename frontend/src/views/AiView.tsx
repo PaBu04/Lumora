@@ -67,8 +67,8 @@ function Generator() {
   return (
     <>
       <p className="hint">
-        Nutzt dein lokales Claude Code ({claude.version}) mit deinem Claude-Abo – es entstehen keine API-Kosten, die Nutzung zählt zu den Limits deines Abos.
-        Claude bekommt nur die Werkzeuge dieser App (kein Datei- oder Shell-Zugriff).
+        Nutzt dein lokales Claude Code {claude.version?.replace(/\s*\(Claude Code\)/, "")} mit deinem Claude-Abo, ohne API-Kosten. Claude bekommt nur die
+        Werkzeuge dieser App.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
         <div>

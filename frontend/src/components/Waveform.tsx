@@ -4,7 +4,7 @@ import type { Analysis } from "../types";
 export const SECTION_COLORS: Record<string, string> = {
   intro: "#3b82f6",
   verse: "#22c55e",
-  chorus: "#ff2d95",
+  chorus: "#c084fc",
   bridge: "#f59e0b",
   break: "#14b8a6",
   outro: "#8b5cf6",
@@ -65,9 +65,9 @@ export function Waveform({
         if (curves) {
           const fr = analysis.frame_rate;
           for (const [name, col] of [
-            ["low", "#ff2d95"],
+            ["low", "#f87171"],
             ["mid", "#ffd400"],
-            ["high", "#00d4ff"],
+            ["high", "#38bdf8"],
           ] as const) {
             const arr = analysis.features[name];
             ctx.strokeStyle = col;
@@ -102,7 +102,7 @@ export function Waveform({
         ctx.fillRect(0, h / 2 - 1, w, 2);
       }
       if (position !== undefined) {
-        ctx.fillStyle = "#ff2d95";
+        ctx.fillStyle = "#f2f4f8";
         ctx.fillRect(x(position) - 1, 0, 2, h);
       }
     };

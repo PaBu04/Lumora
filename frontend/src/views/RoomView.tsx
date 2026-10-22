@@ -366,10 +366,7 @@ export function RoomView() {
             <span className="unit">m</span>
           </div>
         </Field>
-        <p className="hint">
-          Grundriss: Ecken ziehen (Raster 5 cm, <span className="kbd">Shift</span> = 1 cm), blaue Punkte fügen eine Ecke ein,
-          Doppelklick auf eine Ecke löscht sie.
-        </p>
+        <p className="hint">Im Grundriss Ecken ziehen. Punkte auf den Wänden fügen eine Ecke ein, Doppelklick löscht eine. Mit Shift feiner.</p>
         <div className="row" style={{ marginBottom: 12 }}>
           <span className="badge">{area.toFixed(1)} m²</span>
           <span className="badge">Umfang {perimeter.toFixed(1)} m</span>
@@ -380,23 +377,27 @@ export function RoomView() {
         <div className="card">
           {!project.floorplan ? (
             <>
-              <p className="hint" style={{ marginTop: 0 }}>Grundriss-Bild (Foto, Bauplan, Skizze) hochladen, Maßstab festlegen und die Ecken nachklicken.</p>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const pr = await api.uploadFloorplan(slug, file);
-                    setProject({ project: pr });
-                    setImgVersion((v) => v + 1);
-                    notify("Bild geladen – jetzt den Maßstab festlegen", "success");
-                  } catch (err) {
-                    notify((err as Error).message, "error");
-                  }
-                }}
-              />
+              <p className="hint" style={{ marginTop: 0 }}>Foto, Bauplan oder Skizze hochladen, Maßstab festlegen und die Ecken nachklicken.</p>
+              <label className="btn small">
+                Bild auswählen…
+                <input
+                  type="file"
+                  hidden
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const pr = await api.uploadFloorplan(slug, file);
+                      setProject({ project: pr });
+                      setImgVersion((v) => v + 1);
+                      notify("Bild geladen – jetzt den Maßstab festlegen", "success");
+                    } catch (err) {
+                      notify((err as Error).message, "error");
+                    }
+                  }}
+                />
+              </label>
             </>
           ) : (
             <>

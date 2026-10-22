@@ -183,9 +183,9 @@ export function App() {
       <header className="topbar">
         <div className="logo">
           <span className="dots">
-            <i style={{ background: "#ff2d95" }} />
-            <i style={{ background: "#00d4ff" }} />
-            <i style={{ background: "#ffd400" }} />
+            <i style={{ background: "#ff7a90" }} />
+            <i style={{ background: "#6ec6ff" }} />
+            <i style={{ background: "#ffd36e" }} />
           </span>
           Light Show Generator
         </div>
@@ -202,11 +202,6 @@ export function App() {
             {n.label}
           </button>
         ))}
-        <div className="foot">
-          WS2812B · SK6812
-          <br />
-          WLED über DDP
-        </div>
       </nav>
       <main className="main">
         {ready && !project && tab !== "ai" ? (

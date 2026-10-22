@@ -112,13 +112,13 @@ function SongDetail({ song }: { song: Song }) {
               </span>
             ))}
             <span className="row unit">
-              <span className="swatch" style={{ background: "#ff2d95" }} /> Bass
+              <span className="swatch" style={{ background: "#f87171" }} /> Bass
             </span>
             <span className="row unit">
               <span className="swatch" style={{ background: "#ffd400" }} /> Mitten
             </span>
             <span className="row unit">
-              <span className="swatch" style={{ background: "#00d4ff" }} /> Höhen
+              <span className="swatch" style={{ background: "#38bdf8" }} /> Höhen
             </span>
           </div>
           <h3>Abschnitte</h3>

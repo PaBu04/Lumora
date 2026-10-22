@@ -125,8 +125,7 @@ function OutputSettings() {
         />
       </Field>
       <p className="hint">
-        Live sendet die Frames per DDP (UDP 4048) an alle Controller. Audio-Latenz &gt; 0 verzögert das Licht, z. B. für Bluetooth-Lautsprecher.
-        Helligkeit ist wahrgenommen (50 % sieht halb so hell aus). Strombudgets dimmen automatisch, wenn eine Szene mehr Strom bräuchte.
+        Audio-Latenz verzögert das Licht, z. B. bei Bluetooth-Lautsprechern. Ist ein Strombudget gesetzt, wird automatisch gedimmt.
         {Object.keys(pb.controller_errors).length > 0 && <span style={{ color: "var(--err)" }}> Sendefehler: {Object.entries(pb.controller_errors).map(([h, e]) => `${h}: ${e}`).join("; ")}</span>}
       </p>
     </div>
@@ -242,12 +241,6 @@ function ControllerCard({ c }: { c: Controller }) {
         <Field label="Host / IP">
           <TextInput value={c.host} onChange={(v) => set((x) => (x.host = v.trim()))} />
         </Field>
-        <Field label="DDP-Port">
-          <NumberInput integer value={c.port} min={1} max={65535} step={1} onChange={(v) => set((x) => (x.port = v))} />
-        </Field>
-        <Field label="Latenz (ms)">
-          <NumberInput value={c.latency_ms} min={-1000} max={1000} step={5} onChange={(v) => set((x) => (x.latency_ms = v))} />
-        </Field>
         <Field label="RGBW">
           <input type="checkbox" checked={c.rgbw} onChange={(e) => set((x) => (x.rgbw = e.target.checked))} />
         </Field>
@@ -287,6 +280,17 @@ function ControllerCard({ c }: { c: Controller }) {
           )}
         </Field>
       </div>
+      <details className="more">
+        <summary>Erweitert</summary>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px", marginTop: 8 }}>
+          <Field label="Latenz (ms)">
+            <NumberInput value={c.latency_ms} min={-1000} max={1000} step={5} onChange={(v) => set((x) => (x.latency_ms = v))} />
+          </Field>
+          <Field label="DDP-Port">
+            <NumberInput integer value={c.port} min={1} max={65535} step={1} onChange={(v) => set((x) => (x.port = v))} />
+          </Field>
+        </div>
+      </details>
       <h3>Zuordnung</h3>
       <table className="grid">
         <thead>
@@ -442,7 +446,7 @@ export function DevicesView() {
         <OutputSettings />
         <div className="card">
           <strong>Geräte finden</strong>
-          <p className="hint">Sucht per mDNS nach WLED-Controllern im lokalen Netz.</p>
+          <p className="hint">Sucht WLED-Controller im Heimnetz.</p>
           <button
             className="btn primary"
             disabled={searching}

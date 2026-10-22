@@ -10,8 +10,11 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - Grundriss als 2D-Skizze (Ecken ziehen, einfügen, löschen, Vorlagen) plus Raumhöhe – oder ein Foto /
   einen Bauplan hochladen, Maßstab über zwei Punkte festlegen und die Ecken nachzeichnen.
 - LED-Strips als Linien, Bezier-Kurven, Bögen, Kreise und Matrizen; Presets (Deckenumrandung, Wandleiste,
-  Eckstreifen, Deckenring, Wand-Matrix); Punkte per 3D-Gizmo verschieben (rastet an Wänden, Boden, Decke ein).
-- Betrachter mit Position und Blickrichtung: Effekte können „von links nach rechts durchs Blickfeld“ laufen.
+  Eckstreifen, Deckenring, Wand-Matrix, Herz); Punkte per 3D-Gizmo verschieben (rastet an Wänden, Boden, Decke ein),
+  ganze Strips verschieben, Punkte per Drag-and-Drop umsortieren.
+- 3D-Ansicht perspektivisch oder orthografisch, Achsenkreuz (X/Y/Z) zum Orientieren.
+- Betrachter (im Reiter *Raum*) mit Position und Blickrichtung: Effekte können „von links nach rechts durchs
+  Blickfeld“ laufen.
 - Rückgängig/Wiederholen (Strg+Z / Strg+Y) und ein Versionsverlauf mit Wiederherstellen.
 
 **Hardware**
@@ -33,9 +36,10 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 
 **Musik**
 - Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten, Abschnitten (Intro/Strophe/Refrain/
-  Break/Bridge/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2.
+  Break/Bridge/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2 und auf 0,1 BPM genau.
 - Optional genauere Beat-Erkennung mit dem neuronalen Modell *beat_this* (`pip install -e ".[ml]"`).
-- **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen.
+- **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –
+  wahlweise auf den Ton, den der PC gerade abspielt (Browser, Spotify …; Windows-Loopback), oder auf ein Mikrofon.
 
 **Shows**
 - Grafischer Timeline-Editor: Clips ziehen, kürzen, an Beats/Takte einrasten, Mehrfachauswahl, Kopieren/Einfügen,
