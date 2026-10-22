@@ -11,9 +11,10 @@ import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type Sna
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show } from "../types";
-import { Field, formatTime, Icon } from "../ui";
+import { Field, formatTime, Icon, useContextMenu } from "../ui";
+import { moveItem } from "../geometry";
 
-function NewShowForm({ onCreated }: { onCreated: (id: string) => void }) {
+function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   const slug = useStore((s) => s.slug)!;
   const songs = useStore((s) => s.songs);
   const refreshShows = useStore((s) => s.refreshShows);
@@ -24,8 +25,7 @@ function NewShowForm({ onCreated }: { onCreated: (id: string) => void }) {
   const songId = song || songs[0]?.id || "";
   return (
     <div className="card">
-      <strong>Neue Show</strong>
-      <div style={{ marginTop: 8 }}>
+      <div>
         <Field label="Name" stack>
           <input type="text" value={name} placeholder="z. B. Party-Show" onChange={(e) => setName(e.target.value)} />
         </Field>
@@ -55,6 +55,7 @@ function NewShowForm({ onCreated }: { onCreated: (id: string) => void }) {
               await refreshShows();
               onCreated(show.id);
               setName("");
+              onClose();
               notify(`Show „${show.name}" erstellt`, "success");
             } catch (e) {
               notify((e as Error).message, "error");
@@ -307,59 +308,84 @@ function LiveInputCard() {
   const pb = useStore((s) => s.playback);
   const setPlayback = useStore((s) => s.setPlayback);
   const notify = useStore((s) => s.notify);
-  const [devices, setDevices] = useState<{ index: number; name: string; default: boolean }[] | null>(null);
-  const [device, setDevice] = useState<number | null>(null);
+  const [devices, setDevices] = useState<{ index: number | string; name: string; default: boolean; kind: string }[] | null>(null);
+  const [device, setDevice] = useState<string>("");
+  const [starting, setStarting] = useState(false);
   const live = pb?.live_input;
   useEffect(() => {
-    api.liveDevices().then(setDevices).catch(() => setDevices([]));
+    api
+      .liveDevices()
+      .then((d) => {
+        setDevices(d);
+        const desktop = d.find((x) => x.kind === "desktop");
+        if (desktop) setDevice(String(desktop.index)); // what the PC plays is the usual source
+      })
+      .catch(() => setDevices([]));
   }, []);
+  const desktop = devices?.filter((d) => d.kind === "desktop") ?? [];
+  const inputs = devices?.filter((d) => d.kind !== "desktop") ?? [];
   return (
     <div className={`card${live ? " selected" : ""}`}>
-      <strong>Live-Eingang (Mikrofon)</strong>
-      <p className="hint">Ohne vorbereiteten Song: die Show „Live (Mikrofon)“ reagiert in Echtzeit auf Tempo, Bass und Höhen – z. B. für Musik von Spotify oder eine Party.</p>
+      <div className="row between">
+        <strong>Live-Eingang</strong>
+        {live && <span className="badge ok">{live.bpm.toFixed(0)} BPM</span>}
+      </div>
+      <p className="hint">Ohne vorbereiteten Song: reagiert in Echtzeit auf Musik, die der PC abspielt (Browser, Spotify …) oder auf ein Mikrofon.</p>
       {live ? (
         <>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span className="badge info">{live.bpm.toFixed(0)} BPM</span>
-            <span className="unit" title={live.device} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
-              {live.device}
-            </span>
+          <div className="unit" title={live.device} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>
+            {live.device}
           </div>
           {(["low", "mid", "high"] as const).map((k) => (
             <div key={k} className="row" style={{ flexWrap: "nowrap", marginBottom: 3 }}>
               <span className="unit" style={{ width: 48 }}>{k === "low" ? "Bass" : k === "mid" ? "Mitten" : "Höhen"}</span>
-              <div style={{ flex: 1, height: 6, background: "var(--bg-4)", borderRadius: 3 }}>
-                <div style={{ width: `${Math.round((live.levels[k] ?? 0) * 100)}%`, height: "100%", background: "var(--accent-2)", borderRadius: 3 }} />
+              <div className="meter">
+                <div style={{ width: `${Math.round((live.levels[k] ?? 0) * 100)}%` }} />
               </div>
             </div>
           ))}
-          <button className="btn small active" style={{ marginTop: 6 }} onClick={async () => setPlayback(await api.liveInput(false))}>
-            Live-Eingang beenden
+          <button className="btn small" style={{ marginTop: 6 }} onClick={async () => setPlayback(await api.liveInput(false))}>
+            Beenden
           </button>
         </>
       ) : devices && devices.length === 0 ? (
-        <span className="unit">Kein Eingangsgerät gefunden.</span>
+        <span className="unit">Keine Audioquelle gefunden.</span>
       ) : (
         <div className="row" style={{ flexWrap: "nowrap" }}>
-          <select value={device ?? ""} onChange={(e) => setDevice(e.target.value === "" ? null : +e.target.value)}>
-            <option value="">Standard-Eingang</option>
-            {devices?.map((d) => (
-              <option key={d.index} value={d.index}>
-                {d.name}
-              </option>
-            ))}
+          <select value={device} onChange={(e) => setDevice(e.target.value)} title="Audioquelle">
+            {desktop.length > 0 && (
+              <optgroup label="Was der PC abspielt">
+                {desktop.map((d) => (
+                  <option key={d.index} value={String(d.index)}>
+                    {d.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Mikrofon / Line-In">
+              <option value="">Standard-Eingang</option>
+              {inputs.map((d) => (
+                <option key={d.index} value={String(d.index)}>
+                  {d.name}
+                </option>
+              ))}
+            </optgroup>
           </select>
           <button
             className="btn small"
+            disabled={starting}
             onClick={async () => {
+              setStarting(true);
               try {
-                setPlayback(await api.liveInput(true, null, device));
+                setPlayback(await api.liveInput(true, null, device === "" ? null : /^\d+$/.test(device) ? +device : device));
               } catch (e) {
                 notify((e as Error).message, "error");
+              } finally {
+                setStarting(false);
               }
             }}
           >
-            Starten
+            {starting ? "…" : "Starten"}
           </button>
         </div>
       )}
@@ -418,6 +444,10 @@ export function ShowsView() {
   const [snapMode, setSnapMode] = useState<SnapMode>("beat");
   const [zoom, setZoom] = useState(1);
   const [pick, setPick] = useState("pulse");
+  const [creating, setCreating] = useState(false);
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
+  const ctx = useContextMenu();
+  const bumpShowRevision = useStore((s) => s.bumpShowRevision);
   const [looks, setLooks] = useState<Look[]>([]);
   const refreshLooks = useCallback(() => {
     if (slug) api.looks(slug).then(setLooks);
@@ -523,18 +553,89 @@ export function ShowsView() {
   }, [show, selection, apply, editor, duration, analysis, notify, setPlayback]);
 
   if (!slug) return null;
+
+  const reorder = async (from: number, to: number) => {
+    const next = moveItem(shows, from, to);
+    useStore.setState({ shows: next });
+    try {
+      useStore.setState({ shows: await api.orderShows(slug, next.map((x) => x.id)) });
+    } catch (e) {
+      notify((e as Error).message, "error");
+      await refreshShows();
+    }
+  };
+  const rename = async (id: string, current: string) => {
+    const name = prompt("Neuer Name der Show", current)?.trim();
+    if (!name || name === current) return;
+    try {
+      const full = await api.show(slug, id);
+      await api.saveShow(slug, { ...full, name });
+      await refreshShows();
+      bumpShowRevision();
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+  };
+  const remove = async (id: string, name: string) => {
+    if (!confirm(`Show „${name}“ löschen?`)) return;
+    try {
+      await api.deleteShow(slug, id);
+      if (currentId === id) setPlayback(await api.load(slug, null));
+      await refreshShows();
+      notify(`Show „${name}“ gelöscht`);
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+  };
   const defaultEffect = effects.find((e) => e.id === pick) ?? { id: pick };
 
   return (
     <div className="view" style={{ gridTemplateColumns: "230px minmax(0, 1fr) 380px" }}>
       <div className="pane">
-        <h2>Shows</h2>
-        <div className="list" style={{ marginBottom: 12 }}>
+        <div className="row between" style={{ marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Shows</h2>
+          <button className={`btn small${creating ? " active" : " primary"}`} onClick={() => setCreating(!creating)}>
+            {creating ? "Abbrechen" : "+ Neue Show"}
+          </button>
+        </div>
+        {creating && <NewShowForm onCreated={open} onClose={() => setCreating(false)} />}
+        <LiveInputCard />
+        {show && <ExportCard slug={slug} showId={show.id} />}
+        <h3>Deine Shows</h3>
+        <div className="list" style={{ marginBottom: 8 }}>
           {shows.length === 0 && <p className="hint">Noch keine Shows in diesem Projekt.</p>}
-          {shows.map((s) => {
+          {shows.map((s, i) => {
             const sg = songs.find((x) => x.id === s.song_id);
+            const dropCls = drag && drag.over === i && drag.from !== i ? (drag.from < i ? " drop-below" : " drop-above") : "";
             return (
-              <div key={s.id} className={`list-item${currentId === s.id ? " active" : ""}`} onClick={() => open(s.id)}>
+              <div
+                key={s.id}
+                className={`list-item${currentId === s.id ? " active" : ""}${dropCls}${drag?.from === i ? " dragging" : ""}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", s.id);
+                  setDrag({ from: i, over: i });
+                }}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  if (drag.over !== i) setDrag({ ...drag, over: i });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (drag && drag.from !== i) void reorder(drag.from, i);
+                  setDrag(null);
+                }}
+                onDragEnd={() => setDrag(null)}
+                onClick={() => open(s.id)}
+                onContextMenu={(e) =>
+                  ctx.open(e, [
+                    { label: "Umbenennen", onClick: () => void rename(s.id, s.name) },
+                    { label: "Löschen", danger: true, onClick: () => void remove(s.id, s.name) },
+                  ])
+                }
+              >
                 <Icon name="show" />
                 <div className="grow">
                   <div>{s.name}</div>
@@ -546,23 +647,8 @@ export function ShowsView() {
             );
           })}
         </div>
-        <NewShowForm onCreated={open} />
-        <LiveInputCard />
-        {show && <ExportCard slug={slug} showId={show.id} />}
-        {show && (
-          <button
-            className="btn danger small"
-            onClick={async () => {
-              if (!confirm(`Show „${show.name}" löschen?`)) return;
-              await api.deleteShow(slug, show.id);
-              await api.load(slug, null).then(setPlayback);
-              await refreshShows();
-              notify("Show gelöscht");
-            }}
-          >
-            <Icon name="trash" /> Show löschen
-          </button>
-        )}
+        {shows.length > 1 && <p className="hint">Ziehen zum Sortieren · Rechtsklick zum Umbenennen oder Löschen</p>}
+        {ctx.menu}
       </div>
 
       <div className="pane flush" style={{ display: "grid", gridTemplateRows: "minmax(160px, 1fr) auto auto minmax(170px, 36vh)", minWidth: 0 }}>

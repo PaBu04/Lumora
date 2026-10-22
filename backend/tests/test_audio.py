@@ -102,6 +102,22 @@ def test_tempo_correction(demo_analysis):
     assert set(np.round(a.downbeats, 3)) <= set(np.round(back.beats, 3))
 
 
+def test_exact_bpm_keeps_the_beat_phase(demo_analysis):
+    from lsg.audio.analysis import set_bpm
+
+    _, a = demo_analysis
+    nudged = set_bpm(a, round(a.bpm, 1) + 0.1)
+    assert nudged.bpm == pytest.approx(round(a.bpm, 1) + 0.1)
+    gaps = np.diff(nudged.beats)
+    assert np.allclose(gaps, 60 / nudged.bpm, atol=0.002)  # even grid
+    # still on the detected beats (the demo has a steady tempo)
+    near = [np.min(np.abs(np.asarray(nudged.beats) - b)) for b in a.beats[:8]]
+    assert max(near) < 0.03
+    assert np.min(np.abs(np.asarray(nudged.downbeats) - a.downbeats[0])) < 0.03
+    with pytest.raises(ValueError):
+        set_bpm(a, 10)
+
+
 def test_neural_beat_tracker_is_used_when_available(demo_analysis, monkeypatch):
     from lsg.audio import ml_beats
     from lsg.audio.analysis import analyse_file

@@ -3,7 +3,7 @@ import { api } from "../api";
 import { SECTION_COLORS, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
-import { Field, formatTime, Icon, TextInput } from "../ui";
+import { Field, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
 
 function StatusBadge({ song }: { song: Song }) {
   switch (song.status) {
@@ -16,6 +16,49 @@ function StatusBadge({ song }: { song: Song }) {
     default:
       return <span className="badge">wartet</span>;
   }
+}
+
+/** Tempo: octave fixes for a wrongly detected tempo and fine tuning of the exact BPM. */
+function TempoEditor({ song, analysis, onChange }: { song: Song; analysis: Analysis; onChange: (a: Analysis) => void }) {
+  const notify = useStore((s) => s.notify);
+  const [busy, setBusy] = useState(false);
+  const run = async (call: Promise<{ bpm: number }>) => {
+    setBusy(true);
+    try {
+      await call;
+      onChange(await api.analysis(song.id));
+    } catch (e) {
+      notify((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const bpm = Math.round(analysis.bpm * 100) / 100;
+  const nudge = (d: number) => run(api.setBpm(song.id, Math.round((bpm + d) * 10) / 10));
+  return (
+    <div className="tempo" title="Die Beats werden als gleichmäßiges Raster neu gesetzt, passend zu den erkannten Beats">
+      <button className="btn small" disabled={busy} title="halbes Tempo" onClick={() => run(api.scaleTempo(song.id, 0.5))}>
+        ÷2
+      </button>
+      <button className="btn small" disabled={busy} onClick={() => nudge(-1)}>
+        −1
+      </button>
+      <button className="btn small" disabled={busy} onClick={() => nudge(-0.1)}>
+        −0,1
+      </button>
+      <NumberInput value={bpm} step={0.1} min={30} max={300} disabled={busy} onChange={(v) => run(api.setBpm(song.id, v))} />
+      <button className="btn small" disabled={busy} onClick={() => nudge(0.1)}>
+        +0,1
+      </button>
+      <button className="btn small" disabled={busy} onClick={() => nudge(1)}>
+        +1
+      </button>
+      <button className="btn small" disabled={busy} title="doppeltes Tempo" onClick={() => run(api.scaleTempo(song.id, 2))}>
+        ×2
+      </button>
+      <span className="unit">BPM</span>
+    </div>
+  );
 }
 
 function SongDetail({ song }: { song: Song }) {
@@ -41,7 +84,6 @@ function SongDetail({ song }: { song: Song }) {
       <div className="row" style={{ margin: "6px 0 14px" }}>
         <StatusBadge song={song} />
         <span className="badge">{formatTime(song.duration)}</span>
-        {analysis && <span className="badge info">{analysis.bpm.toFixed(1)} BPM</span>}
         {analysis && <span className="badge">{analysis.beats.length} Beats</span>}
         {analysis && <span className="badge">{analysis.downbeats.length} Takte</span>}
         {analysis && <span className="badge">{analysis.sections.length} Abschnitte</span>}
@@ -51,6 +93,11 @@ function SongDetail({ song }: { song: Song }) {
           </span>
         )}
       </div>
+      {analysis && (
+        <Field label="Tempo">
+          <TempoEditor song={song} analysis={analysis} onChange={setAnalysis} />
+        </Field>
+      )}
       {song.status === "error" && <div className="banner err">Analyse fehlgeschlagen: {song.error}</div>}
       {analysis?.beat_note && <div className="banner info">Hinweis zur Beat-Erkennung: {analysis.beat_note}</div>}
       <div className="card" style={{ padding: 8 }}>
@@ -109,29 +156,6 @@ function SongDetail({ song }: { song: Song }) {
         </>
       )}
       <div className="row" style={{ marginTop: 16 }}>
-        {analysis && (
-          <>
-            <span className="unit">Tempo falsch erkannt?</span>
-            {[
-              [0.5, "÷2"],
-              [2, "×2"],
-            ].map(([f, label]) => (
-              <button
-                key={label}
-                className="btn small"
-                title={f === 2 ? "doppeltes Tempo (Beats halbieren den Abstand)" : "halbes Tempo"}
-                onClick={async () => {
-                  const r = await api.scaleTempo(song.id, f as number);
-                  setAnalysis(await api.analysis(song.id));
-                  notify(`Tempo jetzt ${r.bpm.toFixed(1)} BPM`, "success");
-                }}
-              >
-                Tempo {label}
-              </button>
-            ))}
-            <span style={{ width: 12 }} />
-          </>
-        )}
         <button
           className="btn small"
           onClick={async () => {
@@ -141,16 +165,6 @@ function SongDetail({ song }: { song: Song }) {
           }}
         >
           Neu analysieren
-        </button>
-        <button
-          className="btn danger small"
-          onClick={async () => {
-            if (!confirm(`„${song.title}" löschen?`)) return;
-            await api.deleteSong(song.id);
-            await refreshSongs();
-          }}
-        >
-          <Icon name="trash" /> Löschen
         </button>
       </div>
     </div>
@@ -196,6 +210,18 @@ export function SongsView() {
   const [busy, setBusy] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const song = songs.find((s) => s.id === selected) ?? songs[0];
+  const ctx = useContextMenu();
+
+  const remove = async (s: Song) => {
+    if (!confirm(`„${s.title}“ löschen? Audio und Analyse werden entfernt.`)) return;
+    try {
+      await api.deleteSong(s.id);
+      notify(`„${s.title}“ gelöscht`, "success");
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+    await refreshSongs();
+  };
 
   // poll while an analysis is running (events also trigger refreshes)
   useEffect(() => {
@@ -268,7 +294,23 @@ export function SongsView() {
         <div className="list">
           {songs.length === 0 && <p className="hint">Noch keine Songs.</p>}
           {songs.map((s) => (
-            <div key={s.id} className={`list-item${song?.id === s.id ? " active" : ""}`} onClick={() => setSelected(s.id)}>
+            <div
+              key={s.id}
+              className={`list-item${song?.id === s.id ? " active" : ""}`}
+              onClick={() => setSelected(s.id)}
+              onContextMenu={(e) =>
+                ctx.open(e, [
+                  {
+                    label: "Neu analysieren",
+                    onClick: async () => {
+                      await api.reanalyse(s.id);
+                      setTimeout(refreshSongs, 300);
+                    },
+                  },
+                  { label: "Löschen", danger: true, onClick: () => void remove(s) },
+                ])
+              }
+            >
               <Icon name="music" />
               <div className="grow">
                 <div>{s.title}</div>
@@ -280,6 +322,8 @@ export function SongsView() {
             </div>
           ))}
         </div>
+        {songs.length > 0 && <p className="hint">Rechtsklick auf einen Song: neu analysieren oder löschen.</p>}
+        {ctx.menu}
       </div>
       <div className="pane">{song ? <SongDetail song={song} /> : <p className="hint">Lade einen Song hoch, um ihn zu analysieren.</p>}</div>
     </div>

@@ -117,3 +117,18 @@ def test_show_edit_and_shaders(client):
     assert r.status_code == 422 and "import" in r.json()["detail"]
     assert client.get(f"/api/projects/{slug}/shaders").json()["shaders"] == ["glow"]
     assert client.get("/api/effects").json()["effects"][0]["id"] == "solid"
+
+
+def test_show_order_is_kept(client):
+    slug = make_project(client)
+    ids = [client.post(f"/api/projects/{slug}/shows", json={"name": n, "template": "empty"}).json()["id"] for n in "ABC"]
+    names = lambda: [s["name"] for s in client.get(f"/api/projects/{slug}/shows").json()]  # noqa: E731
+    assert names() == ["A", "B", "C"]  # by name until the user sorts
+    r = client.put(f"/api/projects/{slug}/shows/order", json={"ids": [ids[2], ids[0], ids[1], "unknown"]})
+    assert r.status_code == 200 and [s["name"] for s in r.json()] == ["C", "A", "B"]
+    d = client.post(f"/api/projects/{slug}/shows", json={"name": "0 neu", "template": "empty"}).json()
+    assert names() == ["C", "A", "B", "0 neu"]  # new shows go to the end
+    client.delete(f"/api/projects/{slug}/shows/{ids[0]}")
+    assert names() == ["C", "B", "0 neu"]
+    assert client.get(f"/api/projects/{slug}/shows/order").status_code == 404
+    assert d["id"] != "order"

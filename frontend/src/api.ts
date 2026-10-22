@@ -81,6 +81,7 @@ export const api = {
   show: (slug: string, id: string) => get<Show>(`/api/projects/${slug}/shows/${id}`),
   saveShow: (slug: string, show: Show) => put<Show>(`/api/projects/${slug}/shows/${show.id}`, show),
   deleteShow: (slug: string, id: string) => del(`/api/projects/${slug}/shows/${id}`),
+  orderShows: (slug: string, ids: string[]) => put<ShowSummary[]>(`/api/projects/${slug}/shows/order`, { ids }),
   showVersions: (slug: string, id: string) => get<Version[]>(`/api/projects/${slug}/shows/${id}/versions`),
   restoreShowVersion: (slug: string, id: string, vid: string) => post<Show>(`/api/projects/${slug}/shows/${id}/versions/${vid}/restore`),
   projectVersions: (slug: string) => get<Version[]>(`/api/projects/${slug}/versions`),
@@ -112,6 +113,7 @@ export const api = {
   analysis: (id: string) => get<Analysis>(`/api/songs/${id}/analysis`),
   reanalyse: (id: string) => post(`/api/songs/${id}/analyse`),
   scaleTempo: (id: string, factor: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { factor }),
+  setBpm: (id: string, bpm: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { bpm }),
 
   aiStatus: () => get<{ claude: { installed: boolean; version: string | null }; run: AiRun | null }>("/api/ai/status"),
   aiRun: (body: { project: string; prompt: string; song_id: string | null; show_name: string; show_id: string | null }) =>
@@ -133,8 +135,8 @@ export const api = {
   test: (enabled: boolean, fixture_id: string | null, kind = "identify", params: Record<string, unknown> = {}) =>
     post<PlaybackState>("/api/playback/test", { enabled, fixture_id, kind, params }),
 
-  liveDevices: () => get<{ index: number; name: string; channels: number; default: boolean }[]>("/api/live/devices"),
-  liveInput: (enabled: boolean, show_id: string | null = null, device: number | null = null) =>
+  liveDevices: () => get<{ index: number | string; name: string; channels: number; default: boolean; kind: "desktop" | "input" }[]>("/api/live/devices"),
+  liveInput: (enabled: boolean, show_id: string | null = null, device: number | string | null = null) =>
     post<PlaybackState>("/api/playback/live-input", { enabled, show_id, device }),
   sync: (enabled: boolean, bpm = 100) => post<PlaybackState>("/api/playback/sync", { enabled, bpm }),
   speedTest: (controller_id: string) => post<SpeedTestResult>("/api/playback/speedtest", { controller_id }),

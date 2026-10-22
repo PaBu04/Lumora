@@ -286,6 +286,30 @@ def analyse_signal(
     )
 
 
+def set_bpm(analysis: Analysis, bpm: float) -> Analysis:
+    """Manual tempo: an even beat grid at exactly `bpm`, aligned to the detected beats.
+
+    The phase is the circular mean of the detected beats on the new grid, the bar start
+    the grid beat closest to the first detected downbeat."""
+    if not 30.0 <= bpm <= 300.0:
+        raise ValueError("bpm must be between 30 and 300")
+    beats = np.asarray(analysis.beats, dtype=float)
+    period = 60.0 / bpm
+    if len(beats):
+        ang = 2 * np.pi * (beats % period) / period
+        phase = (np.angle(np.mean(np.exp(1j * ang))) % (2 * np.pi)) / (2 * np.pi) * period
+    else:
+        phase = 0.0
+    new_beats = np.arange(phase, analysis.duration, period)
+    if len(new_beats) == 0:
+        raise ValueError("song too short for this tempo")
+    ref = analysis.downbeats[0] if analysis.downbeats else new_beats[0]
+    start = int(np.argmin(np.abs(new_beats - ref))) % 4
+    return analysis.model_copy(
+        update={"beats": _round(new_beats), "downbeats": _round(new_beats[start::4]), "bpm": round(float(bpm), 2)}
+    )
+
+
 def scale_tempo(analysis: Analysis, factor: float) -> Analysis:
     """Manual tempo correction: factor 2 doubles the beat grid, 0.5 halves it."""
     beats = np.asarray(analysis.beats)

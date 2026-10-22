@@ -1,4 +1,5 @@
-"""Real-time audio analysis for the live input mode (microphone / line-in, no pre-analysis).
+"""Real-time audio analysis for the live input mode (microphone, line-in or the PC's own
+sound output, no pre-analysis).
 
 LiveAudioFeatures offers the same interface as AudioFeatures, so every effect and shader
 works unchanged:
@@ -9,6 +10,7 @@ works unchanged:
 Time is seconds since the live mode started.
 """
 
+import re
 import threading
 import time
 from collections import deque
@@ -246,6 +248,80 @@ class LiveInput:
         self._stream.close()
 
 
+DESKTOP = "desktop"  # device id prefix for the PC's sound output ("desktop" or "desktop:<speaker>")
+
+
+class LoopbackInput:
+    """What the PC plays (browser, Spotify, ...) via WASAPI loopback - no microphone needed.
+
+    Uses the `soundcard` package; sounddevice's PortAudio build has no loopback devices.
+    WASAPI delivers no data while nothing plays, so silence is filled in to keep the show
+    clock running."""
+
+    def __init__(self, speaker: str | None = None, sample_rate: int = 48000):
+        import soundcard as sc
+
+        spk = sc.get_speaker(speaker) if speaker else sc.default_speaker()
+        self._mic = sc.get_microphone(id=str(spk.name), include_loopback=True)
+        self.device_name = f"Desktop-Sound: {spk.name}"
+        self.sr = sample_rate
+        self.features = LiveAudioFeatures(self.sr)
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._last = time.monotonic()
+        self._error: str | None = None
+        ready = threading.Event()
+        self._thread = threading.Thread(target=self._run, args=(ready,), daemon=True)
+        self._thread.start()
+        self._filler = threading.Thread(target=self._fill, daemon=True)
+        self._filler.start()
+        ready.wait(5.0)
+        if self._error:
+            self.close()
+            raise RuntimeError(self._error)
+
+    def _feed(self, samples: np.ndarray) -> None:
+        with self._lock:
+            self.features.feed(samples)
+            self._last = time.monotonic()
+
+    def _run(self, ready: threading.Event) -> None:
+        import warnings
+
+        warnings.filterwarnings("ignore", message=".*discontinuity.*")
+        try:
+            with self._mic.recorder(samplerate=self.sr, channels=2, blocksize=self.features.hop) as rec:
+                ready.set()
+                while not self._stop.is_set():
+                    data = rec.record(numframes=self.features.hop)
+                    if len(data):
+                        self._feed(np.ascontiguousarray(data.mean(axis=1), dtype=np.float32))
+        except Exception as exc:  # device gone, exclusive mode, ...
+            self._error = f"Desktop-Sound nicht verfügbar: {exc}"
+            ready.set()
+
+    def _fill(self) -> None:
+        while not self._stop.wait(0.05):
+            gap = time.monotonic() - self._last
+            if gap > 0.1:
+                self._feed(np.zeros(int(gap * self.sr), np.float32))
+
+    def time(self) -> float:
+        return self.features.t
+
+    def close(self) -> None:
+        self._stop.set()
+
+
+def open_input(device: int | str | None):
+    """LiveInput for a sound card input, LoopbackInput for "desktop[:speaker]"."""
+    if isinstance(device, str) and device.startswith(DESKTOP):
+        return LoopbackInput(device.partition(":")[2] or None)
+    if isinstance(device, str) and device.isdigit():
+        device = int(device)
+    return LiveInput(device)
+
+
 class FileInput:
     """Plays a file into the analyser at real-time speed (demo / tests, no sound output)."""
 
@@ -284,15 +360,56 @@ class FileInput:
         self._stop.set()
 
 
+def desktop_devices() -> list[dict]:
+    """The PC's sound outputs that can be captured (loopback)."""
+    try:
+        import soundcard as sc
+
+        default = sc.default_speaker().name
+        return [
+            {
+                "index": f"{DESKTOP}:{s.name}",
+                "name": f"Desktop-Sound – {s.name}",
+                "channels": 2,
+                "default": False,
+                "kind": "desktop",
+                "default_output": s.name == default,
+            }
+            for s in sc.all_speakers()
+        ]
+    except Exception:  # no soundcard package / not supported on this system
+        return []
+
+
 def input_devices() -> list[dict]:
+    """Desktop sound (loopback) first, then microphones and line inputs."""
+    out = desktop_devices()
     try:
         import sounddevice as sd
 
+        apis = sd.query_hostapis()
+        # Windows lists every device once per audio API; WASAPI has the full names
+        wasapi = next((i for i, h in enumerate(apis) if "WASAPI" in h["name"]), None)
         default = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else None
-        return [
-            {"index": i, "name": d["name"], "channels": d["max_input_channels"], "default": i == default}
-            for i, d in enumerate(sd.query_devices())
-            if d["max_input_channels"] > 0
-        ]
+        default_name = sd.query_devices(default)["name"] if default is not None and default >= 0 else None
+        seen = set()
+        for i, d in enumerate(sd.query_devices()):
+            if d["max_input_channels"] <= 0 or (wasapi is not None and d["hostapi"] != wasapi):
+                continue
+            name = _clean_name(d["name"])
+            if name in seen:
+                continue
+            seen.add(name)
+            is_default = i == default or (default_name is not None and default_name.startswith(name[:31]))
+            out.append({"index": i, "name": name, "channels": d["max_input_channels"], "default": is_default, "kind": "input"})
     except Exception:
-        return []
+        pass
+    return out
+
+
+def _clean_name(name: str) -> str:
+    """Readable name for Bluetooth hands-free devices ('...%1 Hands-Free%0 ;(Phone))' -> 'Hands-Free (Phone)')."""
+    m = re.search(r"%1 (.*?)%0.*?\((.*?)\)\)?\s*$", name, re.S)
+    if m:
+        return f"{m.group(1).strip()} ({m.group(2).strip()})"
+    return " ".join(name.split())

@@ -244,7 +244,7 @@ class PlaybackSession:
         lo.show = show
 
     async def start_live_input(self, show_id: str | None, device=None, file=None) -> None:
-        from lsg.audio.live import FileInput, LiveInput
+        from lsg.audio.live import FileInput, open_input
         from lsg.render.autoshow import live_show
 
         lo = self.loaded
@@ -264,7 +264,7 @@ class PlaybackSession:
             show = store.get(show_id)
         self.player.stop()
         self.test = None
-        self.live_input = await asyncio.to_thread(FileInput, file) if file else await asyncio.to_thread(LiveInput, device)
+        self.live_input = await asyncio.to_thread(FileInput, file) if file else await asyncio.to_thread(open_input, device)
         await self._build_live_renderer(show)
         self._dirty = True
         await self.broadcast_state()

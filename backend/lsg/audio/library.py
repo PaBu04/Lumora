@@ -122,6 +122,17 @@ class SongLibrary:
         self._analysis_cache[song_id] = analysis
         return analysis
 
+    def set_bpm(self, song_id: str, bpm: float) -> Analysis:
+        from lsg.audio.analysis import set_bpm
+
+        current = self.analysis(song_id)
+        if current is None:
+            raise ValueError("song has not been analysed yet")
+        analysis = set_bpm(current, bpm)
+        atomic_write_text(self._dir(song_id) / "analysis.json", analysis.model_dump_json())
+        self._analysis_cache[song_id] = analysis
+        return analysis
+
     def analysis(self, song_id: str) -> Analysis | None:
         if song_id in self._analysis_cache:
             return self._analysis_cache[song_id]

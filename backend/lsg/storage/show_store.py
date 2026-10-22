@@ -20,15 +20,39 @@ class ShowStore:
 
     # shows
     def _show_path(self, show_id: str) -> Path:
-        if not _ID_RE.match(show_id):
+        if not _ID_RE.match(show_id) or show_id == "order":  # order.json holds the list order
             raise KeyError(show_id)
         return self.shows_dir / f"{show_id}.json"
 
     def list(self) -> list[Show]:
+        """Shows in the user's order (order.json); shows not in it follow by name."""
         if not self.shows_dir.exists():
             return []
-        shows = [Show.model_validate_json(p.read_text(encoding="utf-8")) for p in self.shows_dir.glob("*.json")]
-        return sorted(shows, key=lambda s: s.name.lower())
+        shows = [
+            Show.model_validate_json(p.read_text(encoding="utf-8"))
+            for p in self.shows_dir.glob("*.json")
+            if p.name != "order.json"
+        ]
+        rank = {sid: i for i, sid in enumerate(self.order())}
+        return sorted(shows, key=lambda s: (rank.get(s.id, len(rank)), s.name.lower()))
+
+    def _order_path(self) -> Path:
+        return self.shows_dir / "order.json"
+
+    def order(self) -> list[str]:
+        path = self._order_path()
+        if not path.is_file():
+            return []
+        try:
+            return [str(x) for x in json.loads(path.read_text(encoding="utf-8"))]
+        except (ValueError, TypeError):
+            return []
+
+    def set_order(self, ids: list[str]) -> None:
+        known = {s.id for s in self.list()}
+        ordered = [i for i in dict.fromkeys(ids) if i in known]
+        self.shows_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(self._order_path(), json.dumps(ordered))
 
     def get(self, show_id: str) -> Show:
         path = self._show_path(show_id)
@@ -46,7 +70,10 @@ class ShowStore:
         history = self.history(show.id)
         previous = history.latest_content()
         summary = show_summary(json.loads(previous) if previous else None, json.loads(content))
+        is_new = not self._show_path(show.id).is_file()
         atomic_write_text(self._show_path(show.id), content)
+        if is_new and self._order_path().is_file():  # new shows go to the end of a custom order
+            atomic_write_text(self._order_path(), json.dumps([*self.order(), show.id]))
         return history.record(content, source, summary)
 
     def restore(self, show_id: str, version_id: str) -> Show:
@@ -60,6 +87,8 @@ class ShowStore:
             raise KeyError(show_id)
         path.unlink()
         shutil.rmtree(self.shows_dir / f"{show_id}.history", ignore_errors=True)
+        if self._order_path().is_file():
+            atomic_write_text(self._order_path(), json.dumps([i for i in self.order() if i != show_id]))
 
     # looks (custom ones; built-in looks live in lsg.render.looks)
     def _looks_path(self) -> Path:

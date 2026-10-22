@@ -188,3 +188,22 @@ table.points tr.sel { background: var(--bg-4); }
 table.points tr.drop-above td { box-shadow: inset 0 2px 0 var(--accent-2); }
 table.points tr.drop-below td { box-shadow: inset 0 -2px 0 var(--accent-2); }
 .grip { cursor: grab; white-space: nowrap; user-select: none; }
+.ctx-menu { position: fixed; z-index: 60; min-width: 170px; padding: 4px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,0.45); display: flex; flex-direction: column; }
+.ctx-menu button { border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--text); }
+.ctx-menu button:hover { background: var(--bg-4); }
+.ctx-menu button.danger { color: var(--err); }
+.tempo { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tempo input { width: 76px; text-align: center; }
+.list-item.drop-above { box-shadow: inset 0 2px 0 var(--accent-2); }
+.list-item.drop-below { box-shadow: inset 0 -2px 0 var(--accent-2); }
+.list-item.dragging { opacity: 0.5; }
+.meter { flex: 1; height: 6px; background: var(--bg-4); border-radius: 3px; overflow: hidden; }
+.meter > div { height: 100%; background: var(--accent-2); border-radius: 3px; transition: width 0.08s linear; }
+details.fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); margin: 14px 0; }
+details.fold > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary > span:first-child::before { content: "▸"; display: inline-block; width: 16px; color: var(--text-3); transition: transform 0.15s; }
+details.fold[open] > summary > span:first-child::before { transform: rotate(90deg); }
+details.fold > summary .unit { font-weight: 400; padding-left: 16px; }
+details.fold > :not(summary) { margin-left: 14px; margin-right: 14px; }
+details.fold[open] { padding-bottom: 8px; }

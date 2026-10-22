@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Vec3 } from "./types";
 
 export function NumberInput({
@@ -103,6 +103,59 @@ export function Field({ label, children, stack }: { label: ReactNode; children: 
       <div>{children}</div>
     </div>
   );
+}
+
+export interface MenuItem {
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+}
+
+/** Right-click menu: `open(event, items)` shows it at the pointer; render `menu` somewhere. */
+export function useContextMenu() {
+  const [state, setState] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!state) return;
+    const close = (e: Event) => {
+      if (e instanceof MouseEvent && ref.current?.contains(e.target as Node)) return;
+      setState(null);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setState(null);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", key);
+    };
+  }, [state]);
+  const open = (e: React.MouseEvent, items: MenuItem[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setState({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 40 * items.length - 12), items });
+  };
+  const menu = state && (
+    <div ref={ref} className="ctx-menu" style={{ left: state.x, top: state.y }} role="menu">
+      {state.items.map((it) => (
+        <button
+          key={it.label}
+          role="menuitem"
+          className={it.danger ? "danger" : ""}
+          onClick={() => {
+            setState(null);
+            it.onClick();
+          }}
+        >
+          {it.label}
+        </button>
+      ))}
+    </div>
+  );
+  return { open, menu };
 }
 
 export function formatTime(t: number): string {

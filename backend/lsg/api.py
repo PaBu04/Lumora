@@ -249,6 +249,19 @@ def list_shows(request: Request, slug: str):
     ]
 
 
+class ShowOrder(BaseModel):
+    ids: list[str]
+
+
+@router.put("/projects/{slug}/shows/order")
+async def order_shows(request: Request, slug: str, body: ShowOrder):
+    """Sort the show list (drag and drop in the UI)."""
+    st = state(request)
+    _project(st, slug)
+    st.show_store(slug).set_order(body.ids)
+    return list_shows(request, slug)
+
+
 @router.post("/projects/{slug}/shows")
 async def create_show(request: Request, slug: str, body: NewShow):
     st = state(request)
@@ -600,16 +613,22 @@ def reanalyse(request: Request, song_id: str):
 
 
 class TempoBody(BaseModel):
-    factor: float
+    factor: float | None = None  # 2 or 0.5: octave correction of the detected beats
+    bpm: float | None = None  # exact tempo: even beat grid
 
 
 @router.post("/songs/{song_id}/tempo")
 async def song_tempo(request: Request, song_id: str, body: TempoBody):
-    """Manual octave correction of the detected tempo (factor 2 or 0.5)."""
+    """Manual tempo correction: octave (factor 2 or 0.5) or an exact BPM value."""
     st = state(request)
     try:
         st.songs.get(song_id)
-        analysis = st.songs.scale_tempo(song_id, body.factor)
+        if body.bpm is not None:
+            analysis = st.songs.set_bpm(song_id, body.bpm)
+        elif body.factor is not None:
+            analysis = st.songs.scale_tempo(song_id, body.factor)
+        else:
+            raise ValueError("factor or bpm required")
     except KeyError:
         raise _404(f"song {song_id!r}")
     except ValueError as exc:
@@ -841,7 +860,7 @@ async def playback_sync(request: Request, body: SyncBody):
 class LiveBody(BaseModel):
     enabled: bool
     show_id: str | None = None
-    device: int | None = None
+    device: int | str | None = None  # sound card index or "desktop[:speaker]"
     file_song_id: str | None = None  # feed a song file instead of the microphone (demo / tests)
 
 

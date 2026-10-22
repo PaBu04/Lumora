@@ -208,47 +208,52 @@ export function AiView() {
           <strong>Show mit KI erstellen</strong>
           <Generator />
         </div>
-        <h3>Eigener KI-Client über MCP</h3>
-        <p className="hint" style={{ fontSize: 14 }}>
-          Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die
-          Musikanalyse und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.
-        </p>
-        <div className="card">
-          <strong>MCP-Endpunkt</strong>
-          <pre className="code">{url}</pre>
-          <p className="hint">Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.</p>
-        </div>
-        <div className="card">
-          <strong>Claude Code</strong>
-          <pre className="code">claude mcp add --transport http lightshow {url}</pre>
-        </div>
-        <div className="card">
-          <strong>Claude Desktop</strong>
-          <p className="hint">In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):</p>
-          <pre className="code">{desktop}</pre>
-        </div>
-        <div className="card">
-          <strong>Beispiel-Auftrag</strong>
-          <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
-            {`Schau dir mit get_overview mein Projekt${slug ? ` „${slug}"` : ""} an und analysiere den Song.
+        <details className="fold">
+          <summary>
+            <span>Eigener KI-Client über MCP</span>
+            <span className="unit">für Claude Desktop, Claude Code und andere KI-Programme</span>
+          </summary>
+          <p className="hint" style={{ fontSize: 14 }}>
+            Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die
+            Musikanalyse und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.
+          </p>
+          <div className="card">
+            <strong>MCP-Endpunkt</strong>
+            <pre className="code">{url}</pre>
+            <p className="hint">Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.</p>
+          </div>
+          <div className="card">
+            <strong>Claude Code</strong>
+            <pre className="code">claude mcp add --transport http lightshow {url}</pre>
+          </div>
+          <div className="card">
+            <strong>Claude Desktop</strong>
+            <p className="hint">In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):</p>
+            <pre className="code">{desktop}</pre>
+          </div>
+          <div className="card">
+            <strong>Beispiel-Auftrag</strong>
+            <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
+              {`Schau dir mit get_overview mein Projekt${slug ? ` „${slug}"` : ""} an und analysiere den Song.
 Erstelle eine Show, die im Intro ruhig mit Blautönen beginnt, im Refrain auf jeden Beat
 pulsiert und bei Drops Wellen von links nach rechts durch mein Blickfeld schickt.
 Prüfe das Ergebnis mit render_timeline und starte danach preview.`}
-          </pre>
-        </div>
-        <h3>Werkzeuge</h3>
-        <table className="grid">
-          <tbody>
-            {TOOLS.map(([k, v]) => (
-              <tr key={k}>
-                <td>
-                  <code>{k}</code>
-                </td>
-                <td className="unit">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </pre>
+          </div>
+          <h3 style={{ marginTop: 14 }}>Werkzeuge</h3>
+          <table className="grid">
+            <tbody>
+              {TOOLS.map(([k, v]) => (
+                <tr key={k}>
+                  <td>
+                    <code>{k}</code>
+                  </td>
+                  <td className="unit">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
       </div>
     </div>
   );
