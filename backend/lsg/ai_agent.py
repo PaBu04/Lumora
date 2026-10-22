@@ -288,6 +288,16 @@ class AgentManager:
             self._proc.terminate()
             await self._publish()
 
+    async def shutdown(self) -> None:
+        """Stop a running generation when the app exits."""
+        if self._proc and self._proc.returncode is None:
+            self._proc.terminate()
+        if self._task:
+            try:
+                await asyncio.wait_for(self._task, timeout=5)
+            except (TimeoutError, asyncio.CancelledError):
+                self._task.cancel()
+
     async def _publish(self) -> None:
         if self.current:
             await self.notify({"kind": "ai", "run": self.current.to_dict()})

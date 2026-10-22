@@ -1,6 +1,7 @@
 """REST API and WebSocket used by the web UI."""
 
 import asyncio
+import re
 import tempfile
 from pathlib import Path
 
@@ -309,6 +310,30 @@ async def show_power(request: Request, slug: str, show_id: str, fps: float = Que
     st = state(request)
     r = _renderer(st, slug, show_id)
     return await asyncio.to_thread(analyse_power, r, OutputPipeline(r.project, r.table), fps, st.session.output.brightness)
+
+
+@router.get("/projects/{slug}/shows/{show_id}/export")
+async def export_show_package(request: Request, slug: str, show_id: str, fps: int = Query(40, ge=10, le=60), audio: bool = True):
+    """Zip with FSEQ v2 sequence (xLights / Falcon Player), audio and channel map."""
+    import tempfile
+
+    from lsg.output.export import export_show
+
+    st = state(request)
+    r = _renderer(st, slug, show_id)
+    song_path = None
+    if audio and r.show.song_id:
+        try:
+            song_path = st.songs.audio_path(r.show.song_id)
+        except KeyError:
+            song_path = None
+    out_dir = Path(tempfile.mkdtemp(prefix="lsg-export-"))
+    out = out_dir / f"{re.sub(r'[^A-Za-z0-9._-]+', '_', r.show.name) or 'show'}.zip"
+    try:
+        await asyncio.to_thread(export_show, r, out, fps, st.session.output.brightness, song_path)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return FileResponse(out, media_type="application/zip", filename=out.name)
 
 
 @router.get("/projects/{slug}/shows/{show_id}/snapshot.png")

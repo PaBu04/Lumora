@@ -296,6 +296,34 @@ function ShaderPanel({ slug }: { slug: string }) {
 
 let clipboard: { clip: Clip; li: number }[] = [];
 
+function ExportCard({ slug, showId }: { slug: string; showId: string }) {
+  const [fps, setFps] = useState(40);
+  const project = useStore((s) => s.project);
+  const ready = (project?.controllers.length ?? 0) > 0;
+  return (
+    <div className="card">
+      <strong>Export (xLights / FPP)</strong>
+      <p className="hint">FSEQ-Sequenz mit kalibrierten Werten, Audio und Kanal-Zuordnung als ZIP – z. B. zum Abspielen ohne PC auf einem Falcon Player.</p>
+      <div className="row" style={{ flexWrap: "nowrap" }}>
+        <select value={fps} onChange={(e) => setFps(+e.target.value)} style={{ width: 90 }}>
+          {[20, 25, 40, 50].map((f) => (
+            <option key={f} value={f}>
+              {f} FPS
+            </option>
+          ))}
+        </select>
+        {ready ? (
+          <a className="btn small" href={`/api/projects/${slug}/shows/${showId}/export?fps=${fps}`} download>
+            Exportieren
+          </a>
+        ) : (
+          <span className="unit">erst Controller anlegen</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ShowsView() {
   const slug = useStore((s) => s.slug);
   const shows = useStore((s) => s.shows);
@@ -443,6 +471,7 @@ export function ShowsView() {
           })}
         </div>
         <NewShowForm onCreated={open} />
+        {show && <ExportCard slug={slug} showId={show.id} />}
         {show && (
           <button
             className="btn danger small"

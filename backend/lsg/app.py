@@ -35,6 +35,7 @@ def create_app(
         st.resume_pending_analyses()
         async with mcp.session_manager.run():
             yield
+        await st.ai.shutdown()
         await st.session.stop_loop()
         st.shutdown()
 
