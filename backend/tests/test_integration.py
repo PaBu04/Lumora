@@ -231,6 +231,9 @@ def test_mcp_tools(server):
                     break
                 await asyncio.sleep(0.5)
             assert a["bpm"] == pytest.approx(120, abs=1) and len(a["curves"]["times"]) == 64
+            assert len(a["drums"]["hihat"]) > 10 and "kick_per_bar" in a["drum_density"][0]  # intro: hats only
+            fx = ov["fixtures"][0]
+            assert 0 <= fx["direct_view_share"] <= 1 and fx["role"] and fx["leds_per_m"] == pytest.approx(30, abs=1)
 
             created = (await c.call_tool("create_show", {"name": "AI", "song_id": song["id"]})).structured_content
             sid = created["show_id"]
@@ -268,6 +271,8 @@ def test_mcp_tools(server):
             ov = (await c.call_tool("get_overview", {})).structured_content
             assert ov["brightness"]["recommended"]["avoid_below"] == 0.03
             assert ov["power"]["full_white_ma"] > 0
+            light = (await c.call_tool("analyze_light", {"show_id": sid})).structured_content
+            assert 0 <= light["room_light"] < 1 and light["sections"] and isinstance(light["hints"], list)
             pw = (await c.call_tool("analyze_power", {"show_id": sid})).structured_content
             assert pw["ok"] is False  # no controllers in this project yet
 
