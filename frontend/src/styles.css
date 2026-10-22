@@ -160,3 +160,16 @@ pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 
 .floorplan .vertex:hover { fill: var(--accent); }
 .floorplan .insert { cursor: copy; opacity: 0.35; }
 .floorplan .insert:hover { opacity: 1; }
+
+.editor-toolbar { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--bg-2); min-width: 0; }
+.effect-bar { display: flex; gap: 4px; align-items: center; overflow-x: auto; min-width: 0; flex: 1; scrollbar-width: thin; }
+.effect-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--bg-3); font-size: 12px; cursor: grab; white-space: nowrap; }
+.effect-chip:hover { border-color: #485268; }
+.effect-chip.active { border-color: var(--accent-2); color: var(--accent-2); }
+.tl-edge { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.tl-clip:hover .tl-edge { background: rgba(255,255,255,0.25); }
+.param { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.param:last-of-type { border-bottom: 0; }
+.dyn { padding: 6px 8px; margin-top: 4px; background: var(--bg-3); border-radius: 6px; }
+.dyn .field { grid-template-columns: 100px 1fr; margin-bottom: 4px; }
+input[type="color"] { width: 34px; height: 28px; padding: 0 2px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); cursor: pointer; flex: none; }

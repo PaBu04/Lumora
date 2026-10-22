@@ -256,7 +256,7 @@ export interface EffectInfo {
   id: string;
   name: string;
   description: string;
-  params: Record<string, { type: string; default: unknown; description: string; min?: number; max?: number; options?: string[] }>;
+  params: Record<string, { type: string; default: unknown; description: string; min?: number; max?: number; options?: string[]; dynamic?: boolean }>;
 }
 
 export interface PowerReport {

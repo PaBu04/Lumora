@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { SERIES } from "../calibration";
 import { LineChart } from "../components/LineChart";
-import { Timeline, usePlayhead } from "../components/Timeline";
 import { Versions } from "../components/Versions";
 import { Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
+import { Inspector } from "../editor/Inspector";
+import { allClips, deleteClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
+import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
+import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, PowerReport, Show } from "../types";
 import { Field, formatTime, Icon } from "../ui";
 
@@ -92,81 +95,6 @@ function Transport({ duration, analysis }: { duration: number; analysis: Analysi
       >
         {live ? "● LIVE" : "Vorschau"}
       </button>
-    </div>
-  );
-}
-
-function ClipPanel({ show, clipId, effects, onSave }: { show: Show; clipId: string | null; effects: EffectInfo[]; onSave: (s: Show) => Promise<void> }) {
-  const clip = show.layers.flatMap((l) => l.clips).find((c) => c.id === clipId);
-  const [text, setText] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    setText(clip ? JSON.stringify(clip, null, 2) : "");
-    setErr(null);
-  }, [clip]);
-  if (!clip) return <p className="hint">Clip in der Timeline anklicken, um ihn zu bearbeiten.</p>;
-  const info = effects.find((e) => e.id === clip.effect);
-  const apply = async (next: Clip | null) => {
-    const s: Show = structuredClone(show);
-    for (const l of s.layers) {
-      const i = l.clips.findIndex((c) => c.id === clip.id);
-      if (i >= 0) {
-        if (next) l.clips[i] = next;
-        else l.clips.splice(i, 1);
-      }
-    }
-    await onSave(s);
-  };
-  return (
-    <div>
-      <div className="row between">
-        <strong>{info?.name ?? clip.effect}</strong>
-        <span className="badge">
-          {clip.start.toFixed(2)}–{clip.end.toFixed(2)} s
-        </span>
-      </div>
-      {info && <p className="hint">{info.description}</p>}
-      <textarea rows={16} value={text} spellCheck={false} onChange={(e) => setText(e.target.value)} />
-      {err && <div className="banner err">{err}</div>}
-      <div className="row between" style={{ marginTop: 6 }}>
-        <button
-          className="btn primary small"
-          onClick={async () => {
-            try {
-              await apply(JSON.parse(text));
-              setErr(null);
-            } catch (e) {
-              setErr((e as Error).message);
-            }
-          }}
-        >
-          Übernehmen
-        </button>
-        <button className="btn danger small" onClick={() => apply(null)}>
-          Clip löschen
-        </button>
-      </div>
-      {info && (
-        <>
-          <h3>Parameter</h3>
-          <table className="grid">
-            <tbody>
-              {Object.entries(info.params).map(([k, p]) => (
-                <tr key={k}>
-                  <td>
-                    <code>{k}</code>
-                  </td>
-                  <td className="unit">
-                    {p.type}
-                    {p.options ? `: ${p.options.join(" | ")}` : ""} = {JSON.stringify(p.default)}
-                    <div>{p.description}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
     </div>
   );
 }
@@ -366,6 +294,8 @@ function ShaderPanel({ slug }: { slug: string }) {
   );
 }
 
+let clipboard: { clip: Clip; li: number }[] = [];
+
 export function ShowsView() {
   const slug = useStore((s) => s.slug);
   const shows = useStore((s) => s.shows);
@@ -373,71 +303,126 @@ export function ShowsView() {
   const pb = useStore((s) => s.playback);
   const setPlayback = useStore((s) => s.setPlayback);
   const refreshShows = useStore((s) => s.refreshShows);
+  const setUndoScope = useStore((s) => s.setUndoScope);
   const notify = useStore((s) => s.notify);
-  const rev = useStore((s) => s.showRevision);
-  const [show, setShow] = useState<Show | null>(null);
+  const currentId = pb?.project === slug && pb?.show !== "__sync__" ? (pb?.show ?? null) : null;
+  const editor = useShowEditor(slug, currentId);
+  const { show, apply } = editor;
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [clipId, setClipId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"clip" | "json" | "issues" | "history" | "shader">("clip");
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"edit" | "json" | "issues" | "history" | "shader">("edit");
   const [viewerCam, setViewerCam] = useState(false);
   const [effects, setEffects] = useState<EffectInfo[]>([]);
-  const currentId = pb?.project === slug ? pb?.show : null;
+  const [palettes, setPalettes] = useState<Record<string, string[]>>({});
+  const [shaders, setShaders] = useState<string[]>([]);
+  const [snapMode, setSnapMode] = useState<SnapMode>("beat");
+  const [zoom, setZoom] = useState(1);
+  const [pick, setPick] = useState("pulse");
+  const rev = useStore((s) => s.showRevision);
+  const playhead = usePlayhead();
 
   useEffect(() => {
-    api.effects().then((r) => setEffects(r.effects));
+    api.effects().then((r) => {
+      setEffects(r.effects);
+      setPalettes(r.palettes);
+    });
   }, []);
-
   useEffect(() => {
-    if (!slug || !currentId) {
-      setShow(null);
-      return;
-    }
-    api.show(slug, currentId).then(setShow).catch(() => setShow(null));
-  }, [slug, currentId, rev]);
+    if (slug) api.shaders(slug).then((r) => setShaders(Object.keys(r.errors).length ? r.shaders.filter((s) => !r.errors[s]) : r.shaders));
+  }, [slug, rev]);
+  useEffect(() => {
+    setUndoScope("show");
+    return () => setUndoScope("project");
+  }, [setUndoScope]);
 
   const song = songs.find((s) => s.id === show?.song_id);
   useEffect(() => {
     setAnalysis(null);
     if (song?.status === "done") api.analysis(song.id).then(setAnalysis);
-  }, [song?.id, song?.status]);
+  }, [song?.id, song?.status, rev]);
 
   const open = useCallback(
     async (id: string) => {
       if (!slug) return;
       setPlayback(await api.load(slug, id));
-      setClipId(null);
+      setSelection(new Set());
+      setSelectedLayer(null);
     },
     [slug, setPlayback],
   );
 
-  const save = useCallback(
-    async (s: Show) => {
-      if (!slug) return;
-      const saved = await api.saveShow(slug, s);
-      setShow(saved);
-      await refreshShows();
-    },
-    [slug, refreshShows],
-  );
+  const duration = pb?.duration || analysis?.duration || show?.duration || 0;
+  const errors = useMemo(() => pb?.clip_errors ?? {}, [pb?.clip_errors]);
 
-  // space bar toggles playback
+  // keyboard: transport, undo/redo and clip editing
   useEffect(() => {
     const onKey = async (e: KeyboardEvent) => {
-      if (e.code !== "Space" || (e.target as HTMLElement).closest("input, textarea, select")) return;
-      e.preventDefault();
-      const st = useStore.getState().playback;
-      if (st?.show) setPlayback(await (st.playing ? api.pause() : api.play()));
+      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (e.code === "Space") {
+        e.preventDefault();
+        const st = useStore.getState().playback;
+        if (st?.show) setPlayback(await (st.playing ? api.pause() : api.play()));
+        return;
+      }
+      if (!show) return;
+      if (ctrl && key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        editor.undo();
+      } else if (ctrl && (key === "y" || (key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        editor.redo();
+      } else if ((key === "delete" || key === "backspace") && selection.size) {
+        e.preventDefault();
+        apply((s) => deleteClips(s, selection));
+        setSelection(new Set());
+      } else if (ctrl && key === "c" && selection.size) {
+        clipboard = allClips(show).filter((c) => selection.has(c.clip.id)).map(({ clip, li }) => ({ clip: structuredClone(clip), li }));
+        notify(`${clipboard.length} Clip(s) kopiert`);
+      } else if (ctrl && key === "v" && clipboard.length) {
+        e.preventDefault();
+        const t = useStore.getState().playback?.position ?? 0;
+        let ids: string[] = [];
+        apply((s) => {
+          const r = pasteClips(s, clipboard, t, duration || 1e9);
+          ids = r.ids;
+          return r.show;
+        });
+        setSelection(new Set(ids));
+      } else if (ctrl && key === "d" && selection.size) {
+        e.preventDefault();
+        const sel = allClips(show).filter((c) => selection.has(c.clip.id));
+        const end = Math.max(...sel.map((c) => c.clip.end));
+        let ids: string[] = [];
+        apply((s) => {
+          const r = pasteClips(s, sel, end, duration || 1e9);
+          ids = r.ids;
+          return r.show;
+        });
+        setSelection(new Set(ids));
+      } else if (ctrl && key === "a") {
+        e.preventDefault();
+        setSelection(new Set(allClips(show).map((c) => c.clip.id)));
+      } else if (key === "escape") {
+        setSelection(new Set());
+      } else if ((key === "arrowleft" || key === "arrowright") && selection.size) {
+        e.preventDefault();
+        const beat = analysis?.bpm ? 60 / analysis.bpm : 0.5;
+        const step = (e.shiftKey ? 4 * beat : beat) * (key === "arrowleft" ? -1 : 1);
+        apply((s) => moveClips(s, selection, step, 0, duration || 1e9));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setPlayback]);
+  }, [show, selection, apply, editor, duration, analysis, notify, setPlayback]);
 
-  const duration = pb?.duration || analysis?.duration || show?.duration || 0;
-  const errors = useMemo(() => pb?.clip_errors ?? {}, [pb?.clip_errors]);
   if (!slug) return null;
+  const defaultEffect = effects.find((e) => e.id === pick) ?? { id: pick };
 
   return (
-    <div className="view" style={{ gridTemplateColumns: "250px 1fr 360px" }}>
+    <div className="view" style={{ gridTemplateColumns: "230px minmax(0, 1fr) 380px" }}>
       <div className="pane">
         <h2>Shows</h2>
         <div className="list" style={{ marginBottom: 12 }}>
@@ -474,7 +459,7 @@ export function ShowsView() {
         )}
       </div>
 
-      <div className="pane flush" style={{ display: "grid", gridTemplateRows: "1fr auto 190px", minWidth: 0 }}>
+      <div className="pane flush" style={{ display: "grid", gridTemplateRows: "minmax(160px, 1fr) auto auto minmax(170px, 36vh)", minWidth: 0 }}>
         <div style={{ position: "relative" }}>
           <div className="canvas-wrap">
             <Scene3D viewerCam={viewerCam} />
@@ -492,17 +477,64 @@ export function ShowsView() {
         </div>
         <Transport duration={duration} analysis={analysis} />
         {show ? (
-          <Timeline
+          <div className="editor-toolbar">
+            <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+              <button className="btn ghost small" title="Rückgängig (Strg+Z)" disabled={!editor.canUndo} onClick={editor.undo}>
+                ↶
+              </button>
+              <button className="btn ghost small" title="Wiederholen (Strg+Y)" disabled={!editor.canRedo} onClick={editor.redo}>
+                ↷
+              </button>
+              <select value={snapMode} title="Einrasten" style={{ width: 120 }} onChange={(e) => setSnapMode(e.target.value as SnapMode)}>
+                <option value="bar">Raster: Takt</option>
+                <option value="beat">Raster: Beat</option>
+                <option value="half">Raster: ½ Beat</option>
+                <option value="off">Raster: aus</option>
+              </select>
+              <button className="btn ghost small" title="herauszoomen" onClick={() => setZoom(Math.max(1, zoom / 1.5))}>
+                −
+              </button>
+              <button className="btn ghost small" title="hineinzoomen" onClick={() => setZoom(Math.min(64, zoom * 1.5))}>
+                +
+              </button>
+              <button className="btn ghost small" title="ganze Show" onClick={() => setZoom(1)}>
+                ⤢
+              </button>
+              <span className="unit" style={{ whiteSpace: "nowrap", minWidth: 70 }}>
+                {editor.saving ? "speichert…" : editor.error ? "⚠ Fehler" : "gespeichert"}
+              </span>
+            </div>
+            <EffectBar effects={effects} shaders={shaders} selected={pick} onPick={setPick} />
+          </div>
+        ) : (
+          <div />
+        )}
+        {show ? (
+          <TimelineEditor
             show={show}
+            apply={apply}
             analysis={analysis}
             duration={duration}
-            selected={clipId}
-            errors={errors}
-            onSelect={(id) => {
-              setClipId(id);
-              setPanel("clip");
+            selection={selection}
+            setSelection={(s) => {
+              setSelection(s);
+              if (s.size) {
+                setSelectedLayer(null);
+                setPanel("edit");
+              }
+            }}
+            selectedLayer={selectedLayer}
+            setSelectedLayer={(id) => {
+              setSelectedLayer(id);
+              setSelection(new Set());
+              setPanel("edit");
             }}
             onSeek={async (t) => setPlayback(await api.seek(t))}
+            errors={errors}
+            snapMode={snapMode}
+            zoom={zoom}
+            setZoom={setZoom}
+            defaultEffect={defaultEffect}
           />
         ) : (
           <div className="timeline" style={{ display: "grid", placeItems: "center" }}>
@@ -515,7 +547,7 @@ export function ShowsView() {
         <div className="row" style={{ marginBottom: 12 }}>
           {(
             [
-              ["clip", "Clip"],
+              ["edit", "Bearbeiten"],
               ["json", "JSON"],
               ["issues", "Prüfung"],
               ["history", "Verlauf"],
@@ -529,8 +561,20 @@ export function ShowsView() {
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           {!show && panel !== "shader" && <p className="hint">Keine Show geladen.</p>}
-          {show && panel === "clip" && <ClipPanel show={show} clipId={clipId} effects={effects} onSave={save} />}
-          {show && panel === "json" && <JsonPanel show={show} onSave={save} />}
+          {show && panel === "edit" && (
+            <Inspector
+              show={show}
+              selection={selection}
+              selectedLayer={selectedLayer}
+              setSelectedLayer={setSelectedLayer}
+              effects={effects}
+              shaders={shaders}
+              palettes={palettes}
+              apply={apply}
+              playhead={playhead}
+            />
+          )}
+          {show && panel === "json" && <JsonPanel show={show} onSave={async (s) => apply(() => s)} />}
           {show && panel === "issues" && <IssuesPanel slug={slug} show={show} />}
           {show && panel === "history" && <Versions showId={show.id} />}
           {panel === "shader" && <ShaderPanel slug={slug} />}
