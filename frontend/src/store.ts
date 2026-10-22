@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "./api";
-import type { LedData, PlaybackState, Project, ShowSummary, Song } from "./types";
+import type { AiRun, LedData, PlaybackState, Project, ShowSummary, Song } from "./types";
 
 export type Tab = "room" | "fixtures" | "devices" | "calibration" | "songs" | "shows" | "ai";
 
@@ -25,6 +25,8 @@ interface AppStore {
   selectedPoint: number | null;
   toasts: Toast[];
   showRevision: number;
+  aiRun: AiRun | null;
+  setAiRun: (r: AiRun | null) => void;
   past: Project[];
   future: Project[];
   undoScope: "project" | "show";
@@ -87,6 +89,8 @@ export const useStore = create<AppStore>((set, get) => ({
   selectedPoint: null,
   toasts: [],
   showRevision: 0,
+  aiRun: null,
+  setAiRun: (aiRun) => set({ aiRun }),
   past: [],
   future: [],
   undoScope: "project",

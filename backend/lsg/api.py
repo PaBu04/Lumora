@@ -487,6 +487,52 @@ def song_audio(request: Request, song_id: str):
         raise _404(f"song {song_id!r}")
 
 
+# AI generation through the local Claude Code CLI (subscription, no API key)
+
+
+class AiRunBody(BaseModel):
+    project: str
+    prompt: str = Field(min_length=3, max_length=4000)
+    song_id: str | None = None
+    show_name: str = "KI-Show"
+    show_id: str | None = None
+
+
+@router.get("/ai/status")
+async def ai_status(request: Request):
+    from lsg.ai_agent import claude_status
+
+    st = state(request)
+    return {"claude": await claude_status(), "run": st.ai.current.to_dict() if st.ai.current else None}
+
+
+@router.post("/ai/run")
+async def ai_run(request: Request, body: AiRunBody):
+    st = state(request)
+    _project(st, body.project)
+    song = None
+    if body.song_id:
+        try:
+            song = st.songs.get(body.song_id).model_dump()
+        except KeyError:
+            raise _404(f"song {body.song_id!r}")
+    try:
+        await st.activate_project(body.project)
+        run = await st.ai.start(body.project, song, body.prompt, body.show_name, body.show_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(424, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    return run.to_dict()
+
+
+@router.post("/ai/cancel")
+async def ai_cancel(request: Request):
+    st = state(request)
+    await st.ai.cancel()
+    return st.ai.current.to_dict() if st.ai.current else None
+
+
 # settings
 
 

@@ -1,4 +1,5 @@
 import type {
+  AiRun,
   Analysis,
   AppSettings,
   EffectInfo,
@@ -97,6 +98,10 @@ export const api = {
   reanalyse: (id: string) => post(`/api/songs/${id}/analyse`),
   scaleTempo: (id: string, factor: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { factor }),
 
+  aiStatus: () => get<{ claude: { installed: boolean; version: string | null }; run: AiRun | null }>("/api/ai/status"),
+  aiRun: (body: { project: string; prompt: string; song_id: string | null; show_name: string; show_id: string | null }) =>
+    post<AiRun>("/api/ai/run", body),
+  aiCancel: () => post<AiRun | null>("/api/ai/cancel"),
   settings: () => get<AppSettings>("/api/settings"),
   saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker">>) => put<AppSettings>("/api/settings", s),
   effects: () => get<{ effects: EffectInfo[]; palettes: Record<string, string[]>; shader_api: string }>("/api/effects"),

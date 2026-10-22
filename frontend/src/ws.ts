@@ -45,6 +45,9 @@ export function connectSocket(): void {
         case "shaders_changed":
           store.bumpShowRevision();
           break;
+        case "ai":
+          store.setAiRun(msg.run);
+          break;
       }
     }
   };

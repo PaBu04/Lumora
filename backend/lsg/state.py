@@ -6,6 +6,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from lsg import config
+from lsg.ai_agent import AgentManager
 from lsg.audio.library import SongLibrary
 from lsg.audio.player import create_player
 from lsg.playback.session import PlaybackSession
@@ -26,6 +28,7 @@ class AppState:
         self._active_file = self.data_dir / "active_project.txt"
         self._settings_file = self.data_dir / "settings.json"
         self.loop: asyncio.AbstractEventLoop | None = None
+        self.ai = AgentManager(self.data_dir, f"http://{config.HOST}:{config.PORT}/mcp", self.session.broadcast_event)
         self.load_settings()
 
     # PC-level settings (speakers, master brightness) survive restarts

@@ -141,6 +141,21 @@ export interface Analysis {
   beat_note: string | null;
 }
 
+export interface AiRun {
+  id: string;
+  project: string;
+  prompt: string;
+  started: number;
+  status: "running" | "done" | "error" | "cancelled";
+  events: { kind: "info" | "text" | "tool" | "warn" | "error"; text: string; time: number; detail?: string }[];
+  result: string | null;
+  error: string | null;
+  show_ids: string[];
+  turns: number | null;
+  duration_s: number | null;
+  model: string | null;
+}
+
 export interface Version {
   id: string;
   time: number;
