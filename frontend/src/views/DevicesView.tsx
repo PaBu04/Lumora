@@ -2,11 +2,14 @@ import { useState } from "react";
 import { api } from "../api";
 import { uid } from "../geometry";
 import { useStore } from "../store";
-import type { Controller, WledInfo } from "../types";
+import type { Controller, SpeedTestResult, WledInfo } from "../types";
 import { Field, Icon, NumberInput, TextInput } from "../ui";
 
 function StatusLine({ id }: { id: string }) {
   const st = useStore((s) => s.playback?.controller_status?.[id]);
+  const link = useStore((s) => s.playback?.links?.[id]);
+  const live = useStore((s) => s.playback?.mode === "live");
+  const measuring = useStore((s) => s.playback?.speed_testing?.includes(id));
   if (!st) return <p className="hint">Status wird abgefragt…</p>;
   if (!st.ok) return <div className="banner err">WLED {st.error}</div>;
   const i = st.info!;
@@ -16,13 +19,33 @@ function StatusLine({ id }: { id: string }) {
         <span className="badge ok">verbunden</span>
         {i.version && <span className="badge">WLED {i.version}</span>}
         {i.arch && <span className="badge">{String(i.arch).toUpperCase()}</span>}
-        {i.live && <span className="badge info">empfängt {i.fps ?? "?"} FPS</span>}
+        {measuring && <span className="badge warn">Messung läuft</span>}
+        {live && link && !measuring && (
+          <span className="badge info" title={`Takt für diesen Controller: ${link.rate} FPS. Unveränderte Bilder gehen nur als Keep-alive raus.`}>
+            sendet {Math.round(link.sent_fps)} FPS
+          </span>
+        )}
+        {i.live && (
+          <span className="badge info" title="von WLED gemeldete Bildrate der LEDs">
+            WLED zeigt {i.fps ?? "?"} FPS
+          </span>
+        )}
+        {st.config?.max_fps ? (
+          <span className="badge" title="geschätzt aus LED-Anzahl und Datenpins in der WLED-Konfiguration">
+            max. ≈ {Math.round(st.config.max_fps)} FPS
+          </span>
+        ) : null}
         {i.rssi !== undefined && i.rssi !== null && (
           <span className={`badge ${i.rssi < -75 ? "warn" : ""}`}>
             WLAN {i.rssi} dBm{i.signal ? ` (${i.signal} %)` : ""}
           </span>
         )}
       </div>
+      {(st.hints ?? []).map((h) => (
+        <div key={h} className="banner info" style={{ marginTop: 6, marginBottom: 0 }}>
+          {h}
+        </div>
+      ))}
       {st.warnings.map((w) => (
         <div key={w} className="banner err" style={{ marginTop: 6, marginBottom: 0 }}>
           {w}
@@ -127,6 +150,10 @@ function ControllerCard({ c }: { c: Controller }) {
   const pb = useStore((s) => s.playback);
   const setPlayback = useStore((s) => s.setPlayback);
   const [info, setInfo] = useState<WledInfo | null>(null);
+  const [speed, setSpeed] = useState<SpeedTestResult | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const status = pb?.controller_status?.[c.id];
+  const autoRate = status?.rate_auto ? status.rate : undefined;
   const set = (fn: (c: Controller) => void) =>
     update((p) => {
       fn(p.controllers.find((x) => x.id === c.id)!);
@@ -161,6 +188,24 @@ function ControllerCard({ c }: { c: Controller }) {
             WLED abfragen
           </button>
           <button
+            className="btn small"
+            disabled={measuring || used === 0}
+            title="Schickt etwa 6 Sekunden ein Testmuster und misst, wie viele Bilder pro Sekunde der Controller wirklich zeigt"
+            onClick={async () => {
+              setMeasuring(true);
+              setSpeed(null);
+              try {
+                setSpeed(await api.speedTest(c.id));
+              } catch (e) {
+                notify((e as Error).message, "error");
+              } finally {
+                setMeasuring(false);
+              }
+            }}
+          >
+            {measuring ? "Misst… (6 s)" : "Geschwindigkeit messen"}
+          </button>
+          <button
             className="btn ghost small danger"
             onClick={() => update((p) => ({ ...p, controllers: p.controllers.filter((x) => x.id !== c.id) }))}
           >
@@ -169,6 +214,26 @@ function ControllerCard({ c }: { c: Controller }) {
         </div>
       </div>
       <StatusLine id={c.id} />
+      {speed && (
+        <div className="banner info speed-result">
+          <div>
+            Zeigt höchstens <strong>{Math.round(speed.measured_fps)} FPS</strong>
+            {speed.estimated_fps ? ` (geschätzt ${Math.round(speed.estimated_fps)})` : ""}. Bei {speed.test_fps} gesendeten FPS kamen{" "}
+            {speed.shown_fps} an{speed.loss_pct ? ` – ${speed.loss_pct} % gingen unterwegs verloren (WLAN prüfen)` : ", nichts ging verloren"}.
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <span>Empfohlene Bildrate: {speed.recommended_fps} FPS</span>
+            <button className="btn primary small" onClick={() => set((x) => (x.max_fps = speed.recommended_fps))}>
+              Übernehmen
+            </button>
+            {c.max_fps != null && (
+              <button className="btn ghost small" onClick={() => set((x) => (x.max_fps = null))}>
+                Automatisch
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {info && (
         <div className={`banner ${info.error ? "err" : "info"}`}>
           {info.error
@@ -206,6 +271,18 @@ function ControllerCard({ c }: { c: Controller }) {
             placeholder="unbegrenzt"
             value={c.budget_ma ? c.budget_ma / 1000 : ""}
             onChange={(e) => set((x) => (x.budget_ma = e.target.value === "" ? null : Math.max(100, +e.target.value * 1000)))}
+          />
+        </Field>
+        <Field label="Bildrate (FPS)">
+          <input
+            type="number"
+            min={5}
+            max={120}
+            step={1}
+            placeholder={autoRate ? `automatisch (${autoRate})` : "automatisch"}
+            title="Wie oft dieser Controller ein neues Bild bekommt. Leer = automatisch aus der LED-Konfiguration in WLED."
+            value={c.max_fps ?? ""}
+            onChange={(e) => set((x) => (x.max_fps = e.target.value === "" ? null : Math.min(120, Math.max(5, +e.target.value))))}
           />
         </Field>
         <Field label="Strom jetzt">
@@ -341,7 +418,7 @@ export function DevicesView() {
       ...p,
       controllers: [
         ...p.controllers,
-        { id: uid(), name: info.name || hostOnly, host: hostOnly, port: 4048, mac: info.mac ?? null, rgbw: !!info.rgbw, latency_ms: 0, budget_ma: null, mappings: [] },
+        { id: uid(), name: info.name || hostOnly, host: hostOnly, port: 4048, mac: info.mac ?? null, rgbw: !!info.rgbw, latency_ms: 0, budget_ma: null, max_fps: null, mappings: [] },
       ],
     }));
     notify(`Controller „${info.name}" hinzugefügt`, "success");

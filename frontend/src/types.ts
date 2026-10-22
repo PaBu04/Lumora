@@ -70,6 +70,7 @@ export interface Controller {
   rgbw: boolean;
   latency_ms: number;
   budget_ma: number | null;
+  max_fps?: number | null;
   mappings: FixtureMapping[];
 }
 
@@ -268,6 +269,8 @@ export interface PlaybackState {
   };
   controller_errors: Record<string, string>;
   controller_status: Record<string, ControllerStatus>;
+  links?: Record<string, { rate: number; sent_fps: number }>;
+  speed_testing?: string[];
   sync: { bpm: number; previous: string | null } | null;
   live_input: { device: string; bpm: number; levels: Record<string, number>; time: number } | null;
 }
@@ -276,7 +279,23 @@ export interface ControllerStatus {
   ok: boolean;
   error?: string;
   warnings: string[];
+  hints?: string[];
+  sent_fps?: number;
+  rate?: number;
+  rate_auto?: boolean;
+  config?: { buses: { type: number; len: number; pins: number[]; ms: number }[]; max_fps: number } | null;
   info?: WledInfo & { fps?: number; rssi?: number; signal?: number; arch?: string; live?: boolean };
+}
+
+export interface SpeedTestResult {
+  controller: string;
+  measured_fps: number;
+  estimated_fps: number | null;
+  test_fps: number;
+  shown_fps: number;
+  loss_pct: number;
+  recommended_fps: number;
+  rssi: number | null;
 }
 
 export interface WledInfo {

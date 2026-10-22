@@ -34,13 +34,19 @@ def test_controller_status_warnings(monkeypatch):
         return {"led_count": 500, "arch": "esp8266", "rssi": -80, "fps": 20}
 
     monkeypatch.setattr("lsg.output.wled.fetch_info", fake_info)
-    st = asyncio.run(controller_status("x", pixels=900, sending_fps=50, live=True))
+    cfg = {"buses": [{"type": 22, "len": 900, "pins": [2], "ms": 27.3}], "max_fps": 31.0, "wifi_sleep": True}
+    st = asyncio.run(controller_status("x", pixels=900, sent_fps=30, live=True, cfg=cfg))
     text = " ".join(st["warnings"])
-    assert st["ok"] and "500 LEDs" in text and "ESP8266" in text and "WLAN" in text and "20 FPS" in text
+    assert st["ok"] and "500 LEDs" in text and "-80 dBm" in text and "20 von 30" in text and "Energiesparen" in text
+    assert "900 LEDs an einem Datenpin" in st["hints"][0] and "aufteilen" in st["hints"][0]
+
+    # paused live mode only sends keep-alives: a low WLED frame rate is no problem then
+    st = asyncio.run(controller_status("x", pixels=400, sent_fps=2, live=True))
+    assert not any("FPS" in w for w in st["warnings"])
 
     async def down(host, timeout=2.0):
         raise OSError("timeout")
 
     monkeypatch.setattr("lsg.output.wled.fetch_info", down)
-    st = asyncio.run(controller_status("x", pixels=10, sending_fps=50, live=False))
+    st = asyncio.run(controller_status("x", pixels=10, sent_fps=0, live=False))
     assert not st["ok"] and "nicht erreichbar" in st["error"]

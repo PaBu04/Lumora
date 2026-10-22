@@ -133,9 +133,13 @@ class OutputPipeline:
 
     # --- main entry -------------------------------------------------------------------
 
-    def encode_all(self, frame_for, brightness: float = 1.0, raw: bool = False) -> tuple[list[ControllerOutput], FrameStats]:
+    def encode_all(
+        self, frame_for, brightness: float = 1.0, raw: bool = False, only: set[str] | None = None
+    ) -> tuple[list[ControllerOutput], FrameStats]:
         """`frame_for(controller)` returns the perceived frame for that controller (latency aware).
-        With raw=True the frames already hold PWM values 0..255 (calibration patterns)."""
+        With raw=True the frames already hold PWM values 0..255 (calibration patterns).
+        `only` limits the byte encoding to these controller ids (the others get empty data but
+        still count for power limits and statistics)."""
         staged = []
         cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         for plan in self.plans:
@@ -163,9 +167,12 @@ class OutputPipeline:
 
         outputs, stats = [], FrameStats()
         for plan, buf, types, ma, scale, idle in staged:
-            if scale < 1.0:
-                buf = buf * scale
-            data = self._quantise(plan.controller.id, buf, types)
+            if only is not None and plan.controller.id not in only:
+                data = b""
+            else:
+                if scale < 1.0:
+                    buf = buf * scale
+                data = self._quantise(plan.controller.id, buf, types)
             limited_ma = idle + (ma - idle) * scale
             outputs.append(ControllerOutput(plan, data, limited_ma, ma, scale))
             stats.total_ma += limited_ma

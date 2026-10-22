@@ -158,7 +158,10 @@ def test_full_workflow(env):
     page.keyboard.press("Space")
     page.wait_for_timeout(2500)
     stats = httpx.get(env["sim"] + "/sim/stats").json()
-    assert stats["frames"] - before > 60 and stats["fps"] > 30
+    # 1200 LEDs on one simulated pin show ~24 FPS: the app sends just below that, evenly
+    rate = api(env, "/api/playback")["links"][ctrl["id"]]["rate"]
+    assert 18 <= rate <= 24 and stats["frames"] - before > 35
+    assert stats["shown_fps"] >= stats["fps"] - 1.5 and stats["fps"] <= rate + 1.5, stats
     assert api(env, "/api/playback")["power"]["total_ma"] > 0
     page.keyboard.press("Space")
     shot(page, "05_show_live")

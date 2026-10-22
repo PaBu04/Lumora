@@ -1,7 +1,9 @@
 """WLED HTTP JSON API and mDNS discovery."""
 
 import asyncio
+import math
 import socket
+import weakref
 
 import httpx
 from zeroconf import ServiceStateChange
@@ -9,13 +11,40 @@ from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZerocon
 
 WLED_SERVICE = "_wled._tcp.local."
 
+_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
+
+
+def _client() -> httpx.AsyncClient:
+    """One shared HTTP client per event loop.
+
+    Creating an httpx client loads the system's TLS certificates, which blocks the event loop
+    for ~300 ms on Windows - enough to freeze the live output. WLED only speaks plain HTTP,
+    so the shared client skips TLS setup entirely."""
+    loop = asyncio.get_running_loop()
+    client = _clients.get(loop)
+    if client is None or client.is_closed:
+        client = _new_client()
+        _clients[loop] = client
+    return client
+
+
+def _new_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(verify=False, limits=httpx.Limits(max_keepalive_connections=16))
+
+
+async def warm_client() -> None:
+    """Create the shared client in a worker thread so not even its first setup stalls the loop."""
+    loop = asyncio.get_running_loop()
+    if loop not in _clients:
+        client = await asyncio.to_thread(_new_client)
+        _clients.setdefault(loop, client)
+
 
 async def fetch_info(host: str, timeout: float = 2.0) -> dict:
     """Summary of a WLED device from /json/info."""
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.get(f"http://{host}/json/info")
-        r.raise_for_status()
-        info = r.json()
+    r = await _client().get(f"http://{host}/json/info", timeout=timeout)
+    r.raise_for_status()
+    info = r.json()
     leds = info.get("leds", {})
     lc = leds.get("lc", 1)
     wifi = info.get("wifi", {}) or {}
@@ -35,41 +64,115 @@ async def fetch_info(host: str, timeout: float = 2.0) -> dict:
     }
 
 
-# rough DDP limits at ~50 FPS (one output); more LEDs lower the achievable frame rate
-LED_LIMITS = {"esp8266": 600, "esp32": 1500}
+# WLED bus types (const.h) of single-wire LEDs -> bits per LED; the rest is clocked/analog/network
+_BITS = {
+    18: 8,
+    19: 8,
+    20: 16,
+    21: 24,
+    22: 24,
+    23: 24,
+    24: 24,
+    25: 24,
+    26: 48,
+    27: 24,
+    28: 48,
+    29: 64,
+    30: 32,
+    31: 32,
+    32: 40,
+    33: 24,
+    34: 80,
+}
+_US_PER_BIT = {24: 2.5}  # WS2811 400 kHz; all others 800 kHz
+WLED_OVERHEAD_MS = 5.0  # WLED loop, DDP handling, latch (measured: 873 WS2812B on one pin -> 32 FPS)
+WLED_MAX_FPS = 50.0  # realtime frames WLED shows at most, even with few LEDs (measured ~51)
+SAFETY = 0.92  # send a bit slower than the estimate so WLED never has to drop frames
 
 
-async def controller_status(host: str, pixels: int, sending_fps: float, live: bool) -> dict:
+def bus_ms(bus_type: int, length: int) -> float:
+    """Time one LED data line needs to push a frame out."""
+    bits = _BITS.get(bus_type)
+    if bits is None:
+        return 0.0
+    return length * bits * _US_PER_BIT.get(bus_type, 1.25) / 1000.0 + 0.3  # + reset/latch
+
+
+def estimate_fps(buses: list[dict]) -> float:
+    """Frames per second WLED can display; parallel data pins output at the same time."""
+    slowest = max((b["ms"] for b in buses), default=0.0)
+    return round(min(WLED_MAX_FPS, 1000.0 / (slowest + WLED_OVERHEAD_MS)), 1)
+
+
+async def fetch_config(host: str, timeout: float = 3.0) -> dict:
+    """LED outputs and settings from /json/cfg that limit realtime output."""
+    r = await _client().get(f"http://{host}/json/cfg", timeout=timeout)
+    r.raise_for_status()
+    cfg = r.json()
+    buses = []
+    for b in cfg.get("hw", {}).get("led", {}).get("ins") or []:
+        t, n = int(b.get("type", 0)), int(b.get("len", 0))
+        buses.append({"type": t, "len": n, "pins": b.get("pin", []), "ms": round(bus_ms(t, n), 2)})
+    live = cfg.get("if", {}).get("live", {}) or {}
+    return {
+        "buses": buses,
+        "max_fps": estimate_fps(buses),
+        "wifi_sleep": bool((cfg.get("wifi") or {}).get("sleep", False)),
+        "realtime": bool(live.get("en", True)),
+        "timeout_s": (live.get("timeout") or 25) / 10.0,
+    }
+
+
+def recommended_fps(max_fps: float | None, cap: float) -> float:
+    """Send rate for a controller: a little below what it can show, never above the render rate."""
+    if not max_fps or max_fps >= WLED_MAX_FPS:  # LEDs are not the bottleneck
+        return cap
+    return float(max(5, math.floor(min(cap, max_fps * SAFETY))))
+
+
+def limit_hint(cfg: dict | None) -> str | None:
+    """Why a controller cannot go faster, in words, or None if it is not the bottleneck."""
+    if not cfg or not cfg.get("buses") or cfg["max_fps"] >= WLED_MAX_FPS:
+        return None
+    slow = max(cfg["buses"], key=lambda b: b["ms"])
+    pins = sum(1 for b in cfg["buses"] if b["ms"] > 0)
+    text = f"max. ca. {cfg['max_fps']:.0f} FPS: {slow['len']} LEDs an einem Datenpin brauchen {slow['ms']:.0f} ms pro Bild"
+    if pins <= 1:
+        text += ". Für mehr FPS den Strip auf zwei oder mehr Datenpins aufteilen (in WLED je Pin ein Ausgang)"
+    return text
+
+
+async def controller_status(host: str, pixels: int, sent_fps: float, live: bool, cfg: dict | None = None) -> dict:
     """Reachability and health of one controller with human readable warnings."""
     try:
         info = await fetch_info(host, timeout=1.5)
     except Exception as exc:
-        return {"ok": False, "error": f"nicht erreichbar ({type(exc).__name__})", "warnings": []}
-    warnings = []
+        return {"ok": False, "error": f"nicht erreichbar ({type(exc).__name__})", "warnings": [], "hints": []}
+    warnings, hints = [], []
     if info["led_count"] and pixels > info["led_count"]:
         warnings.append(f"WLED hat nur {info['led_count']} LEDs konfiguriert, zugeordnet sind {pixels}")
-    arch = str(info.get("arch") or "").lower()
-    limit = next((v for k, v in LED_LIMITS.items() if arch.startswith(k)), None)
-    if limit and pixels > limit:
-        warnings.append(
-            f"{pixels} LEDs an einem {arch.upper()}: über ca. {limit} sinkt die Bildrate "
-            "(Strips auf mehrere Controller verteilen)"
-        )
     if info.get("rssi") is not None and info["rssi"] < -75:
         warnings.append(f"schwaches WLAN ({info['rssi']} dBm): Pakete können verloren gehen")
-    if live and info.get("fps") and info["fps"] < 0.8 * sending_fps:
+    if cfg:
+        if cfg.get("wifi_sleep"):
+            warnings.append("WLAN-Energiesparen ist an: in WLED unter WiFi Setup „Disable WiFi sleep“ aktivieren")
+        if not cfg.get("realtime", True):
+            warnings.append("Empfang von Echtzeitdaten ist aus: in WLED unter Sync „Receive UDP realtime“ aktivieren")
+        hint = limit_hint(cfg)
+        if hint:
+            hints.append(hint)
+    if live and sent_fps >= 5 and info.get("fps") is not None and info["fps"] < 0.75 * sent_fps:
         warnings.append(
-            f"WLED zeigt {info['fps']} FPS bei {sending_fps:.0f} gesendeten: "
-            "Frames gehen verloren oder der Controller ist überlastet"
+            f"WLED zeigt {info['fps']} von {sent_fps:.0f} gesendeten FPS: Pakete gehen verloren "
+            "(WLAN) oder der Controller ist überlastet – „Geschwindigkeit messen“ hilft beim Einstellen"
         )
-    return {"ok": True, "info": info, "warnings": warnings}
+    return {"ok": True, "info": info, "config": cfg, "sent_fps": round(sent_fps, 1), "warnings": warnings, "hints": hints}
 
 
 async def set_state(host: str, state: dict, timeout: float = 2.0) -> dict:
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.post(f"http://{host}/json/state", json=state)
-        r.raise_for_status()
-        return r.json()
+    r = await _client().post(f"http://{host}/json/state", json=state, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
 
 
 async def discover(seconds: float = 3.0) -> list[dict]:

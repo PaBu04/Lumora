@@ -882,6 +882,24 @@ async def playback_test(request: Request, body: TestBody):
     return s.state()
 
 
+class SpeedTestBody(BaseModel):
+    controller_id: str
+
+
+@router.post("/playback/speedtest")
+async def playback_speedtest(request: Request, body: SpeedTestBody):
+    """Measure the frames per second a controller really shows (sends a test pattern for ~6 s)."""
+    s = state(request).session
+    try:
+        return await s.speed_test(body.controller_id)
+    except KeyError as exc:
+        raise _404(str(exc))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    except Exception as exc:  # WLED unreachable
+        raise HTTPException(502, f"Messung fehlgeschlagen: {exc}")
+
+
 # devices
 
 

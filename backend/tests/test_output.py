@@ -2,6 +2,7 @@ import socket
 import struct
 
 import numpy as np
+import pytest
 
 from lsg.geometry.led_table import build_led_table
 from lsg.model.calibration import LedCalibration
@@ -74,3 +75,58 @@ def test_sender_delivers_frames():
     assert bytes(received) == data
     sender.close()
     rx.close()
+
+
+# --- live output pacing ------------------------------------------------------------------
+
+
+def test_output_link_paces_evenly_and_skips_static_frames():
+    from lsg.output.link import KEEPALIVE_S, REPEATS, OutputLink
+
+    link = OutputLink(rate=25.0, next_due=0.0)
+    sent = []
+    t = -0.01
+    while t < 0.99:  # a 1 kHz loop asking with changing content
+        if link.needs_frame(t, changing=True) and link.offer(bytes([int(t * 1000) % 256]), t):
+            sent.append(t)
+        t = round(t + 0.001, 6)
+    gaps = np.diff(sent)
+    assert len(sent) == 25 and np.allclose(gaps, 0.04, atol=0.0011)
+    assert link.sent_fps(now=sent[-1]) == pytest.approx(25, rel=0.05)
+
+    # unchanged content: sent, repeated REPEATS times, then only kept alive
+    link = OutputLink(rate=50.0, next_due=0.0)
+    sent = []
+    t = 0.0
+    while t < 2.0:
+        if link.needs_frame(t, changing=True) and link.offer(b"same", t):
+            sent.append(t)
+        t = round(t + 0.001, 6)
+    assert sent[: REPEATS + 1] == pytest.approx([0.0, 0.017, 0.037], abs=0.002)
+    assert np.diff(sent[REPEATS + 1 :]).min() >= KEEPALIVE_S - 0.021
+    assert len(sent) <= REPEATS + 1 + 2.0 / KEEPALIVE_S + 1
+
+    # a forced update (seek while paused) goes out at once and restarts the schedule
+    assert link.offer(b"new", 2.005, force=True)
+    assert link.next_due == pytest.approx(2.025)
+
+
+def test_wled_frame_rate_estimate():
+    from lsg.output.wled import bus_ms, estimate_fps, limit_hint, recommended_fps
+
+    # measured on a real ESP32: 873 WS2812B on one pin showed 32-33 FPS
+    ms = bus_ms(22, 873)
+    assert ms == pytest.approx(26.5, abs=0.3)
+    one_pin = [{"type": 22, "len": 873, "pins": [16], "ms": ms}]
+    assert estimate_fps(one_pin) == pytest.approx(32, abs=1)
+    assert 28 <= recommended_fps(estimate_fps(one_pin), 50) < 31
+    assert "873 LEDs an einem Datenpin" in limit_hint({"buses": one_pin, "max_fps": estimate_fps(one_pin)})
+
+    # split over two pins: they output in parallel
+    two = [{"type": 22, "len": 437, "ms": bus_ms(22, 437)}, {"type": 22, "len": 436, "ms": bus_ms(22, 436)}]
+    assert estimate_fps(two) > 50 * 0.99 or estimate_fps(two) > 55
+    # small RGBW strip (measured: 128 SK6812 show ~51 FPS): WLED itself is the limit, send at full rate
+    small = [{"type": 30, "len": 128, "ms": bus_ms(30, 128)}]
+    assert recommended_fps(estimate_fps(small), 50) == 50
+    assert limit_hint({"buses": small, "max_fps": estimate_fps(small)}) is None
+    assert bus_ms(51, 1000) == 0.0  # APA102 (clocked) is not limited by the data line

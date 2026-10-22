@@ -9,6 +9,7 @@ Header (10 bytes):
   8-9 data length in bytes (big endian)
 """
 
+import contextlib
 import socket
 import struct
 
@@ -53,6 +54,9 @@ def parse_packet(packet: bytes) -> dict:
 class DdpSender:
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # room for a whole frame burst (5000 LEDs = 11 packets); a full buffer would drop frames
+        with contextlib.suppress(OSError):
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1 << 20)
         self.sock.setblocking(False)
         self._seq: dict[tuple[str, int], int] = {}
         self.errors: dict[str, str] = {}

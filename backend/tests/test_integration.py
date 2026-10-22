@@ -1,6 +1,7 @@
 """End-to-end: real HTTP server, WLED simulator receiving DDP, MCP client."""
 
 import asyncio
+import contextlib
 import socket
 import threading
 import time
@@ -51,14 +52,15 @@ def server(tmp_path):
     t.stop()
 
 
-@pytest.fixture
-def wled():
+@contextlib.contextmanager
+def simulated_wled(leds: int = 200, pins: int = 1):
     http_port, ddp_port = free_port(), free_port(socket.SOCK_DGRAM)
     loop = asyncio.new_event_loop()
     th = threading.Thread(target=loop.run_forever, daemon=True)
     th.start()
     stop = asyncio.Event()
-    fut = asyncio.run_coroutine_threadsafe(wled_sim.run("Sim", 200, http_port, ddp_port, False, False, stop), loop)
+    coro = wled_sim.run("Sim", leds, http_port, ddp_port, False, False, stop, pins=pins)
+    fut = asyncio.run_coroutine_threadsafe(coro, loop)
     for _ in range(100):
         try:
             httpx.get(f"http://127.0.0.1:{http_port}/json/info")
@@ -69,6 +71,12 @@ def wled():
     loop.call_soon_threadsafe(stop.set)
     fut.result(timeout=5)
     loop.call_soon_threadsafe(loop.stop)
+
+
+@pytest.fixture
+def wled():
+    with simulated_wled() as ports:
+        yield ports
 
 
 def setup_project(base: str, controllers: list | None = None) -> str:
@@ -110,10 +118,22 @@ def test_live_output_reaches_wled(server, wled):
     time.sleep(1.5)
     stats = httpx.get(f"http://127.0.0.1:{http_port}/sim/stats").json()
     frame = httpx.get(f"http://127.0.0.1:{http_port}/sim/frame").json()["data"]
-    httpx.post(f"{server}/api/playback/stop")
-    assert stats["frames"] > 30 and stats["fps"] > 35
+    # a static frame is sent, repeated twice and then only kept alive (2 per second)
+    assert 3 <= stats["frames"] <= 8, stats
     assert frame[:30] == [0] * 30  # pixels 0..9 unmapped
     assert frame[30:33] == [255, 0, 0] and frame[(10 + 119) * 3 : (10 + 120) * 3] == [255, 0, 0]
+    state = httpx.get(f"{server}/api/playback").json()
+    assert state["links"]["c1"]["rate"] == 50  # 200 LEDs on the simulated pin are no bottleneck
+
+    # moving content goes out at the full, evenly spaced rate
+    show["layers"][0]["clips"][0].update(effect="rainbow", params={"speed": 2})
+    httpx.put(f"{server}/api/projects/{slug}/shows/{show['id']}", json=show)
+    time.sleep(1.5)
+    stats = httpx.get(f"http://127.0.0.1:{http_port}/sim/stats").json()
+    httpx.post(f"{server}/api/playback/stop")
+    assert stats["fps"] > 42, stats
+    show["layers"][0]["clips"][0].update(effect="solid", params={"color": "#ff0000"})
+    httpx.put(f"{server}/api/projects/{slug}/shows/{show['id']}", json=show)
 
     power = httpx.get(f"{server}/api/projects/{slug}/shows/{show['id']}/power", params={"fps": 1}).json()
     assert power["controllers"]["c1"]["peak_ma"] > 0
@@ -141,6 +161,46 @@ def test_live_output_reaches_wled(server, wled):
     time.sleep(0.4)
     frame = httpx.get(f"http://127.0.0.1:{http_port}/sim/frame").json()["data"]
     assert frame[30:33] == [0, 255, 0] and frame[129 * 3 : 130 * 3] == [255, 0, 0]
+
+
+def test_slow_controller_gets_frames_it_can_show(server, monkeypatch):
+    """900 WS2812B on one pin can show ~31 FPS: the app sends evenly just below that and
+    the speed test finds the limit."""
+    monkeypatch.setattr("lsg.playback.session.MONITOR_SECONDS", 0.3)
+    with simulated_wled(leds=900) as (http_port, ddp_port):
+        host = f"127.0.0.1:{http_port}"
+        slug = setup_project(server, [{"id": "c1", "host": host, "port": ddp_port, "mappings": [{"fixture_id": "s1"}]}])
+        show = httpx.post(f"{server}/api/projects/{slug}/shows", json={"name": "S", "template": "empty"}).json()
+        show["duration"] = 60
+        show["layers"] = [{"name": "L", "clips": [{"start": 0, "end": 60, "effect": "rainbow", "params": {"speed": 2}}]}]
+        httpx.put(f"{server}/api/projects/{slug}/shows/{show['id']}", json=show)
+        httpx.post(f"{server}/api/playback/load", json={"project": slug, "show": show["id"]})
+        httpx.post(f"{server}/api/playback/mode", json={"mode": "live"})
+        httpx.post(f"{server}/api/playback/play")
+        time.sleep(1.0)  # monitor reads /json/cfg and lowers the rate
+        state = httpx.get(f"{server}/api/playback").json()
+        assert 27 <= state["links"]["c1"]["rate"] <= 30, state["links"]
+        st = state["controller_status"]["c1"]
+        assert "900 LEDs an einem Datenpin" in st["hints"][0]
+        time.sleep(1.5)
+        stats = httpx.get(f"http://127.0.0.1:{http_port}/sim/stats").json()
+        assert abs(stats["fps"] - state["links"]["c1"]["rate"]) < 2.5, stats
+        assert stats["shown_fps"] >= stats["fps"] - 1.5, stats  # nothing dropped by the controller
+
+        r = httpx.post(f"{server}/api/playback/speedtest", json={"controller_id": "c1"}, timeout=20)
+        assert r.status_code == 200, r.text
+        res = r.json()
+        assert 28 <= res["measured_fps"] <= 33 and res["loss_pct"] == 0, res
+        assert 26 <= res["recommended_fps"] <= 30
+        assert res["estimated_fps"] == pytest.approx(31, abs=1)
+
+        # a manual rate wins over the automatic one
+        p = httpx.get(f"{server}/api/projects/{slug}").json()
+        p["controllers"][0]["max_fps"] = 20
+        assert httpx.put(f"{server}/api/projects/{slug}", json=p).status_code == 200
+        time.sleep(1.2)
+        assert httpx.get(f"{server}/api/playback").json()["links"]["c1"]["rate"] == 20
+        httpx.post(f"{server}/api/playback/stop")
 
 
 def test_mcp_tools(server):

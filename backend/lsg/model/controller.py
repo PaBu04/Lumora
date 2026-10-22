@@ -21,4 +21,7 @@ class Controller(BaseModel):
     rgbw: bool = False
     latency_ms: float = Field(default=0.0, ge=-1000, le=1000)
     budget_ma: float | None = Field(default=None, ge=100, description="power supply limit of this controller in mA")
+    max_fps: float | None = Field(
+        default=None, ge=5, le=120, description="frames per second sent to this controller; None = automatic from its LED setup"
+    )
     mappings: list[FixtureMapping] = Field(default_factory=list)

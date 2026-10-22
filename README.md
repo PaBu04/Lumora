@@ -16,7 +16,13 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 
 **Hardware**
 - WLED-Controller per mDNS finden, Strips Pixelbereichen zuordnen, Testmuster, Live-Ausgabe per DDP (~50 FPS).
-- Statusüberwachung: erreichbar, WLED-Version, empfangene FPS, WLAN-Signal, Warnungen bei zu vielen LEDs pro ESP.
+- **Bildrate pro Controller:** Ein WLED kann nur so viele Bilder zeigen, wie seine Datenleitungen schaffen
+  (WS2812B: ~30 µs pro LED und Pin – 873 LEDs an einem Pin ≈ 32 FPS). Die App liest dazu die LED-Konfiguration
+  aus WLED, schickt jedem Controller gleichmäßig getaktet knapp unter seinem Maximum und lässt unveränderte
+  Bilder weg (nur Keep-alive). *Geschwindigkeit messen* ermittelt die echte Rate und Paketverluste; die
+  Bildrate lässt sich auch von Hand festlegen.
+- Statusüberwachung: erreichbar, WLED-Version, gesendete und angezeigte FPS, mögliches Maximum, WLAN-Signal,
+  Hinweise (z. B. Strip auf mehrere Datenpins aufteilen, WLAN-Energiesparen aus).
 - **Kalibrierung:** Shows rechnen in *wahrgenommener* Helligkeit (0,5 sieht halb so hell aus). Eine Kurve
   (CIE L* oder Gamma) setzt das in PWM um; Mindeststufe, Abschaltschwelle, Weißabgleich, RGBW-Weißmischung und
   räumliches/zeitliches Dithering sorgen dafür, dass dunkle und helle Szenen gut rüberkommen. Ein Assistent zeigt
@@ -80,7 +86,7 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 | `LSG_PORT`     | `8000`      | HTTP-Port                                                     |
 | `LSG_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
 | `LSG_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
-| `LSG_FPS`      | `50`        | Bildrate für Rendering und DDP                                |
+| `LSG_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
 
 ## Erste Schritte mit echten LEDs
 
@@ -91,8 +97,12 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 4. *Kalibrierung → Synchronisation*: Sync-Test starten und Audio-Latenz einstellen, bis Klick und Blitz zusammenfallen.
 5. Song hochladen, Show erstellen (Starter, Editor oder KI), im Player auf **LIVE** schalten.
 
-Ohne Hardware testen: `backend\.venv\Scripts\lsg-wled-sim --leds 600 --http 8081` startet einen simulierten
-WLED-Controller (per mDNS auffindbar, empfängt DDP, `/sim/stats` zeigt die FPS).
+Mehr FPS bei langen Strips: In WLED die LEDs auf mehrere Ausgänge (Datenpins) verteilen – die Pins werden
+parallel beschrieben, z. B. 2 × 437 statt 1 × 873 LEDs ≈ 50 statt 32 FPS. WLAN-Energiesparen in WLED ausschalten.
+
+Ohne Hardware testen: `backend\.venv\Scripts\lsg-wled-sim --leds 600 --http 8081 [--pins 2]` startet einen
+simulierten WLED-Controller (per mDNS auffindbar, empfängt DDP, zeigt wie ein echter höchstens so viele Bilder,
+wie seine Pins schaffen; `/sim/stats` meldet empfangene und angezeigte FPS).
 
 ## KI
 
