@@ -1,94 +1,113 @@
 # Neopixel Light Show Generator
 
 Musiksynchrone Lichtshows für adressierbare LEDs (WS2812B, SK6812 RGB/RGBW) an WLED-Controllern –
-mit 3D-Raummodell, Betrachterposition, Songanalyse und einem MCP-Server, über den eine KI Shows programmiert.
+mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor und KI-Unterstützung
+(eingebaut über Claude Code oder als MCP-Server für eigene KI-Clients).
 
 ## Funktionen
 
-- **Raum**: Grundriss als 2D-Skizze zeichnen (Ecken ziehen, einfügen, löschen, Vorlagen) plus Raumhöhe.
-- **LED-Strips**: Linien, Bezier-Kurven, Bögen, Kreise und Matrizen im Raum platzieren; Presets wie
-  Deckenumrandung, Wandleiste, Eckstreifen, Deckenring, Wand-Matrix; Punkte per 3D-Gizmo verschieben
-  (rastet an Wänden, Boden und Decke ein); LED-Dichte bzw. feste Anzahl, Datenrichtung, Tags.
-- **Betrachter**: Position und Blickrichtung. Jede LED kennt ihren Winkel links/rechts, ihre Höhe im
-  Blickfeld und ihre Entfernung – Effekte können sich darauf beziehen („Welle von links nach rechts").
-- **Controller**: WLED-Geräte per mDNS finden oder per IP hinzufügen, Strips auf Pixelbereiche
-  zuordnen, Testmuster (Anfang grün, Ende rot), Live-Ausgabe per DDP mit ~50 FPS, Latenz je Controller,
-  Gamma, Helligkeit, Audio-Latenz.
-- **Songs**: mp3/wav/flac/ogg hochladen; automatische Analyse von Tempo, Beats, Takten, Abschnitten
-  (Intro/Strophe/Refrain/Break/Bridge/Outro) und Lautstärke je Frequenzband; Tempo-Korrektur ×2/÷2.
-- **Shows**: Ebenen mit Effekt-Clips (14 Effekte, Audio-Bindings, Keyframes, beat-synchrone LFOs,
-  räumliche Ziele) plus eigene Python/numpy-Shader. Starter-Show aus der Songstruktur, 3D-Vorschau mit
-  Bloom, Betrachter-Sicht, Timeline, JSON-Editor, Prüfung.
-- **KI/MCP**: Streamable-HTTP-MCP-Server unter `/mcp` – die KI liest Raum, LEDs, Betrachter und
-  Musikanalyse, schreibt Shows und Shader und prüft ihr Ergebnis über gerenderte Bilder.
+**Raum und LEDs**
+- Grundriss als 2D-Skizze (Ecken ziehen, einfügen, löschen, Vorlagen) plus Raumhöhe – oder ein Foto /
+  einen Bauplan hochladen, Maßstab über zwei Punkte festlegen und die Ecken nachzeichnen.
+- LED-Strips als Linien, Bezier-Kurven, Bögen, Kreise und Matrizen; Presets (Deckenumrandung, Wandleiste,
+  Eckstreifen, Deckenring, Wand-Matrix); Punkte per 3D-Gizmo verschieben (rastet an Wänden, Boden, Decke ein).
+- Betrachter mit Position und Blickrichtung: Effekte können „von links nach rechts durchs Blickfeld“ laufen.
+- Rückgängig/Wiederholen (Strg+Z / Strg+Y) und ein Versionsverlauf mit Wiederherstellen.
+
+**Hardware**
+- WLED-Controller per mDNS finden, Strips Pixelbereichen zuordnen, Testmuster, Live-Ausgabe per DDP (~50 FPS).
+- Statusüberwachung: erreichbar, WLED-Version, empfangene FPS, WLAN-Signal, Warnungen bei zu vielen LEDs pro ESP.
+- **Kalibrierung:** Shows rechnen in *wahrgenommener* Helligkeit (0,5 sieht halb so hell aus). Eine Kurve
+  (CIE L* oder Gamma) setzt das in PWM um; Mindeststufe, Abschaltschwelle, Weißabgleich, RGBW-Weißmischung und
+  räumliches/zeitliches Dithering sorgen dafür, dass dunkle und helle Szenen gut rüberkommen. Ein Assistent zeigt
+  Testmuster direkt auf den LEDs (rohe PWM-Stufen, gleichmäßige Stufen, Dunkelstufen, Weiß).
+- **Strombudget** pro Controller und Netzteil: Stromschätzung aus den tatsächlichen PWM-Werten, automatische
+  Drosselung, Stromverlauf und Warnungen in der Show-Prüfung.
+- **Synchronisation:** Sync-Test (Klick auf jeden Beat + LED-Blitz) zum Einstellen von Audio- und Controller-Latenz.
+
+**Musik**
+- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten, Abschnitten (Intro/Strophe/Refrain/
+  Break/Bridge/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2.
+- Optional genauere Beat-Erkennung mit dem neuronalen Modell *beat_this* (`pip install -e ".[ml]"`).
+- **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen.
+
+**Shows**
+- Grafischer Timeline-Editor: Clips ziehen, kürzen, an Beats/Takte einrasten, Mehrfachauswahl, Kopieren/Einfügen,
+  Ebenen; Inspektor mit Reglern, Farbwählern, Paletten und den Modi Wert / Audio / LFO / Keyframes; Ziel-Editor.
+- 14 Effekte, eigene Effekte als Python/numpy-Shader (laufen in einem eigenen Prozess), **Looks** als
+  wiederverwendbare Clip-Gruppen mit Zeiten in Beats (vier mitgeliefert, eigene aus jeder Auswahl).
+- Starter-Show aus der Songstruktur, 3D-Vorschau mit Bloom und Betrachter-Sicht.
+- **Export** als FSEQ-v2-Paket für xLights / Falcon Player (kalibrierte Werte, Audio, Kanal-Zuordnung).
+
+**KI**
+- *Show mit KI erstellen*: nutzt dein lokal installiertes **Claude Code** im Hintergrund (`claude -p`) mit deinem
+  Claude-Abo – keine API-Kosten. Claude bekommt nur die Werkzeuge dieser App (kein Datei- oder Shell-Zugriff).
+- MCP-Server unter `/mcp` für eigene KI-Clients (Claude Desktop, Claude Code, …).
 
 ## Voraussetzungen
 
-- Python ≥ 3.12 (getestet mit 3.14)
-- Node.js ≥ 20 (nur zum Bauen der Oberfläche)
+- Python ≥ 3.12 (getestet mit 3.14; zstd-komprimierter Export braucht 3.14)
+- Node.js ≥ 20 (zum Bauen der Oberfläche)
+- Optional: [Claude Code](https://claude.com/claude-code), angemeldet mit deinem Claude-Konto, für die eingebaute KI
 
-## Installation
+## Installation und Start
+
+```powershell
+.\start.ps1                # richtet beim ersten Start alles ein, öffnet http://127.0.0.1:8000
+.\create_shortcut.ps1      # optional: Desktop-Verknüpfung, App läuft im eigenen Fenster
+```
+
+Manuell:
 
 ```powershell
 cd backend
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
-
 cd ..\frontend
 npm install
 npm run build
+..\backend\.venv\Scripts\lsg            # Server im Terminal
+..\backend\.venv\Scripts\lsg-desktop    # oder als App-Fenster (schließen = beenden)
 ```
 
-## Starten
-
-```powershell
-.\start.ps1          # oder: backend\.venv\Scripts\lsg
-```
-
-Dann <http://127.0.0.1:8000> öffnen. Die Musik wird über die Soundkarte des PCs abgespielt; ihre
-Position ist der Taktgeber für Vorschau und LEDs.
-
-Entwicklung mit Hot-Reload der Oberfläche: Backend starten und zusätzlich `npm run dev` im Ordner
-`frontend` (<http://localhost:5173>, leitet `/api`, `/ws` und `/mcp` an Port 8000 weiter).
+Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `frontend` (<http://localhost:5173>).
 
 ### Umgebungsvariablen
 
-| Variable       | Standard          | Bedeutung                                               |
-|----------------|-------------------|---------------------------------------------------------|
-| `LSG_DATA`     | `./data`          | Projekte, Songs, Shows                                   |
-| `LSG_PORT`     | `8000`            | HTTP-Port                                               |
-| `LSG_HOST`     | `127.0.0.1`       | Bind-Adresse                                            |
-| `LSG_AUDIO`    | `device`          | `null` = stumme Uhr ohne Soundkarte (Tests, Server)    |
-| `LSG_FPS`      | `50`              | Bildrate für Rendering und DDP                          |
+| Variable       | Standard    | Bedeutung                                                     |
+|----------------|-------------|---------------------------------------------------------------|
+| `LSG_DATA`     | `./data`    | Projekte, Songs, Shows, Einstellungen                         |
+| `LSG_PORT`     | `8000`      | HTTP-Port                                                     |
+| `LSG_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
+| `LSG_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
+| `LSG_FPS`      | `50`        | Bildrate für Rendering und DDP                                |
 
-## WLED einrichten
+## Erste Schritte mit echten LEDs
 
-1. In WLED unter *LED Preferences* LED-Typ (WS2812B / SK6812 / SK6812 RGBW), Anzahl und Farbreihenfolge
-   einstellen. Die Anzahl muss alle in der App zugeordneten Pixel abdecken.
-2. Unter *Sync Interfaces* muss *Receive UDP realtime* aktiv sein (Standard). DDP läuft auf UDP-Port 4048.
-3. In der App unter *Controller* das Gerät hinzufügen, Strips zuordnen und mit *Test* prüfen, ob Anfang
-   (grün) und Ende (rot) stimmen – sonst *Datenrichtung umgekehrt* setzen.
-4. Im Player auf **LIVE** schalten. Nach Ende der Show kehrt WLED nach ca. 2,5 s zum eigenen Effekt zurück.
+1. WLED: LED-Typ, Anzahl und Farbreihenfolge einstellen; *Receive UDP realtime* aktiv lassen (DDP, UDP 4048).
+2. App → *Controller*: Gerät suchen oder IP eingeben, Strips zuordnen, mit *Test* Anfang (grün) und Ende (rot)
+   prüfen, Strombudget des Netzteils eintragen.
+3. *Kalibrierung* im abgedunkelten Raum: Mindeststufe finden, Kurve prüfen, dunkle Stufen und Weißabgleich.
+4. *Kalibrierung → Synchronisation*: Sync-Test starten und Audio-Latenz einstellen, bis Klick und Blitz zusammenfallen.
+5. Song hochladen, Show erstellen (Starter, Editor oder KI), im Player auf **LIVE** schalten.
 
-Wirken die Farben zu blass oder zu dunkel, Gamma unter *Controller → Ausgabe* anpassen
-(1.0, falls WLED bereits selbst eine Gammakorrektur anwendet).
+Ohne Hardware testen: `backend\.venv\Scripts\lsg-wled-sim --leds 600 --http 8081` startet einen simulierten
+WLED-Controller (per mDNS auffindbar, empfängt DDP, `/sim/stats` zeigt die FPS).
 
-Ohne Hardware testen: `backend\.venv\Scripts\lsg-wled-sim --leds 600 --http 8081` startet einen
-simulierten WLED-Controller (per mDNS auffindbar, empfängt DDP, `/sim/stats` zeigt die FPS).
+## KI
 
-## KI-Shows (MCP)
+**In der App** (Seite *KI / MCP*): Song wählen, Wunsch beschreiben, *Show generieren*. Der Fortschritt erscheint
+live; das Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf.
 
-Endpunkt: `http://127.0.0.1:8000/mcp` (die App muss laufen).
-
-- **Claude Code**: `claude mcp add --transport http lightshow http://127.0.0.1:8000/mcp`
-- **Claude Desktop** (`claude_desktop_config.json`):
-  ```json
-  { "mcpServers": { "lightshow": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp"] } } }
-  ```
+**Eigener Client:** MCP-Endpunkt `http://127.0.0.1:8000/mcp`
+- Claude Code: `claude mcp add --transport http lightshow http://127.0.0.1:8000/mcp`
+- Claude Desktop (`claude_desktop_config.json`):
+  `{ "mcpServers": { "lightshow": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp"] } } }`
 
 Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effects`, `get_show_format`,
 `create_show`, `add_clips`, `update_clips`, `remove_clips`, `update_show`, `delete_show`, `validate`,
-`write_shader`, `get_shader`, `get_shader_api`, `render_snapshot`, `render_timeline`, `preview`, `playback`.
+`analyze_power`, `list_looks`, `apply_look`, `list_show_versions`, `restore_show_version`, `write_shader`,
+`get_shader`, `get_shader_api`, `render_snapshot`, `render_timeline`, `preview`, `playback`.
 
 ## Show-Format (Kurzfassung)
 
@@ -97,51 +116,51 @@ Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effec
   "name": "Party", "song_id": "…",
   "layers": [
     { "name": "Base", "clips": [
-      { "start": 0, "end": 16.5, "effect": "noise", "params": { "palette": "ocean", "brightness": 0.5 } } ] },
+      { "start": 0, "end": 16.5, "effect": "noise", "params": { "palette": "ocean", "brightness": 0.2 } } ] },
     { "name": "Beat", "clips": [
       { "start": 16.5, "end": 48, "effect": "pulse", "blend": "add",
         "params": { "color": "#ff0080", "trigger": "beat", "decay": 0.15 },
-        "target": { "tags": ["ceiling"] } },
-      { "start": 16.5, "end": 48, "effect": "wave", "blend": "add",
-        "params": { "axis": "azimuth", "beats": 2, "brightness": { "audio": "low", "min": 0.2, "max": 1 } } } ] }
+        "target": { "tags": ["ceiling"] } } ] }
   ]
 }
 ```
 
-Effekte: `solid`, `gradient`, `rainbow`, `pulse`, `strobe`, `chase`, `wave`, `ripple`, `sparkle`, `fade`,
-`vu`, `noise`, `spotlight`, `split` sowie `shader:<name>`. Die vollständige Beschreibung liefert das
-MCP-Werkzeug `get_show_format` bzw. die Seite *KI / MCP*.
+Helligkeiten sind wahrgenommen: dunkle Szenen 0,05–0,25, normal 0,3–0,7, Akzente 0,8–1,0, nichts unter 0,03.
+Die vollständige Beschreibung liefert `get_show_format` bzw. die Seite *KI / MCP*.
 
 ## Architektur
 
 ```
-frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  backend/ FastAPI
+frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  backend/ FastAPI (lsg)
 backend/lsg/
-  model/      Raum, Fixtures, Controller, Betrachter, Songs, Shows (pydantic)
+  model/      Raum, Fixtures, Controller, Kalibrierung, Betrachter, Songs, Shows
   geometry/   Fixture → LED-Positionen, betrachterbezogene Koordinaten
-  audio/      Analyse (librosa), Bibliothek, Player (Audio-Uhr), Demo-Songs
-  render/     Effekte, Parameter, Shader-Sandbox, Engine, Validierung, Snapshots
-  output/     DDP, Pixel-Zuordnung, WLED-API, mDNS
-  playback/   Takt-Schleife: rendern → Browser-Vorschau + WLED
-  mcp_server  MCP-Werkzeuge
+  audio/      Analyse (librosa, optional beat_this), Live-Analyse, Bibliothek, Player, Demo-Songs
+  render/     Effekte, Parameter, Shader (+ Worker-Prozess), Looks, Engine, Validierung, Snapshots
+  output/     Kalibrierkurve, Ausgabe-Pipeline mit Strombegrenzung, DDP, WLED-API/mDNS, FSEQ-Export
+  playback/   Takt-Schleife, Testmuster, Sync-Test, Live-Eingang
+  storage/    Projekte, Shows, Looks, Versionsverlauf
+  ai_agent    Claude-Code-Anbindung      mcp_server   MCP-Werkzeuge      desktop   App-Fenster
 ```
 
-Eine einzige Render-Engine erzeugt die Bilder für Vorschau, Live-Ausgabe und KI-Snapshots – alle drei
-zeigen immer dasselbe.
+Eine einzige Render-Engine erzeugt Vorschau, Live-Ausgabe, Export und KI-Snapshots – alle zeigen dasselbe.
 
-## Tests
+## Tests und Qualität
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest
+.venv\Scripts\python -m pytest            # ~100 Unit- und Integrationstests
+.venv\Scripts\python -m pytest -m ui      # Browser-Ende-zu-Ende-Test (braucht gebautes Frontend + Playwright)
+.venv\Scripts\python -m ruff check lsg tests
+cd ..\frontend; npm run lint; npm run typecheck
 ```
 
-Die Tests decken Geometrie, Audioanalyse, Effekte, Shader-Sandbox, DDP, REST-API, Live-Ausgabe an einen
-simulierten WLED-Controller und den MCP-Server Ende-zu-Ende ab.
+GitHub Actions (`.github/workflows/ci.yml`) führt Backend-Tests (Python 3.12/3.14), Lint, Typecheck, Build und den
+Browser-Test aus.
 
 ## Hinweise
 
-- Shader laufen mit eingeschränktem Python (nur numpy/math, keine Importe, keine `while`-Schleifen). Das
-  verhindert Versehen, ist aber keine Sicherheitsgrenze gegen absichtlich bösartigen Code.
-- Der MCP-Server ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).
+- Shader laufen in einem eigenen Prozess und mit eingeschränktem Python; das schützt vor Hängern und Versehen,
+  ist aber keine Sicherheitsgrenze gegen absichtlich bösartigen Code.
 - Abschnittsnamen sind heuristisch; die Ähnlichkeits-Labels (A, B, C …) zeigen, welche Teile gleich klingen.
+- Der MCP-Server ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).

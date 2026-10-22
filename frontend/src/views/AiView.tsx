@@ -188,7 +188,9 @@ const TOOLS: [string, string][] = [
   ["list_effects / get_show_format", "Effektbibliothek und Show-Format"],
   ["create_show, add_clips, update_clips, remove_clips, update_show", "Shows programmieren"],
   ["write_shader / get_shader_api", "Eigene Effekte in Python/numpy"],
-  ["validate", "Fehler und Hinweise prüfen"],
+  ["validate / analyze_power", "Fehler, Hinweise und Strombedarf prüfen"],
+  ["list_looks / apply_look", "Wiederverwendbare Clip-Gruppen (in Beats) einsetzen"],
+  ["list_show_versions / restore_show_version", "Versionen ansehen und zurückrollen"],
   ["render_snapshot / render_timeline", "Bilder zur Selbstkontrolle der KI"],
   ["preview / playback", "Show in der App abspielen"],
 ];
