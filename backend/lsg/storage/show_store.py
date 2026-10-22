@@ -1,0 +1,81 @@
+"""Shows (<project>/shows/<id>.json) and shaders (<project>/shaders/<name>.py)."""
+
+import re
+from pathlib import Path
+
+from lsg.model.show import Show
+from lsg.render.shaders import NAME_RE, Shader, ShaderError
+from lsg.storage.project_store import atomic_write_text
+
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class ShowStore:
+    def __init__(self, project_dir: Path):
+        self.shows_dir = project_dir / "shows"
+        self.shaders_dir = project_dir / "shaders"
+
+    # shows
+    def _show_path(self, show_id: str) -> Path:
+        if not _ID_RE.match(show_id):
+            raise KeyError(show_id)
+        return self.shows_dir / f"{show_id}.json"
+
+    def list(self) -> list[Show]:
+        if not self.shows_dir.exists():
+            return []
+        shows = [Show.model_validate_json(p.read_text(encoding="utf-8")) for p in self.shows_dir.glob("*.json")]
+        return sorted(shows, key=lambda s: s.name.lower())
+
+    def get(self, show_id: str) -> Show:
+        path = self._show_path(show_id)
+        if not path.is_file():
+            raise KeyError(show_id)
+        return Show.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def save(self, show: Show) -> None:
+        atomic_write_text(self._show_path(show.id), show.model_dump_json(indent=2))
+
+    def delete(self, show_id: str) -> None:
+        path = self._show_path(show_id)
+        if not path.is_file():
+            raise KeyError(show_id)
+        path.unlink()
+
+    # shaders
+    def _shader_path(self, name: str) -> Path:
+        if not NAME_RE.match(name):
+            raise KeyError(name)
+        return self.shaders_dir / f"{name}.py"
+
+    def shader_names(self) -> list[str]:
+        if not self.shaders_dir.exists():
+            return []
+        return sorted(p.stem for p in self.shaders_dir.glob("*.py") if NAME_RE.match(p.stem))
+
+    def shader_source(self, name: str) -> str:
+        path = self._shader_path(name)
+        if not path.is_file():
+            raise KeyError(name)
+        return path.read_text(encoding="utf-8")
+
+    def save_shader(self, name: str, source: str) -> Shader:
+        shader = Shader(name, source)  # validates before writing
+        atomic_write_text(self._shader_path(name), source)
+        return shader
+
+    def delete_shader(self, name: str) -> None:
+        path = self._shader_path(name)
+        if not path.is_file():
+            raise KeyError(name)
+        path.unlink()
+
+    def load_shaders(self) -> tuple[dict[str, Shader], dict[str, str]]:
+        """All loadable shaders plus load errors by name."""
+        shaders, errors = {}, {}
+        for name in self.shader_names():
+            try:
+                shaders[name] = Shader(name, self.shader_source(name))
+            except ShaderError as exc:
+                errors[name] = str(exc)
+        return shaders, errors

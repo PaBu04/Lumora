@@ -1,0 +1,40 @@
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from lsg.model.common import Id, new_id
+
+AnalysisStatus = Literal["pending", "running", "done", "error"]
+
+
+class Song(BaseModel):
+    id: Id = Field(default_factory=new_id)
+    title: str
+    artist: str = ""
+    filename: str
+    duration: float = 0.0
+    status: AnalysisStatus = "pending"
+    error: str | None = None
+
+
+class Section(BaseModel):
+    start: float
+    end: float
+    name: str  # intro / verse / chorus / bridge / break / outro (heuristic)
+    label: str  # A, B, C ... sections with the same label sound alike
+    energy: float  # mean loudness 0..1
+
+
+class Analysis(BaseModel):
+    """Result of the audio analysis. Feature curves are sampled at `frame_rate` Hz, normalised 0..1."""
+
+    version: int = 1
+    duration: float
+    bpm: float
+    beats: list[float]
+    downbeats: list[float]
+    onsets: list[float]
+    sections: list[Section]
+    frame_rate: float
+    features: dict[str, list[float]]  # rms, low, mid, high, onset
+    waveform: list[float]  # peak envelope for drawing, ~WAVEFORM_POINTS values

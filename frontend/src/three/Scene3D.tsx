@@ -1,0 +1,309 @@
+import { Line, OrbitControls, PerspectiveCamera, TransformControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Bloom, EffectComposer } from "@react-three/postprocessing";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { bounds, geometryPath, handles, setHandle, snapPoint } from "../geometry";
+import { useStore } from "../store";
+import type { LedData, Project, Room, Vec3, Viewer } from "../types";
+import { liveFrame } from "../ws";
+
+// the backend uses z-up coordinates; make three.js agree
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+const LED_RADIUS = 0.02;
+const IDLE = new THREE.Color("#4a5468");
+
+function RoomModel({ room }: { room: Room }) {
+  const floor = useMemo(() => {
+    const shape = new THREE.Shape(room.floor.map(([x, y]) => new THREE.Vector2(x, y)));
+    return new THREE.ShapeGeometry(shape);
+  }, [room]);
+  const edges = useMemo(() => {
+    const segs: Vec3[][] = [];
+    const n = room.floor.length;
+    for (let i = 0; i < n; i++) {
+      const [ax, ay] = room.floor[i];
+      const [bx, by] = room.floor[(i + 1) % n];
+      segs.push([[ax, ay, 0], [bx, by, 0]], [[ax, ay, room.height], [bx, by, room.height]], [[ax, ay, 0], [ax, ay, room.height]]);
+    }
+    return segs;
+  }, [room]);
+  const grid = useMemo(() => {
+    const b = bounds(room);
+    const segs: Vec3[][] = [];
+    for (let x = Math.ceil(b.x0); x <= b.x1; x++) segs.push([[x, b.y0, 0.001], [x, b.y1, 0.001]]);
+    for (let y = Math.ceil(b.y0); y <= b.y1; y++) segs.push([[b.x0, y, 0.001], [b.x1, y, 0.001]]);
+    return segs;
+  }, [room]);
+  const walls = useMemo(
+    () =>
+      room.floor.map((a, i) => {
+        const b = room.floor[(i + 1) % room.floor.length];
+        const geo = new THREE.BufferGeometry();
+        const h = room.height;
+        geo.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute([a[0], a[1], 0, b[0], b[1], 0, b[0], b[1], h, a[0], a[1], 0, b[0], b[1], h, a[0], a[1], h], 3),
+        );
+        return geo;
+      }),
+    [room],
+  );
+  return (
+    <group>
+      <mesh geometry={floor}>
+        <meshBasicMaterial color="#10141b" side={THREE.DoubleSide} />
+      </mesh>
+      {walls.map((g, i) => (
+        <mesh key={i} geometry={g}>
+          <meshBasicMaterial color="#1a2030" transparent opacity={0.18} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      ))}
+      {grid.map((s, i) => (
+        <Line key={`g${i}`} points={s} color="#1d2430" lineWidth={1} />
+      ))}
+      {edges.map((s, i) => (
+        <Line key={`e${i}`} points={s} color="#465063" lineWidth={1} />
+      ))}
+    </group>
+  );
+}
+
+function LedInstances({ leds, highlight }: { leds: LedData; highlight: { start: number; count: number } | null }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const seen = useRef("");
+  const color = useMemo(() => new THREE.Color(), []);
+
+  useEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < leds.count; i++) {
+      m.makeTranslation(leds.positions[i * 3], leds.positions[i * 3 + 1], leds.positions[i * 3 + 2]);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, IDLE);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    seen.current = "";
+  }, [leds]);
+
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const hasFrame = liveFrame.count === leds.count && liveFrame.version > 0;
+    const key = `${hasFrame ? liveFrame.version : -1}|${highlight?.start}|${highlight?.count}|${leds.count}`;
+    if (key === seen.current) return;
+    seen.current = key;
+    const c = liveFrame.colors;
+    for (let i = 0; i < leds.count; i++) {
+      const r = hasFrame ? c[i * 3] / 255 : 0,
+        g = hasFrame ? c[i * 3 + 1] / 255 : 0,
+        b = hasFrame ? c[i * 3 + 2] / 255 : 0;
+      if (highlight && i >= highlight.start && i < highlight.start + highlight.count) {
+        // first LED (data input) green, rest of the selected strip amber
+        color.set(i === highlight.start ? "#33ff66" : "#ffb020").multiplyScalar(r + g + b > 0.02 ? 1 : 0.8);
+      } else if (r + g + b < 0.02) color.copy(IDLE);
+      else color.setRGB(r * 2.2, g * 2.2, b * 2.2, THREE.SRGBColorSpace);
+      mesh.setColorAt(i, color);
+    }
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh key={leds.count} ref={ref} args={[undefined, undefined, Math.max(leds.count, 1)]} frustumCulled={false}>
+      <sphereGeometry args={[LED_RADIUS, 8, 6]} />
+      <meshBasicMaterial toneMapped={false} />
+    </instancedMesh>
+  );
+}
+
+function FixturePaths({ project, editable }: { project: Project; editable: boolean }) {
+  const selected = useStore((s) => s.selectedFixture);
+  const select = useStore((s) => s.selectFixture);
+  return (
+    <group>
+      {project.fixtures.map((f) => {
+        const pts = geometryPath(f.geometry);
+        const isSel = f.id === selected;
+        if (pts.length < 2) return null;
+        return (
+          <Line
+            key={f.id}
+            points={pts}
+            color={isSel ? "#ffcc33" : editable ? "#58627a" : "#2c3341"}
+            lineWidth={isSel ? 3 : 1.5}
+            onClick={
+              editable
+                ? (e) => {
+                    e.stopPropagation();
+                    select(f.id);
+                  }
+                : undefined
+            }
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+function Handle({ p, active, onSelect, onMove }: { p: Vec3; active: boolean; onSelect: () => void; onMove: (p: Vec3) => void }) {
+  const mesh = useRef<THREE.Mesh>(null!);
+  return (
+    <>
+      <mesh
+        ref={mesh}
+        position={p}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
+      >
+        <sphereGeometry args={[0.05, 16, 12]} />
+        <meshBasicMaterial color={active ? "#ffcc33" : "#c8d0e0"} />
+      </mesh>
+      {active && (
+        <TransformControls
+          object={mesh}
+          mode="translate"
+          size={0.7}
+          onMouseUp={() => {
+            const v = mesh.current.position;
+            onMove([v.x, v.y, v.z]);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function FixtureHandles({ project }: { project: Project }) {
+  const selected = useStore((s) => s.selectedFixture);
+  const point = useStore((s) => s.selectedPoint);
+  const select = useStore((s) => s.selectFixture);
+  const update = useStore((s) => s.updateProject);
+  const fixture = project.fixtures.find((f) => f.id === selected);
+  if (!fixture) return null;
+  return (
+    <group>
+      {handles(fixture.geometry).map((p, i) => (
+        <Handle
+          key={`${fixture.id}-${i}-${p.join(",")}`}
+          p={p}
+          active={point === i}
+          onSelect={() => select(fixture.id, i)}
+          onMove={(np) =>
+            update((pr) => {
+              const f = pr.fixtures.find((x) => x.id === fixture.id)!;
+              f.geometry = setHandle(f.geometry, i, snapPoint(np, pr.room));
+              return pr;
+            })
+          }
+        />
+      ))}
+    </group>
+  );
+}
+
+function viewerForward(v: Viewer): THREE.Vector3 {
+  const yaw = (v.yaw_deg * Math.PI) / 180,
+    pitch = (v.pitch_deg * Math.PI) / 180;
+  return new THREE.Vector3(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
+}
+
+function ViewerMarker({ viewer, editable }: { viewer: Viewer; editable: boolean }) {
+  const selected = useStore((s) => s.selectedFixture);
+  const select = useStore((s) => s.selectFixture);
+  const update = useStore((s) => s.updateProject);
+  const group = useRef<THREE.Group>(null!);
+  const fwd = viewerForward(viewer);
+  const [x, y, z] = viewer.position;
+  const arrowEnd: Vec3 = [x + fwd.x * 0.6, y + fwd.y * 0.6, z + fwd.z * 0.6];
+  const active = editable && selected === "__viewer__";
+  return (
+    <group key={viewer.position.join(",")}>
+      <group
+        ref={group}
+        position={viewer.position}
+        onClick={(e) => {
+          if (!editable) return;
+          e.stopPropagation();
+          select("__viewer__");
+        }}
+      >
+        <mesh>
+          <sphereGeometry args={[0.11, 20, 16]} />
+          <meshBasicMaterial color={active ? "#ffcc33" : "#e8ecf4"} />
+        </mesh>
+        <mesh position={[0, 0, -0.45]}>
+          <cylinderGeometry args={[0.13, 0.18, 0.7, 16]} />
+          <meshBasicMaterial color={active ? "#806a20" : "#4a5468"} />
+        </mesh>
+      </group>
+      <Line points={[viewer.position, arrowEnd]} color="#ffcc33" lineWidth={3} />
+      <Line points={[viewer.position, [x, y, 0]]} color="#465063" lineWidth={1} dashed dashSize={0.05} gapSize={0.05} />
+      {active && (
+        <TransformControls
+          object={group}
+          mode="translate"
+          size={0.7}
+          onMouseUp={() => {
+            const v = group.current.position;
+            update((pr) => {
+              const p = snapPoint([v.x, v.y, v.z], pr.room, 0.05, 0);
+              pr.viewer.position = [p[0], p[1], Math.max(0.3, p[2])];
+              return pr;
+            });
+          }}
+        />
+      )}
+    </group>
+  );
+}
+
+function ViewerCamera({ viewer }: { viewer: Viewer }) {
+  const cam = useRef<THREE.PerspectiveCamera>(null!);
+  const { size } = useThree();
+  useEffect(() => {
+    const fwd = viewerForward(viewer);
+    const [x, y, z] = viewer.position;
+    cam.current.position.set(x, y, z);
+    cam.current.up.set(0, 0, 1);
+    cam.current.lookAt(x + fwd.x, y + fwd.y, z + fwd.z);
+  }, [viewer, size]);
+  return <PerspectiveCamera ref={cam} makeDefault fov={75} near={0.05} far={100} />;
+}
+
+export function Scene3D({ editable = false, viewerCam = false }: { editable?: boolean; viewerCam?: boolean }) {
+  const project = useStore((s) => s.project);
+  const leds = useStore((s) => s.leds);
+  const select = useStore((s) => s.selectFixture);
+  const selected = useStore((s) => s.selectedFixture);
+  if (!project) return null;
+  const b = bounds(project.room);
+  const hl = editable && leds ? (leds.fixtures.find((f) => f.id === selected) ?? null) : null;
+  const cx = (b.x0 + b.x1) / 2,
+    cy = (b.y0 + b.y1) / 2;
+  const span = Math.max(b.x1 - b.x0, b.y1 - b.y0, project.room.height);
+  return (
+    <Canvas
+      dpr={[1, 2]}
+      gl={{ antialias: true, preserveDrawingBuffer: true }}
+      camera={{ position: [cx - span * 0.9, cy - span * 1.2, project.room.height + span * 0.9], fov: 45, near: 0.05, far: 200 }}
+      onPointerMissed={() => editable && select(null)}
+    >
+      <color attach="background" args={["#07090d"]} />
+      <RoomModel room={project.room} />
+      {leds && <LedInstances leds={leds} highlight={hl} />}
+      <FixturePaths project={project} editable={editable} />
+      {editable && <FixtureHandles project={project} />}
+      {!viewerCam && <ViewerMarker viewer={project.viewer} editable={editable} />}
+      {viewerCam ? <ViewerCamera viewer={project.viewer} /> : <OrbitControls makeDefault target={[cx, cy, project.room.height / 3]} />}
+      <EffectComposer>
+        <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.25} luminanceSmoothing={0.3} />
+      </EffectComposer>
+    </Canvas>
+  );
+}
