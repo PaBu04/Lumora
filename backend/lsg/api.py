@@ -706,6 +706,38 @@ async def playback_sync(request: Request, body: SyncBody):
     return s.state()
 
 
+class LiveBody(BaseModel):
+    enabled: bool
+    show_id: str | None = None
+    device: int | None = None
+    file_song_id: str | None = None  # feed a song file instead of the microphone (demo / tests)
+
+
+@router.get("/live/devices")
+def live_devices():
+    from lsg.audio.live import input_devices
+
+    return input_devices()
+
+
+@router.post("/playback/live-input")
+async def playback_live_input(request: Request, body: LiveBody):
+    """Live input mode: the show reacts to the microphone in real time (no pre-analysis)."""
+    st = state(request)
+    s = st.session
+    try:
+        if body.enabled:
+            file = st.songs.audio_path(body.file_song_id) if body.file_song_id else None
+            await s.start_live_input(body.show_id, body.device, file)
+        else:
+            await s.stop_live_input()
+    except KeyError as exc:
+        raise _404(str(exc))
+    except Exception as exc:  # no input device, PortAudio errors ...
+        raise HTTPException(422, f"Live-Eingang nicht möglich: {exc}")
+    return s.state()
+
+
 @router.post("/playback/test")
 async def playback_test(request: Request, body: TestBody):
     s = state(request).session

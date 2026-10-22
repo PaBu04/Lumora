@@ -248,6 +248,7 @@ export interface PlaybackState {
   controller_errors: Record<string, string>;
   controller_status: Record<string, ControllerStatus>;
   sync: { bpm: number; previous: string | null } | null;
+  live_input: { device: string; bpm: number; levels: Record<string, number>; time: number } | null;
 }
 
 export interface ControllerStatus {

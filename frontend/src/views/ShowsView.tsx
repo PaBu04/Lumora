@@ -83,7 +83,7 @@ function Transport({ duration, analysis }: { duration: number; analysis: Analysi
         <Icon name="stop" />
       </button>
       <span className="time">
-        {formatTime(t)} / {formatTime(duration)}
+        {pb.live_input ? `Live · ${pb.live_input.bpm.toFixed(0)} BPM` : `${formatTime(t)} / ${formatTime(duration)}`}
       </span>
       <div className="seekbar">
         <Waveform analysis={analysis} duration={duration} position={t} onSeek={async (s) => setPlayback(await api.seek(s))} />
@@ -296,6 +296,70 @@ function ShaderPanel({ slug }: { slug: string }) {
 
 let clipboard: { clip: Clip; li: number }[] = [];
 
+function LiveInputCard() {
+  const pb = useStore((s) => s.playback);
+  const setPlayback = useStore((s) => s.setPlayback);
+  const notify = useStore((s) => s.notify);
+  const [devices, setDevices] = useState<{ index: number; name: string; default: boolean }[] | null>(null);
+  const [device, setDevice] = useState<number | null>(null);
+  const live = pb?.live_input;
+  useEffect(() => {
+    api.liveDevices().then(setDevices).catch(() => setDevices([]));
+  }, []);
+  return (
+    <div className={`card${live ? " selected" : ""}`}>
+      <strong>Live-Eingang (Mikrofon)</strong>
+      <p className="hint">Ohne vorbereiteten Song: die Show „Live (Mikrofon)“ reagiert in Echtzeit auf Tempo, Bass und Höhen – z. B. für Musik von Spotify oder eine Party.</p>
+      {live ? (
+        <>
+          <div className="row" style={{ marginBottom: 6 }}>
+            <span className="badge info">{live.bpm.toFixed(0)} BPM</span>
+            <span className="unit" title={live.device} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+              {live.device}
+            </span>
+          </div>
+          {(["low", "mid", "high"] as const).map((k) => (
+            <div key={k} className="row" style={{ flexWrap: "nowrap", marginBottom: 3 }}>
+              <span className="unit" style={{ width: 48 }}>{k === "low" ? "Bass" : k === "mid" ? "Mitten" : "Höhen"}</span>
+              <div style={{ flex: 1, height: 6, background: "var(--bg-4)", borderRadius: 3 }}>
+                <div style={{ width: `${Math.round((live.levels[k] ?? 0) * 100)}%`, height: "100%", background: "var(--accent-2)", borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
+          <button className="btn small active" style={{ marginTop: 6 }} onClick={async () => setPlayback(await api.liveInput(false))}>
+            Live-Eingang beenden
+          </button>
+        </>
+      ) : devices && devices.length === 0 ? (
+        <span className="unit">Kein Eingangsgerät gefunden.</span>
+      ) : (
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <select value={device ?? ""} onChange={(e) => setDevice(e.target.value === "" ? null : +e.target.value)}>
+            <option value="">Standard-Eingang</option>
+            {devices?.map((d) => (
+              <option key={d.index} value={d.index}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn small"
+            onClick={async () => {
+              try {
+                setPlayback(await api.liveInput(true, null, device));
+              } catch (e) {
+                notify((e as Error).message, "error");
+              }
+            }}
+          >
+            Starten
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExportCard({ slug, showId }: { slug: string; showId: string }) {
   const [fps, setFps] = useState(40);
   const project = useStore((s) => s.project);
@@ -471,6 +535,7 @@ export function ShowsView() {
           })}
         </div>
         <NewShowForm onCreated={open} />
+        <LiveInputCard />
         {show && <ExportCard slug={slug} showId={show.id} />}
         {show && (
           <button
