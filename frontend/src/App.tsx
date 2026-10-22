@@ -71,6 +71,41 @@ function ProjectSwitcher() {
   );
 }
 
+function UndoButtons() {
+  const scope = useStore((s) => s.undoScope);
+  const past = useStore((s) => s.past.length);
+  const future = useStore((s) => s.future.length);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || (e.target as HTMLElement).closest("input, textarea, select")) return;
+      const key = e.key.toLowerCase();
+      if (useStore.getState().undoScope !== "project") return;
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+  if (scope !== "project") return null;
+  return (
+    <div className="row" style={{ gap: 4 }}>
+      <button className="btn ghost icon" title="Rückgängig (Strg+Z)" disabled={!past} onClick={undo}>
+        ↶
+      </button>
+      <button className="btn ghost icon" title="Wiederholen (Strg+Y)" disabled={!future} onClick={redo}>
+        ↷
+      </button>
+    </div>
+  );
+}
+
 function StatusArea() {
   const pb = useStore((s) => s.playback);
   const saving = useStore((s) => s.saving);
@@ -131,6 +166,7 @@ export function App() {
           Light Show Generator
         </div>
         <ProjectSwitcher />
+        {project && <UndoButtons />}
         <div className="spacer" />
         {project && <StatusArea />}
       </header>

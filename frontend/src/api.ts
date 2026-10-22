@@ -11,6 +11,7 @@ import type {
   Show,
   ShowSummary,
   Song,
+  Version,
   WledInfo,
 } from "./types";
 
@@ -70,6 +71,10 @@ export const api = {
   show: (slug: string, id: string) => get<Show>(`/api/projects/${slug}/shows/${id}`),
   saveShow: (slug: string, show: Show) => put<Show>(`/api/projects/${slug}/shows/${show.id}`, show),
   deleteShow: (slug: string, id: string) => del(`/api/projects/${slug}/shows/${id}`),
+  showVersions: (slug: string, id: string) => get<Version[]>(`/api/projects/${slug}/shows/${id}/versions`),
+  restoreShowVersion: (slug: string, id: string, vid: string) => post<Show>(`/api/projects/${slug}/shows/${id}/versions/${vid}/restore`),
+  projectVersions: (slug: string) => get<Version[]>(`/api/projects/${slug}/versions`),
+  restoreProjectVersion: (slug: string, vid: string) => post<Project>(`/api/projects/${slug}/versions/${vid}/restore`),
   validate: (slug: string, id: string) => post<Issue[]>(`/api/projects/${slug}/shows/${id}/validate`),
   power: (slug: string, id: string, fps = 2) => get<PowerReport>(`/api/projects/${slug}/shows/${id}/power?fps=${fps}`),
 

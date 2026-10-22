@@ -141,6 +141,13 @@ export interface Analysis {
   beat_note: string | null;
 }
 
+export interface Version {
+  id: string;
+  time: number;
+  source: "ui" | "ai" | "system" | "restore";
+  summary: string;
+}
+
 export interface AppSettings {
   beat_tracker: "auto" | "librosa" | "beat_this";
   beat_this: { installed: boolean; loaded: boolean; error: string | null };

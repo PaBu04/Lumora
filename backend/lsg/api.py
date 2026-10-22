@@ -195,7 +195,7 @@ async def create_show(request: Request, slug: str, body: NewShow):
         show = starter_show(body.name, body.song_id, analysis, duration)
     else:
         show = Show(name=body.name, song_id=body.song_id)
-    st.show_store(slug).save(show)
+    st.show_store(slug).save(show, "system")
     return show
 
 
@@ -224,6 +224,56 @@ async def delete_show(request: Request, slug: str, show_id: str):
         raise _404(f"show {show_id!r}")
     await st.show_changed(slug, show_id)
     return {"ok": True}
+
+
+@router.get("/projects/{slug}/shows/{show_id}/versions")
+def show_versions(request: Request, slug: str, show_id: str):
+    st = state(request)
+    show = _show(st, slug, show_id)
+    store = st.show_store(slug)
+    if not store.history(show_id).list():  # shows from before the history existed: seed a baseline
+        store.save(show, "system")
+    return store.history(show_id).list()
+
+
+@router.get("/projects/{slug}/shows/{show_id}/versions/{version_id}")
+def show_version(request: Request, slug: str, show_id: str, version_id: str):
+    try:
+        return Show.model_validate_json(state(request).show_store(slug).history(show_id).get(version_id))
+    except KeyError:
+        raise _404(f"version {version_id!r}")
+
+
+@router.post("/projects/{slug}/shows/{show_id}/versions/{version_id}/restore")
+async def restore_show_version(request: Request, slug: str, show_id: str, version_id: str):
+    st = state(request)
+    try:
+        show = st.show_store(slug).restore(show_id, version_id)
+    except KeyError:
+        raise _404(f"version {version_id!r}")
+    await st.show_changed(slug, show_id)
+    return show
+
+
+@router.get("/projects/{slug}/versions")
+def project_versions(request: Request, slug: str):
+    st = state(request)
+    project = _project(st, slug)
+    if not st.projects.history(slug).list():
+        st.projects.save(slug, project, "system")
+    return st.projects.history(slug).list()
+
+
+@router.post("/projects/{slug}/versions/{version_id}/restore")
+async def restore_project_version(request: Request, slug: str, version_id: str):
+    st = state(request)
+    _project(st, slug)
+    try:
+        project = st.projects.restore(slug, version_id)
+    except KeyError:
+        raise _404(f"version {version_id!r}")
+    await st.project_changed(slug)
+    return project
 
 
 @router.post("/projects/{slug}/shows/{show_id}/validate")

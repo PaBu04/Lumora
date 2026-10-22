@@ -1,5 +1,6 @@
 """Projects live in folders: <root>/<slug>/project.json plus songs/, shows/, shaders/."""
 
+import json
 import os
 import re
 import tempfile
@@ -47,12 +48,29 @@ class ProjectStore:
             slug, n = f"{base}-{n}", n + 1
         for sub in SUBDIRS:
             (self.project_dir(slug) / sub).mkdir(parents=True)
-        self.save(slug, project)
+        self.save(slug, project, "system")
         return slug
 
     def load(self, slug: str) -> Project:
         text = (self.project_dir(slug) / PROJECT_FILE).read_text(encoding="utf-8")
         return Project.model_validate_json(text)
 
-    def save(self, slug: str, project: Project) -> None:
-        atomic_write_text(self.project_dir(slug) / PROJECT_FILE, project.model_dump_json(indent=2))
+    def history(self, slug: str):
+        from lsg.storage.history import History
+
+        return History(self.project_dir(slug) / "history")
+
+    def save(self, slug: str, project: Project, source: str = "ui") -> str:
+        from lsg.storage.history import project_summary
+
+        content = project.model_dump_json(indent=2)
+        history = self.history(slug)
+        previous = history.latest_content()
+        summary = project_summary(json.loads(previous) if previous else None, json.loads(content))
+        atomic_write_text(self.project_dir(slug) / PROJECT_FILE, content)
+        return history.record(content, source, summary)
+
+    def restore(self, slug: str, version_id: str) -> Project:
+        project = Project.model_validate_json(self.history(slug).get(version_id))
+        self.save(slug, project, "restore")
+        return project

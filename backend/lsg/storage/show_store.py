@@ -1,10 +1,13 @@
 """Shows (<project>/shows/<id>.json) and shaders (<project>/shaders/<name>.py)."""
 
+import json
 import re
+import shutil
 from pathlib import Path
 
 from lsg.model.show import Show
 from lsg.render.shaders import NAME_RE, Shader, ShaderError
+from lsg.storage.history import History, show_summary
 from lsg.storage.project_store import atomic_write_text
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -33,14 +36,30 @@ class ShowStore:
             raise KeyError(show_id)
         return Show.model_validate_json(path.read_text(encoding="utf-8"))
 
-    def save(self, show: Show) -> None:
-        atomic_write_text(self._show_path(show.id), show.model_dump_json(indent=2))
+    def history(self, show_id: str) -> History:
+        self._show_path(show_id)  # validates the id
+        return History(self.shows_dir / f"{show_id}.history")
+
+    def save(self, show: Show, source: str = "ui") -> str:
+        """Write the show and record a version; returns the version id."""
+        content = show.model_dump_json(indent=2)
+        history = self.history(show.id)
+        previous = history.latest_content()
+        summary = show_summary(json.loads(previous) if previous else None, json.loads(content))
+        atomic_write_text(self._show_path(show.id), content)
+        return history.record(content, source, summary)
+
+    def restore(self, show_id: str, version_id: str) -> Show:
+        show = Show.model_validate_json(self.history(show_id).get(version_id))
+        self.save(show, "restore")
+        return show
 
     def delete(self, show_id: str) -> None:
         path = self._show_path(show_id)
         if not path.is_file():
             raise KeyError(show_id)
         path.unlink()
+        shutil.rmtree(self.shows_dir / f"{show_id}.history", ignore_errors=True)
 
     # shaders
     def _shader_path(self, name: str) -> Path:

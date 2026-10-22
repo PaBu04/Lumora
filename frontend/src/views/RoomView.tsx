@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { bounds, geometryPath, polygonArea, round, wallLength } from "../geometry";
 import { useStore } from "../store";
+import { Versions } from "../components/Versions";
 import { Scene3D } from "../three/Scene3D";
 import type { Room, Vec2 } from "../types";
 import { Field, NumberInput, TextInput } from "../ui";
@@ -302,6 +303,10 @@ export function RoomView() {
             ))}
           </tbody>
         </table>
+
+        <h3>Verlauf</h3>
+        <p className="hint">Jede gespeicherte Änderung an Raum, Strips, Controllern und Kalibrierung.</p>
+        <Versions limit={12} />
 
         <h3>Projekt</h3>
         <button

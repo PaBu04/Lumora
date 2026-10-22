@@ -25,6 +25,12 @@ interface AppStore {
   selectedPoint: number | null;
   toasts: Toast[];
   showRevision: number;
+  past: Project[];
+  future: Project[];
+  undoScope: "project" | "show";
+  undo: () => void;
+  redo: () => void;
+  setUndoScope: (s: "project" | "show") => void;
 
   setTab: (t: Tab) => void;
   notify: (message: string, kind?: Toast["kind"]) => void;
@@ -45,6 +51,26 @@ interface AppStore {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let toastId = 0;
+let lastPush = 0;
+const HISTORY_LIMIT = 100;
+const COALESCE_MS = 700; // rapid edits (typing, sliders) become one undo step
+
+function scheduleSave(get: () => AppStore, set: (p: Partial<AppStore>) => void) {
+  if (saveTimer) clearTimeout(saveTimer);
+  set({ saving: true });
+  saveTimer = setTimeout(async () => {
+    saveTimer = null;
+    const { slug, project } = get();
+    if (!slug || !project) return;
+    try {
+      await api.saveProject(slug, project);
+      set({ projectError: null, saving: false });
+      await get().refreshLeds();
+    } catch (e) {
+      set({ projectError: (e as Error).message, saving: false });
+    }
+  }, 350);
+}
 
 export const useStore = create<AppStore>((set, get) => ({
   tab: (localStorage.getItem("lsg.tab") as Tab) || "room",
@@ -61,6 +87,9 @@ export const useStore = create<AppStore>((set, get) => ({
   selectedPoint: null,
   toasts: [],
   showRevision: 0,
+  past: [],
+  future: [],
+  undoScope: "project",
 
   setTab: (tab) => {
     try {
@@ -92,7 +121,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   openProject: async (slug) => {
     const [project, leds, shows] = await Promise.all([api.project(slug), api.leds(slug), api.shows(slug)]);
-    set({ slug, project, leds, shows, projectError: null, selectedFixture: null, selectedPoint: null });
+    set({ slug, project, leds, shows, projectError: null, selectedFixture: null, selectedPoint: null, past: [], future: [] });
     await api.activate(slug);
   },
 
@@ -104,28 +133,43 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   updateProject: (fn) => {
-    const { project, slug } = get();
+    const { project, slug, past } = get();
     if (!project || !slug) return;
     const next = fn(structuredClone(project));
-    set({ project: next, saving: true });
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-      saveTimer = null;
-      try {
-        await api.saveProject(slug, get().project!);
-        set({ projectError: null, saving: false });
-        await get().refreshLeds();
-      } catch (e) {
-        set({ projectError: (e as Error).message, saving: false });
-      }
-    }, 350);
+    const now = Date.now();
+    const push = now - lastPush > COALESCE_MS;
+    lastPush = now;
+    set({ project: next, future: [], past: push ? [...past, project].slice(-HISTORY_LIMIT) : past });
+    scheduleSave(get, set);
   },
+
+  undo: () => {
+    const { past, future, project } = get();
+    if (!project || past.length === 0) return;
+    lastPush = 0;
+    set({ project: past[past.length - 1], past: past.slice(0, -1), future: [project, ...future].slice(0, HISTORY_LIMIT) });
+    scheduleSave(get, set);
+    get().notify("Rückgängig");
+  },
+
+  redo: () => {
+    const { past, future, project } = get();
+    if (!project || future.length === 0) return;
+    lastPush = 0;
+    set({ project: future[0], future: future.slice(1), past: [...past, project].slice(-HISTORY_LIMIT) });
+    scheduleSave(get, set);
+    get().notify("Wiederholt");
+  },
+
+  setUndoScope: (undoScope) => set({ undoScope }),
 
   reloadProject: async () => {
     const { slug } = get();
     if (!slug || saveTimer || get().saving) return;
     const [project, leds] = await Promise.all([api.project(slug), api.leds(slug)]);
-    set({ project, leds });
+    // a change from elsewhere (restore, AI) invalidates the local undo stack
+    const external = JSON.stringify(project) !== JSON.stringify(get().project);
+    set(external ? { project, leds, past: [], future: [] } : { project, leds });
   },
 
   refreshLeds: async () => {

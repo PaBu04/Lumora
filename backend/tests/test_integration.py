@@ -180,6 +180,11 @@ def test_mcp_tools(server):
             pw = (await c.call_tool("analyze_power", {"show_id": sid})).structured_content
             assert pw["ok"] is False  # no controllers in this project yet
 
+            vs = (await c.call_tool("list_show_versions", {"show_id": sid})).structured_content["versions"]
+            assert vs[0]["source"] == "ai" and len(vs) >= 3
+            r = (await c.call_tool("restore_show_version", {"show_id": sid, "version_id": vs[-1]["id"]})).structured_content
+            assert r["ok"] and r["clips"] == 0  # back to the empty show
+
             st = (await c.call_tool("preview", {"show_id": sid, "start": 2.0})).structured_content
             assert st["playing"] and st["show"] == sid
 

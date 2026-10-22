@@ -3,6 +3,7 @@ import { api } from "../api";
 import { SERIES } from "../calibration";
 import { LineChart } from "../components/LineChart";
 import { Timeline, usePlayhead } from "../components/Timeline";
+import { Versions } from "../components/Versions";
 import { Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
@@ -377,7 +378,7 @@ export function ShowsView() {
   const [show, setShow] = useState<Show | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [clipId, setClipId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"clip" | "json" | "issues" | "shader">("clip");
+  const [panel, setPanel] = useState<"clip" | "json" | "issues" | "history" | "shader">("clip");
   const [viewerCam, setViewerCam] = useState(false);
   const [effects, setEffects] = useState<EffectInfo[]>([]);
   const currentId = pb?.project === slug ? pb?.show : null;
@@ -517,6 +518,7 @@ export function ShowsView() {
               ["clip", "Clip"],
               ["json", "JSON"],
               ["issues", "Prüfung"],
+              ["history", "Verlauf"],
               ["shader", "Shader"],
             ] as const
           ).map(([k, label]) => (
@@ -530,6 +532,7 @@ export function ShowsView() {
           {show && panel === "clip" && <ClipPanel show={show} clipId={clipId} effects={effects} onSave={save} />}
           {show && panel === "json" && <JsonPanel show={show} onSave={save} />}
           {show && panel === "issues" && <IssuesPanel slug={slug} show={show} />}
+          {show && panel === "history" && <Versions showId={show.id} />}
           {panel === "shader" && <ShaderPanel slug={slug} />}
         </div>
       </div>

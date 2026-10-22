@@ -145,11 +145,11 @@ def create_mcp(st: AppState) -> MCPServer:
 
     async def save_and_check(slug: str, show: Show) -> dict[str, Any]:
         _, p, table = project_and_table(slug)
-        st.show_store(slug).save(show)
+        version = st.show_store(slug).save(show, "ai")
         issues = await asyncio.to_thread(issues_for, slug, p, table, show)
         await notify(slug, show.id)
         return {
-            "ok": True, "show_id": show.id, "layers": [l.name for l in show.layers],
+            "ok": True, "show_id": show.id, "version": version, "layers": [l.name for l in show.layers],
             "clips": sum(len(l.clips) for l in show.layers), "issues": issues,
         }
 
@@ -376,6 +376,30 @@ def create_mcp(st: AppState) -> MCPServer:
         for layer in show.layers:
             layer.clips = [c for c in layer.clips if c.id not in ids]
         return await save_and_check(slug, show)
+
+    @mcp.tool()
+    def list_show_versions(show_id: str, project: str | None = None) -> dict[str, Any]:
+        """Saved versions of a show, newest first (source ui = user, ai = you, restore = rollback)."""
+        slug = st.resolve_project(project)
+        try:
+            show = load_show(slug, show_id)
+        except KeyError as exc:
+            return _err(exc)
+        store = st.show_store(slug)
+        if not store.history(show_id).list():
+            store.save(show, "system")
+        return {"ok": True, "versions": store.history(show_id).list()[:50]}
+
+    @mcp.tool()
+    async def restore_show_version(show_id: str, version_id: str, project: str | None = None) -> dict[str, Any]:
+        """Roll a show back to an earlier version (the current state stays in the history)."""
+        slug = st.resolve_project(project)
+        try:
+            show = st.show_store(slug).restore(show_id, version_id)
+        except KeyError as exc:
+            return _err(KeyError(f"unknown show or version: {exc}"))
+        await notify(slug, show_id)
+        return {"ok": True, "show_id": show.id, "clips": sum(len(l.clips) for l in show.layers)}
 
     @mcp.tool()
     async def delete_show(show_id: str, project: str | None = None) -> dict[str, Any]:
