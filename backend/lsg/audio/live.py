@@ -17,7 +17,7 @@ from collections import deque
 
 import numpy as np
 
-from lsg.audio.features import FEATURE_NAMES, AudioFrame
+from lsg.audio.features import FEATURE_NAMES, HIT_KINDS, AudioFrame
 from lsg.model.song import Section
 
 HOP_SECONDS = 1 / 86.0
@@ -52,6 +52,17 @@ class LiveAudioFeatures:
         freqs = np.fft.rfftfreq(WINDOW, 1 / sample_rate)
         self._band_masks = {k: (freqs >= lo) & (freqs < hi) for k, (lo, hi) in BANDS.items()}
         self._kick_mask = (freqs >= 30) & (freqs < 150)
+        # drum hit bands (same idea as lsg.audio.drums, online)
+        self._hit_masks = {
+            "kick": (freqs >= 40) & (freqs < 150),
+            "body": (freqs >= 150) & (freqs < 300),
+            "rattle": (freqs >= 1500) & (freqs < 5000),
+            "hihat": freqs >= 7000,
+        }
+        self._prev_hit: dict[str, np.ndarray] = {}
+        self._hit_hist = {k: deque(maxlen=max(8, int(0.8 / HOP_SECONDS))) for k in HIT_KINDS}
+        self._hit_peak = dict.fromkeys(HIT_KINDS, 1e-9)
+        self.hits: dict[str, deque[float]] = {k: deque(maxlen=64) for k in HIT_KINDS}
         self._prev_mag = None
         self._prev_lin = None
         # floors keep a quiet room from being amplified to full scale (measured: -54 dBFS noise stays < 0.2)
@@ -114,6 +125,7 @@ class LiveAudioFeatures:
         kick_rise = 0.0 if self._prev_lin is None else float(np.maximum(lin - self._prev_lin, 0).sum())
         self._prev_lin = lin
         kick = f["kick"].norm(kick_rise, dt)
+        self._detect_hits(mag, dt)
         self._onset_hist.append(0.5 * onset + 2.0 * kick)
         hist = np.fromiter(self._onset_hist, float)
         recent = hist[-int(0.5 * self.frame_rate) :]
@@ -125,6 +137,27 @@ class LiveAudioFeatures:
         if self.t - self._last_tempo > 0.5:
             self._last_tempo = self.t
             self._update_tempo(hist)
+
+    def _detect_hits(self, mag: np.ndarray, dt: float) -> None:
+        """Kick / snare / hi-hat: a band's linear rise sticks out of its recent history and
+        reaches a good part of the recent strongest hit."""
+        rise = {}
+        for k, m in self._hit_masks.items():
+            lin = mag[m]
+            prev = self._prev_hit.get(k)
+            rise[k] = 0.0 if prev is None else float(np.maximum(lin - prev, 0).sum())
+            self._prev_hit[k] = lin
+        values = {"kick": rise["kick"], "snare": min(rise["body"], rise["rattle"] * 0.5), "hihat": rise["hihat"]}
+        strength = {"kick": 0.5, "snare": 0.4, "hihat": 0.2}
+        for k, v in values.items():
+            hist = self._hit_hist[k]
+            self._hit_peak[k] = max(v, self._hit_peak[k] * (1 - dt / 6.0))  # strongest hit, forgotten over ~6 s
+            if len(hist) >= 8:
+                h = np.fromiter(hist, float)
+                last = self.hits[k][-1] if self.hits[k] else -1.0
+                if v > h.mean() + 2.0 * h.std() and v >= strength[k] * self._hit_peak[k] and self.t - last > 0.1:
+                    self.hits[k].append(self.t)
+            hist.append(v)
 
     def _update_tempo(self, hist: np.ndarray) -> None:
         x = hist - hist.mean()
@@ -191,11 +224,17 @@ class LiveAudioFeatures:
     def recent(self, kind: str, t: float, window: float) -> np.ndarray:
         if kind == "onset":
             return np.array([o for o in self.onsets if t - window <= o <= t])
+        if kind in HIT_KINDS:
+            return np.array([o for o in self.hits[kind] if t - window <= o <= t])
         period = self._period * (4 if kind == "bar" else 1)
         pos = self.beat_position(t) / (4 if kind == "bar" else 1)
         last = t - (pos % 1.0) * period
         marks = last - np.arange(int(window / period) + 1) * period
         return marks[marks >= t - window][::-1]
+
+    def _since_hit(self, kind: str, t: float) -> float:
+        past = [o for o in self.hits[kind] if o <= t]
+        return t - past[-1] if past else float("inf")
 
     def frame(self, t: float) -> AudioFrame:
         beat = self.beat_position(t)
@@ -216,6 +255,9 @@ class LiveAudioFeatures:
             since_beat=(beat % 1.0) * self._period,
             since_bar=(bar % 1.0) * 4 * self._period,
             since_onset=t - onsets[-1] if onsets else float("inf"),
+            since_kick=self._since_hit("kick", t),
+            since_snare=self._since_hit("snare", t),
+            since_hihat=self._since_hit("hihat", t),
             section="live",
             section_label="L",
             section_energy=self._smooth_energy,

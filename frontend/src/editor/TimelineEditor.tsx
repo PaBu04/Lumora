@@ -37,6 +37,8 @@ const EFFECT_COLORS: Record<string, string> = {
   noise: "#3b82f6",
   spotlight: "#fde68a",
   split: "#f97316",
+  hits: "#fb7185",
+  sweep: "#38bdf8",
 };
 export const effectColor = (effect: string) => (effect.startsWith("shader:") ? "#10b981" : (EFFECT_COLORS[effect] ?? "#64748b"));
 

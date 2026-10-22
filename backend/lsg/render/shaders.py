@@ -35,13 +35,17 @@ def render(t, leds, audio, params) -> rgb | (rgb, alpha)
 t       song time in seconds
 leds    the targeted LEDs; numpy arrays of length leds.n:
           leds.pos (n,3) metres, leds.x / leds.y / leds.z, leds.norm_pos (n,3) 0..1 in room bounds,
-          leds.u (0..1 along each strip in data order), leds.index_in_fixture, leds.fixture_index,
+          leds.u (0..1 along each strip in data order), leds.s (metres along the strip),
+          leds.index_in_fixture, leds.fixture_index,
           leds.azimuth / leds.elevation (degrees as seen by the viewer, negative azimuth = left),
-          leds.distance (metres from viewer), leds.coord(axis) -> 0..1 for
-          'x','y','z','u','azimuth','elevation','distance','radial','angle','fixture' or [dx,dy,dz]
+          leds.distance (metres from viewer), leds.view (1 = in the viewer's field of view,
+          0 = behind the viewer: only lights the room), leds.coord(axis) -> 0..1 for
+          'x','y','z','u','azimuth','elevation','distance','radial','angle','fixture','view'
+          or [dx,dy,dz]; coord('s') is in metres (not normalised)
 audio   music at time t: audio.rms, .low, .mid, .high, .onset (0..1), audio.bpm,
           audio.beat (continuous beat count), .beat_phase (0..1), .bar, .bar_phase,
-          .since_beat, .since_bar, .since_onset (seconds), .section (name), .section_energy
+          .since_beat, .since_bar, .since_onset, .since_kick, .since_snare, .since_hihat
+          (seconds), .section (name), .section_energy
 params  dict of the clip's params (dynamic values already resolved to numbers)
 ctx     (global) clip context: ctx.lt (seconds since clip start), ctx.duration, ctx.progress
 

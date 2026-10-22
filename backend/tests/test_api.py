@@ -111,7 +111,8 @@ def test_show_edit_and_shaders(client):
 
     r = client.put(f"/api/projects/{slug}/shaders/glow", content="def render(t, leds, audio, params):\n    return color('red')")
     assert r.status_code == 200, r.text
-    assert client.post(f"/api/projects/{slug}/shows/{show['id']}/validate").json() == []
+    issues = client.post(f"/api/projects/{slug}/shows/{show['id']}/validate").json()
+    assert [i for i in issues if i["severity"] == "error"] == []
     assert "def render" in client.get(f"/api/projects/{slug}/shaders/glow").text
     r = client.put(f"/api/projects/{slug}/shaders/evil", content="import os\ndef render(t, leds, audio, params): pass")
     assert r.status_code == 422 and "import" in r.json()["detail"]

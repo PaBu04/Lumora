@@ -19,6 +19,7 @@ def validate_show(
     probe_frames: int = 24,
     power: bool = True,
     power_fps: float = 2.0,
+    light: bool = True,
 ) -> list[dict]:
     """Errors stop a clip from rendering, warnings are hints. Each issue: severity, clip, layer, message."""
     issues: list[dict] = []
@@ -96,4 +97,101 @@ def validate_show(
 
         report = analyse_power(renderer, OutputPipeline(project, table), fps=power_fps)
         issues.extend(power_issues(report))
+    if light and table.count:
+        issues.extend(light_issues(light_report(Renderer(project, table, show, features, shaders)), show))
+    return issues
+
+
+# --- light and variety ---------------------------------------------------------------------
+# LEDs in a dark room: what matters for the feel of a show is how much light the whole room
+# gets (long strips light the walls even when dim) and how much changes.
+ROOM_LIGHT_WARN = 0.06  # mean linear light over the whole show (1 = every LED full white)
+ROOM_LIGHT_PEAK = 0.15  # mean linear light over an 8 s stretch
+LIT_SHARE_WARN = 0.85  # share of LEDs lit above 5 % ...
+LIT_TIME_WARN = 0.6  # ... for this share of the show
+STILL_SECONDS = 20.0  # longer than this without visible change = monotonous
+
+
+def light_report(renderer: Renderer, fps: float = 2.0) -> dict:
+    """Room light, lit share and motion over time and per section."""
+    duration = renderer.duration or 0.0
+    times = np.arange(0.0, max(duration, 1e-3), 1.0 / fps)
+    room, lit, motion = [], [], []
+    prev = None
+    for t in times:
+        f = renderer.render(float(t))
+        lin = np.power(np.clip(f, 0, 1), 2.2)
+        room.append(float((lin @ np.array([0.2126, 0.7152, 0.0722], np.float32)).mean()) if len(f) else 0.0)
+        lit.append(float((f.max(axis=1) > 0.05).mean()) if len(f) else 0.0)
+        motion.append(float(np.abs(f - prev).mean()) if prev is not None and len(f) else 0.0)
+        prev = f
+    room_a, lit_a, motion_a = np.asarray(room), np.asarray(lit), np.asarray(motion)
+    sections = []
+    for s in renderer.features.sections:
+        sel = (times >= s.start) & (times < s.end)
+        if sel.any():
+            sections.append(
+                {
+                    "name": s.name,
+                    "start": round(s.start, 2),
+                    "end": round(s.end, 2),
+                    "room_light": round(float(room_a[sel].mean()), 4),
+                    "lit_share": round(float(lit_a[sel].mean()), 3),
+                    "motion": round(float(motion_a[sel].mean()), 4),
+                }
+            )
+    win = max(1, int(8 * fps))
+    peak = (
+        float(np.convolve(room_a, np.ones(win) / win, mode="valid").max()) if len(room_a) >= win else float(room_a.max(initial=0))
+    )
+    still, longest, start_still = 0.0, (0.0, 0.0, 0.0), 0.0
+    for i, m in enumerate(motion_a):
+        if m < 0.002:
+            if still == 0:
+                start_still = times[i]
+            still += 1.0 / fps
+            if still > longest[0]:
+                longest = (still, start_still, times[i])
+        else:
+            still = 0.0
+    return {
+        "room_light": round(float(room_a.mean()) if len(room_a) else 0.0, 4),
+        "room_light_peak_8s": round(peak, 4),
+        "lit_share": round(float(lit_a.mean()) if len(lit_a) else 0.0, 3),
+        "time_mostly_lit": round(float((lit_a > LIT_SHARE_WARN).mean()) if len(lit_a) else 0.0, 3),
+        "longest_still": {
+            "seconds": round(longest[0], 1),
+            "from": round(float(longest[1]), 1),
+            "to": round(float(longest[2]), 1),
+        },
+        "sections": sections,
+        "scale": "room_light: mean linear light of all LEDs, 1 = all full white; a dark, punchy show stays around "
+        f"0.01-0.04, above {ROOM_LIGHT_WARN} it feels bright. motion: mean change between frames 0.5 s apart.",
+    }
+
+
+def light_issues(report: dict, show: Show) -> list[dict]:
+    issues = []
+
+    def warn(msg: str) -> None:
+        issues.append({"severity": "warning", "clip": None, "layer": None, "message": msg})
+
+    if report["room_light"] > ROOM_LIGHT_WARN:
+        warn(
+            f"the show is bright overall (room light {report['room_light']:.3f}, aim for 0.01-0.04): darker base levels, "
+            "fewer LEDs lit at once, light as accents. Long strips light the whole room even when dim."
+        )
+    elif report["room_light_peak_8s"] > ROOM_LIGHT_PEAK:
+        warn(f"a passage is very bright for 8 s or more (room light {report['room_light_peak_8s']:.3f}); keep such moments short")
+    if report["time_mostly_lit"] > LIT_TIME_WARN:
+        warn(
+            f"more than {LIT_SHARE_WARN:.0%} of all LEDs are lit {report['time_mostly_lit']:.0%} of the time: leave strips or "
+            "segments dark, use hits / chases on parts of the strips instead of whole-strip effects"
+        )
+    still = report["longest_still"]
+    if still["seconds"] > STILL_SECONDS:
+        warn(f"nothing visibly changes from {still['from']}s to {still['to']}s ({still['seconds']}s): add movement or accents")
+    clips = [c for _, c in show.clips()]
+    if len(clips) >= 4 and all(not (c.target.fixtures or c.target.tags or c.target.where or c.target.view) for c in clips):
+        warn("every clip targets all LEDs: give strips / groups (tags, view direct/indirect) their own effects for variety")
     return issues

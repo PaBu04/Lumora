@@ -251,7 +251,7 @@ def test_mcp_tools(server):
             res = (
                 await c.call_tool("update_clips", {"show_id": sid, "updates": [{"id": "bad", "params": {"axis": "u"}}]})
             ).structured_content
-            assert res["issues"] == []
+            assert [i for i in res["issues"] if i["severity"] == "error"] == []
 
             shader = "def render(t, leds, audio, params):\n    return hsv(leds.u + t, 1, audio.rms)"
             assert (await c.call_tool("write_shader", {"name": "hue", "code": shader})).structured_content["ok"]

@@ -25,25 +25,49 @@ from lsg.state import AppState
 INSTRUCTIONS = """\
 Neopixel Light Show Generator: program music-synchronised LED light shows for a real room.
 
-Recommended workflow:
-1. get_overview - room, viewer, fixtures (LED strips), songs and shows in one call.
-2. get_song_analysis - tempo, beats, bars, sections and loudness curves of the song.
+Workflow:
+1. get_overview - room, viewer, fixtures (LED strips: length, LED count, how much the viewer sees them
+   directly), songs and shows in one call.
+2. get_song_analysis - tempo, beats, bars, sections, loudness curves and drum hits (kick / snare / hihat).
 3. list_effects / get_show_format - the effect library and the show JSON format.
-4. create_show, then add_clips / update_clips / remove_clips (or update_show for a full rewrite).
-5. validate_show, then render_timeline (whole passages) and render_snapshot (single moments) to
-   check your work visually. preview starts playback in the app so the user can watch and listen.
+4. create_show (template "empty"), then add_clips / update_clips / remove_clips.
+5. validate (errors, brightness, monotony), analyze_light (room light and motion per section),
+   render_timeline / render_snapshot to look at the result; fix and repeat. preview plays it in the app.
 
-Brightness is PERCEIVED brightness (like sRGB): 0.5 looks half as bright as 1.0, the app converts it
-to LED PWM through the calibrated curve of the user's strips. LEDs are very bright in a dark room, so
-- dark, atmospheric scenes work well at 0.05 - 0.25, normal scenes at 0.3 - 0.7, peaks/accents at 0.8 - 1.0;
-- values below ~0.03 are at the bottom of the 8-bit PWM range (1-3) and look identical or switch off;
-- contrast reads best in perceived terms: 0.2 -> 0.6 is a strong change, 0.9 -> 1.0 is barely visible.
-Power: full white on many LEDs draws a lot of current. If get_overview shows power budgets, check
-analyze_power / validate - the limiter dims the whole controller when a scene exceeds its budget.
+HOW A GOOD SHOW LOOKS - follow these rules:
+- DARK BY DEFAULT. LEDs in a dark room are very bright. Most of the time most LEDs are off or dim
+  (0.03-0.15); light is an accent that comes and goes with the music. A long strip (hundreds of LEDs)
+  lights up the whole room even at 0.1 - use washes on long strips sparingly and dimly, and prefer
+  effects that light only parts of them (hits, chase, sparkle). analyze_light: room_light 0.01-0.04 is
+  a dark, punchy show; above 0.06 it feels bright and flat.
+- DIRECT VS INDIRECT. The viewer only sees the LEDs in front of them (target {"view": "direct"}); LEDs
+  behind or far beside them (target {"view": "indirect"}) are only seen as light on walls and ceiling.
+  Put detail (hits, chases, sparkle, spotlight, sweeps along a strip) on direct LEDs. Use indirect LEDs
+  for the colour of the room: dim washes, and flashes / strobes on big hits (drops, downbeats).
+  get_overview tells per fixture how much of it is seen directly; one strip can have both parts.
+- SMALL, LOCAL ACCENTS ON DRUMS. Use the "hits" effect (trigger kick / snare / hihat / onset): a few
+  segments of 4-30 LEDs flash at random places and fade - instead of whole strips pulsing. Kick =
+  bigger, warmer segments; snare = sharper, other colour; hihat = tiny glitter (size 1-3).
+- MEASURE IN METRES / LEDS, NOT PER STRIP. A pattern stretched over a strip looks different on a 1 m and
+  a 5 m strip. Use axis "s" (metres along the strip; count / repeat / scale / wavelength then mean
+  "per metre") for chases, waves and gradients along strips, and hits.size in LEDs.
+- USE THE ROOM. Room axes x, y, z (normalised to the room) and azimuth / elevation (as seen by the
+  viewer) span all strips, so effects travel from strip to strip: "sweep" (a band from floor to
+  ceiling, axis "z", or left to right, axis "azimuth", once per bar / kick / ...), "wave", "gradient".
+- VARIETY. Do not give every strip the same effect: give groups roles (e.g. ceiling = room colour,
+  wall strips = rhythm, desk = accents) and change something every phrase (4-8 bars). Sections with the
+  same label sound alike - give them related looks, and make the loudest sections (chorus / drop) the
+  brightest and busiest, breaks and intros nearly dark. Build up before drops (sweeps, rising density).
+- COLOUR. Pick 2-3 colours per section that belong together (one palette + one accent); white is an
+  accent. Avoid full rainbows everywhere.
 
-Conventions: metres, z is up, floor at z = 0. Viewer-relative angles: azimuth 0 = straight ahead,
-negative = left, positive = right; elevation positive = up. Times are seconds of the song.
-Align clip boundaries with beats/bars/sections from the analysis so the show feels in time.
+Brightness is PERCEIVED brightness (like sRGB): 0.5 looks half as bright as 1.0, the app converts it to
+LED PWM with the calibrated curve. Values below ~0.03 fall into the lowest PWM steps and look identical
+or switch off. Contrast reads in perceived terms: 0.1 -> 0.5 is a strong change, 0.9 -> 1.0 is not.
+Power: if get_overview shows budgets, check analyze_power - the limiter dims a whole controller.
+
+Conventions: metres, z is up, floor at z = 0. Azimuth 0 = straight ahead, negative = left; elevation
+positive = up. Times are seconds of the song; align clip boundaries with bars and sections.
 Write custom effects as Python/numpy shaders with write_shader when the library is not enough.
 """
 
@@ -52,20 +76,27 @@ Show JSON
 {
   "id": "auto", "name": "My show", "song_id": "<song id>", "master": 1.0,
   "layers": [                         # composited bottom (first) to top (last)
-    {"name": "Base", "opacity": 1.0, "enabled": true, "clips": [
+    {"name": "Room", "opacity": 1.0, "enabled": true, "clips": [
       {"id": "optional", "start": 0.0, "end": 16.5,          # seconds, end exclusive
        "effect": "noise",                                    # effect id or "shader:<name>"
-       "params": {"palette": "ocean", "brightness": 0.6},
-       "target": {"tags": ["ceiling"]},                     # omit = all LEDs
+       "params": {"palette": ["#001a40", "#0050a0"], "brightness": 0.08},
+       "target": {"view": "indirect"},                      # omit = all LEDs
        "blend": "normal",                                    # normal | add | max | multiply | subtract
        "opacity": 1.0, "fade_in": 1.0, "fade_out": 0.5}
+    ]},
+    {"name": "Drums", "clips": [
+      {"start": 16.5, "end": 48.0, "effect": "hits", "blend": "max",
+       "params": {"trigger": "kick", "palette": ["#40c0ff", "#ffffff"], "count": 3, "size": 12, "decay": 0.2},
+       "target": {"tags": ["wall"], "view": "direct"}}
     ]}
   ]
 }
 
-Target (which LEDs): {"fixtures": [ids], "tags": [tags], "where": [{"field": f, "min": a, "max": b}], "invert": false}
-  fixtures/tags are OR-ed, where-ranges AND-ed on top. Fields: x, y, z, distance (metres),
-  nx, ny, nz, u (0..1; n* = normalised in room bounds, u = along the strip), azimuth, elevation (degrees).
+Target (which LEDs): {"fixtures": [ids], "tags": [tags], "view": "direct" | "indirect",
+                      "where": [{"field": f, "min": a, "max": b}], "invert": false}
+  fixtures/tags are OR-ed; view and where-ranges are AND-ed on top. view "direct" = LEDs in the viewer's
+  field of view, "indirect" = behind / beside the viewer. Where-fields: x, y, z, distance, s (metres;
+  s = along the strip from its first LED), nx, ny, nz, u (0..1), azimuth, elevation (degrees), view (0..1).
 
 Parameter values can be animated (number params; keyframes also for colours and points):
   audio binding: {"audio": "low", "min": 0.1, "max": 1.0, "pow": 1.0}
@@ -73,16 +104,20 @@ Parameter values can be animated (number params; keyframes also for colours and 
   keyframes:     {"keys": [[0, "#ff0000"], [8, "#0000ff"]], "ease": "linear|smooth|step"}  (seconds from clip start)
   lfo:           {"lfo": "sine|triangle|saw|square", "beats": 2, "min": 0, "max": 1, "phase": 0}  (or "seconds": 3)
 
-Brightness and colour values are perceived (0.5 = looks half as bright). Use 0.05 - 0.25 for dark
-scenes, avoid values below 0.03 (they fall into the lowest PWM steps), and keep big full-white areas
-short if a power budget is set.
+Triggers (pulse, hits, sweep, ripple): beat, bar, onset, kick, snare, hihat (+ half_beat, two_beats for pulse).
+
+Brightness is perceived (0.5 = looks half as bright). Base levels 0.03-0.15, accents 0.6-1.0, nothing
+below 0.03. Long strips: dimmer.
 
 Colours: "#ff0080", "#f08", names (red, orange, amber, yellow, lime, green, mint, cyan, sky, blue, purple,
 violet, magenta, pink, white, warmwhite, black), "hsv(200,1,1)" or [r, g, b] 0..255.
 Palettes: a palette name or a list of colours.
-Axes (for gradients, waves, chases...): x, y, z, u, azimuth (left->right as seen by the viewer),
-elevation (bottom->top as seen), distance (near->far), radial (room centre outwards), angle (around the
-room centre), fixture, or a vector [dx, dy, dz]. Prefix "-" to reverse, e.g. "-azimuth".
+Axes (gradient, wave, chase, rainbow, vu, sweep): x, y, z (normalised to the room: 0 = floor/wall,
+1 = ceiling/opposite wall - spans all strips), u (0..1 along each strip), s (METRES along each strip:
+scale/repeat/count/wavelength become per metre, so long and short strips look alike), azimuth
+(left -> right as seen by the viewer), elevation (bottom -> top as seen), distance (near -> far),
+radial (room centre outwards), angle (around the room centre), fixture, view, or a vector [dx, dy, dz].
+Prefix "-" to reverse, e.g. "-z" = ceiling to floor.
 Tempo locking: most moving effects take "beats" (> 0 = one cycle per N beats) instead of "speed".
 """
 
@@ -117,6 +152,14 @@ def create_mcp(st: AppState) -> MCPServer:
             pos = table.pos[sl]
             az, el, dist = table.azimuth[sl], table.elevation[sl], table.distance[sl]
             length = None if isinstance(f.geometry, MatrixGeometry) else round(curve_length(f.geometry), 3)
+            direct = float((table.view[sl] >= 0.5).mean())
+            role = (
+                "seen directly: rhythm and detail"
+                if direct >= 0.85
+                else "behind / beside the viewer: room colour, flashes"
+                if direct <= 0.15
+                else 'partly seen: target {"view": "direct"} for detail, {"view": "indirect"} for room colour'
+            )
             out.append(
                 {
                     "id": f.id,
@@ -134,6 +177,12 @@ def create_mcp(st: AppState) -> MCPServer:
                     "elevation_range": [round(float(el.min()), 1), round(float(el.max()), 1)],
                     "distance_range": [round(float(dist.min()), 2), round(float(dist.max()), 2)],
                     "azimuth_first_last": [round(float(az[0]), 1), round(float(az[-1]), 1)],
+                    "leds_per_m": round((sl.stop - sl.start) / length, 1) if length else None,
+                    "direct_view_share": round(direct, 2),
+                    "role": role,
+                    "note": "long strip: lights the whole room even when dim - keep washes low"
+                    if sl.stop - sl.start > 200
+                    else None,
                 }
             )
         return out
@@ -267,8 +316,23 @@ def create_mcp(st: AppState) -> MCPServer:
         def in_win(xs):
             return [x for x in xs if start <= x < end]
 
+        feats = f
+        drums = {k: [round(float(x), 3) for x in v if start <= x < end] for k, v in feats.hits.items()}
+        density = [
+            {
+                "section": s.name,
+                "start": s.start,
+                **{
+                    f"{k}_per_bar": round(sum(s.start <= x < s.end for x in v) / max((s.end - s.start) / (4 * 60 / a.bpm), 1), 2)
+                    for k, v in feats.hits.items()
+                },
+            }
+            for s in a.sections
+        ]
         out = {
             "song": {"id": song.id, "title": song.title, "artist": song.artist, "duration": a.duration},
+            "drums": drums,
+            "drum_density": density,
             "bpm": a.bpm,
             "beat_period": round(60.0 / a.bpm, 4) if a.bpm else None,
             "window": [start, round(end, 3)],
@@ -344,7 +408,8 @@ def create_mcp(st: AppState) -> MCPServer:
             if layers is not None:
                 show = Show(name=name, song_id=song_id, description=description, layers=[Layer.model_validate(l) for l in layers])
             elif template == "starter":
-                show = starter_show(name, song_id, analysis, duration)
+                p = st.projects.load(slug)
+                show = starter_show(name, song_id, analysis, duration, p, build_led_table(p))
             else:
                 show = Show(name=name, song_id=song_id, description=description)
         except ValidationError as exc:
@@ -518,6 +583,25 @@ def create_mcp(st: AppState) -> MCPServer:
             return _err(exc)
         issues = await asyncio.to_thread(issues_for, slug, p, table, show)
         return {"ok": not any(i["severity"] == "error" for i in issues), "issues": issues}
+
+    @mcp.tool()
+    async def analyze_light(show_id: str, project: str | None = None) -> dict[str, Any]:
+        """How bright and how lively a show is: room_light (mean linear light of all LEDs; 0.01-0.04 = dark and
+        punchy, > 0.06 = bright and flat), share of lit LEDs, motion between frames, per section, and the
+        longest stretch without visible change. Use it to keep shows dark and varied."""
+        slug, p, table = project_and_table(project)
+        try:
+            show = load_show(slug, show_id)
+        except KeyError as exc:
+            return _err(exc)
+        from lsg.render.validate import light_issues, light_report
+
+        def work():
+            report = light_report(renderer_for(slug, p, table, show))
+            report["hints"] = [i["message"] for i in light_issues(report, show)]
+            return report
+
+        return await asyncio.to_thread(work)
 
     @mcp.tool()
     async def analyze_power(show_id: str, fps: float = 2.0, project: str | None = None) -> dict[str, Any]:

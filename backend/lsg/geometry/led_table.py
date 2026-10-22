@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from lsg.geometry.sampling import sample_fixture
-from lsg.geometry.viewer import viewer_relative
+from lsg.geometry.viewer import viewer_relative, visibility
 from lsg.model.project import Project
 
 
@@ -21,6 +21,8 @@ class LedTable:
     azimuth: np.ndarray  # (N,) degrees, negative = left of the viewer
     elevation: np.ndarray  # (N,) degrees, positive = above eye level
     distance: np.ndarray  # (N,) metres from the viewer
+    s: np.ndarray  # (N,) metres along the fixture from its first LED (data order)
+    view: np.ndarray  # (N,) 0..1, 1 = in the viewer's field of view, 0 = behind (indirect light)
 
     @property
     def count(self) -> int:
@@ -40,11 +42,15 @@ def build_led_table(project: Project) -> LedTable:
     fixture_index = np.repeat(np.arange(len(counts)), counts).astype(np.int32)
     index_in_fixture = np.concatenate([np.arange(c) for c in counts]).astype(np.int32) if counts else np.zeros(0, np.int32)
     u = np.concatenate([np.arange(c) / max(c - 1, 1) for c in counts]) if counts else np.zeros(0)
+    # metres along each fixture: cumulative distance between neighbouring LEDs in data order
+    runs = [np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(p, axis=0), axis=1))]) for p in positions if len(p)]
+    s = np.concatenate(runs) if runs else np.zeros(0)
 
     lo, hi = (np.asarray(b) for b in project.room.bounds)
     norm_pos = (pos - lo) / np.maximum(hi - lo, 1e-9)
 
     azimuth, elevation, distance = viewer_relative(pos, project.viewer)
+    view = visibility(azimuth, elevation)
     return LedTable(
         fixture_ids=[f.id for f in project.fixtures],
         fixture_offsets=offsets,
@@ -56,4 +62,6 @@ def build_led_table(project: Project) -> LedTable:
         azimuth=azimuth.astype(np.float32),
         elevation=elevation.astype(np.float32),
         distance=distance.astype(np.float32),
+        s=s.astype(np.float32),
+        view=view,
     )

@@ -8,7 +8,7 @@ import numpy as np
 from lsg.audio.features import AudioFeatures, AudioFrame
 from lsg.geometry.led_table import LedTable
 
-AXES = ("x", "y", "z", "u", "azimuth", "elevation", "distance", "radial", "angle", "fixture")
+AXES = ("x", "y", "z", "u", "s", "azimuth", "elevation", "distance", "radial", "angle", "fixture", "view")
 
 
 def _norm(v: np.ndarray, lo: float, hi: float) -> np.ndarray:
@@ -64,6 +64,14 @@ class LedView:
         return self.table.u[self.idx]
 
     @cached_property
+    def s(self) -> np.ndarray:
+        return self.table.s[self.idx]
+
+    @cached_property
+    def view(self) -> np.ndarray:
+        return self.table.view[self.idx]
+
+    @cached_property
     def azimuth(self) -> np.ndarray:
         return self.table.azimuth[self.idx]
 
@@ -117,6 +125,10 @@ class LedView:
                     out = self.norm_pos[:, 2]
                 case "u":
                     out = self.u
+                case "s":  # metres, NOT normalised: repeat / scale / wavelength become "per metre"
+                    out = self.s
+                case "view":
+                    out = self.view
                 case "azimuth":
                     out = _norm(self.azimuth, *s.az)
                 case "elevation":

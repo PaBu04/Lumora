@@ -120,3 +120,19 @@ def test_viewer_yaw_rotates_frame():
     viewer = Viewer(position=(0, 0, 0), yaw_deg=90)  # looking along +y
     az, _, _ = viewer_relative(np.array([(0, 3, 0), (3, 0, 0)]), viewer)
     np.testing.assert_allclose(az, [0, 90], atol=1e-9)  # +x is now on the right
+
+
+def test_heart_is_upright_sized_and_starts_at_the_tip():
+    from lsg.geometry.sampling import sample_fixture
+    from lsg.model.fixture import Fixture
+
+    f = Fixture(
+        name="h", geometry={"type": "heart", "center": [1, 0.02, 1.5], "size": 0.6, "normal": [0, 1, 0]}, leds_per_meter=60
+    )
+    p = sample_fixture(f)
+    assert p[:, 0].max() - p[:, 0].min() == pytest.approx(0.6, abs=0.01)  # width
+    assert np.allclose(p[:, 1], 0.02)  # flat on the wall plane
+    assert p[0, 2] == pytest.approx(p[:, 2].min(), abs=0.01) and p[0, 0] == pytest.approx(1.0, abs=0.01)  # tip, bottom centre
+    rotated = Fixture(name="h", geometry={**f.geometry.model_dump(), "rotate_deg": 180})
+    q = sample_fixture(rotated)
+    assert q[0, 2] == pytest.approx(q[:, 2].max(), abs=0.01)  # upside down: the tip is on top

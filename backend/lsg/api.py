@@ -265,7 +265,7 @@ async def order_shows(request: Request, slug: str, body: ShowOrder):
 @router.post("/projects/{slug}/shows")
 async def create_show(request: Request, slug: str, body: NewShow):
     st = state(request)
-    _project(st, slug)
+    project = _project(st, slug)
     analysis, duration = None, None
     if body.song_id:
         try:
@@ -274,7 +274,7 @@ async def create_show(request: Request, slug: str, body: NewShow):
             raise _404(f"song {body.song_id!r}")
         analysis = st.songs.analysis(body.song_id)
     if body.template == "starter":
-        show = starter_show(body.name, body.song_id, analysis, duration)
+        show = starter_show(body.name, body.song_id, analysis, duration, project, build_led_table(project))
     else:
         show = Show(name=body.name, song_id=body.song_id)
     st.show_store(slug).save(show, "system")

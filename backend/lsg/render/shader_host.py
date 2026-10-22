@@ -32,6 +32,8 @@ TABLE_FIELDS = (
     "azimuth",
     "elevation",
     "distance",
+    "s",
+    "view",
     "fixture_offsets",
 )
 

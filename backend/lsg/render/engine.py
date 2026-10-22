@@ -57,6 +57,10 @@ def select_leds(target: Target, table: LedTable, project: Project) -> np.ndarray
             mask &= v >= r.min
         if r.max is not None:
             mask &= v <= r.max
+    if target.view == "direct":
+        mask &= table.view >= 0.5
+    elif target.view == "indirect":
+        mask &= table.view < 0.5
     if target.invert:
         mask = ~mask
     return np.flatnonzero(mask)

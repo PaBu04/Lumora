@@ -252,6 +252,10 @@ def analyse_signal(
 
     bpm = 60.0 / float(np.polyfit(np.arange(len(beats)), beats, 1)[0]) if len(beats) > 3 else 120.0
 
+    from lsg.audio.drums import detect as detect_drums
+
+    drum_hits = detect_drums(spec, freqs, SR / HOP)
+
     onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=SR, hop_length=HOP, units="frames")
     onsets = frame_times[onset_frames]
 
@@ -283,6 +287,7 @@ def analyse_signal(
         },
         waveform=_round(peaks),
         beat_source=beat_source,
+        drums={k: _round(v) for k, v in drum_hits.items()},
     )
 
 

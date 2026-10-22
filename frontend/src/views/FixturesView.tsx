@@ -10,6 +10,7 @@ const TYPE_LABEL: Record<Geometry["type"], string> = {
   bezier: "Kurve",
   arc: "Bogen",
   circle: "Kreis",
+  heart: "Herz",
   matrix: "Matrix",
 };
 
@@ -161,6 +162,49 @@ function GeometryEditor({ f, onChange }: { f: Fixture; onChange: (g: Geometry) =
               <NumberInput value={g.sweep_deg} step={5} min={-360} max={360} onChange={(sweep_deg) => sweep_deg !== 0 && onChange({ ...g, sweep_deg })} />
             </Field>
           )}
+        </>
+      );
+    case "heart":
+      return (
+        <>
+          <Field label="Mittelpunkt">
+            <Vec3Input value={g.center} onChange={(center) => onChange({ ...g, center })} />
+          </Field>
+          <Field label="Breite (m)">
+            <NumberInput value={g.size} min={0.05} step={0.05} onChange={(size) => onChange({ ...g, size })} />
+          </Field>
+          <Field label="Ebene">
+            <select
+              value={NORMALS.findIndex((n) => n.v.every((x, i) => Math.abs(Math.abs(x) - Math.abs(g.normal[i])) < 1e-6))}
+              onChange={(e) => onChange({ ...g, normal: NORMALS[+e.target.value].v, reference: null })}
+            >
+              <option value={-1} disabled>
+                benutzerdefiniert
+              </option>
+              {NORMALS.map((n, i) => (
+                <option key={i} value={i}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Drehung (°)">
+            <div className="row" style={{ flexWrap: "nowrap" }}>
+              <input
+                type="range"
+                className="grow"
+                min={-180}
+                max={180}
+                step={5}
+                value={g.rotate_deg}
+                onChange={(e) => onChange({ ...g, rotate_deg: +e.target.value })}
+              />
+              <div style={{ width: 72, flex: "none" }}>
+                <NumberInput value={g.rotate_deg} step={5} min={-180} max={180} onChange={(rotate_deg) => onChange({ ...g, rotate_deg })} />
+              </div>
+            </div>
+          </Field>
+          <p className="hint">Die erste LED sitzt an der Spitze. „umgekehrt“ dreht die Laufrichtung.</p>
         </>
       );
     case "matrix":

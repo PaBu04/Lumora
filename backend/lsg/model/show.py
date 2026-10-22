@@ -14,12 +14,13 @@ from pydantic import BaseModel, Field, model_validator
 from lsg.model.common import Id, new_id
 
 BlendMode = Literal["normal", "add", "max", "multiply", "subtract"]
-TargetField = Literal["x", "y", "z", "nx", "ny", "nz", "u", "azimuth", "elevation", "distance"]
+TargetField = Literal["x", "y", "z", "nx", "ny", "nz", "u", "s", "azimuth", "elevation", "distance", "view"]
 
 
 class Range(BaseModel):
-    """Selects LEDs whose `field` lies in [min, max]. x/y/z/distance in metres, angles in degrees,
-    nx/ny/nz/u normalised 0..1."""
+    """Selects LEDs whose `field` lies in [min, max]. x/y/z/distance/s in metres (s = along the
+    strip from its first LED), angles in degrees, nx/ny/nz/u normalised 0..1, view 0..1
+    (1 = in the viewer's field of view)."""
 
     field: TargetField
     min: float | None = None
@@ -30,10 +31,13 @@ class Target(BaseModel):
     """Which LEDs a clip affects. Empty target = all LEDs.
 
     fixtures/tags are combined with OR, `where` ranges are combined with AND on top.
+    view: "direct" = LEDs the viewer looks at, "indirect" = behind / beside the viewer (they
+    light the room rather than being seen).
     """
 
     fixtures: list[str] | None = None
     tags: list[str] | None = None
+    view: Literal["direct", "indirect"] | None = None
     where: list[Range] = Field(default_factory=list)
     invert: bool = False
 

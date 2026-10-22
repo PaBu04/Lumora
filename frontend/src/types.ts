@@ -29,6 +29,7 @@ export type Geometry =
       sweep_deg: number;
     }
   | { type: "circle"; center: Vec3; radius: number; normal: Vec3; reference: Vec3 | null; start_deg: number }
+  | { type: "heart"; center: Vec3; size: number; normal: Vec3; reference: Vec3 | null; rotate_deg: number }
   | {
       type: "matrix";
       origin: Vec3;
@@ -194,6 +195,7 @@ export interface Target {
   fixtures?: string[] | null;
   tags?: string[] | null;
   where?: { field: string; min?: number | null; max?: number | null }[];
+  view?: "direct" | "indirect" | null;
   invert?: boolean;
 }
 

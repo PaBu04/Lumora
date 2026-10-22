@@ -18,7 +18,8 @@ Result = tuple[np.ndarray, np.ndarray | None]
 BRIGHTNESS = Param("brightness", "number", 1.0, "overall intensity 0..1", 0.0, 1.0)
 SPEED = Param("speed", "number", 0.5, "cycles per second (ignored when beats > 0)", -20.0, 20.0)
 BEATS = Param("beats", "number", 0.0, "if > 0: one cycle takes this many beats (tempo-locked)", 0.0, 64.0)
-TRIGGERS = ("beat", "bar", "onset", "half_beat", "two_beats")
+TRIGGERS = ("beat", "bar", "onset", "half_beat", "two_beats", "kick", "snare", "hihat")
+EVENTS = ("beat", "bar", "onset", "kick", "snare", "hihat")  # triggers with a list of past event times
 
 
 def _fill(color: np.ndarray, n: int) -> np.ndarray:
@@ -51,6 +52,12 @@ def _since_trigger(ctx: RenderContext, trigger: str) -> float:
             return (a.beat_phase % 0.5) * period
         case "two_beats":
             return ((a.beat % 2.0) if a.beat >= 0 else 0.0) * period
+        case "kick":
+            return a.since_kick
+        case "snare":
+            return a.since_snare
+        case "hihat":
+            return a.since_hihat
     raise ValueError(trigger)
 
 
@@ -156,7 +163,10 @@ class Strobe(Effect):
 
 class Chase(Effect):
     id, name = "chase", "Chase"
-    description = "Lit segments running along an axis (default: along each strip). bounce=true gives a scanner."
+    description = (
+        "Lit segments running along an axis (default: along each strip). bounce=true gives a scanner. "
+        "With axis 's' (metres) count = segments per metre, so long and short strips look alike."
+    )
     params = (
         Param("color", "color", "#ffffff", "segment colour"),
         Param("axis", "axis", "u", "path of the chase", dynamic=False),
@@ -217,8 +227,8 @@ class Ripple(Effect):
             "trigger",
             "enum",
             "beat",
-            "beat / bar / onset or interval",
-            options=("beat", "bar", "onset", "interval"),
+            "beat / bar / onset / kick / snare / hihat or interval",
+            options=(*EVENTS, "interval"),
             dynamic=False,
         ),
         Param("interval", "number", 1.0, "seconds between rings when trigger = interval", 0.05, 30.0),
@@ -253,6 +263,100 @@ class Ripple(Effect):
         s = ctx.leds.spatial
         z = float(s.table.pos[:, 2].mean()) if s.table.count else 1.0
         return np.array([s.center[0], s.center[1], z], dtype=np.float32)
+
+
+class Hits(Effect):
+    id, name = "hits", "Hits"
+    description = (
+        "On every drum hit (kick / snare / hihat / beat / onset) a few short segments of `size` LEDs light up at "
+        "random places and fade. Small, local accents instead of whole strips flashing - ideal for snares and kicks."
+    )
+    params = (
+        Param("palette", "palette", ["#ffffff"], "colours of the segments (picked at random)", dynamic=False),
+        Param("trigger", "enum", "snare", "what lights segments", options=EVENTS, dynamic=False),
+        Param("count", "number", 3.0, "segments per hit", 1.0, 32.0),
+        Param("size", "number", 12.0, "segment length in LEDs", 1.0, 300.0),
+        Param("decay", "number", 0.25, "fade time in seconds", 0.02, 4.0),
+        Param("soft", "number", 0.3, "0 = hard segment edges, 1 = soft fade towards the ends", 0.0, 1.0),
+        BRIGHTNESS,
+    )
+
+    def render(self, ctx, p):
+        leds = ctx.leds
+        n = leds.n
+        level = np.zeros(n, np.float32)
+        key = np.zeros(n, np.float32)  # random value that picks the colour of the winning segment
+        times = ctx.features.recent(p["trigger"], ctx.t, p["decay"] * 5)[-8:]
+        count, size = round(p["count"]), max(1, round(p["size"]))
+        fi, ii = leds.fixture_index, leds.index_in_fixture
+        for tk in times:
+            env = math.exp(-(ctx.t - tk) / p["decay"])
+            if env < 0.01:
+                continue
+            ev = round(float(tk) * 1000)
+            picks = _hash(np.full(count, ev), np.arange(count), ctx.seed)
+            for j, r in enumerate(picks):
+                i0 = min(n - 1, int(r * n))
+                start = int(ii[i0]) - size // 2
+                inside = (fi == fi[i0]) & (ii >= start) & (ii < start + size)
+                if not inside.any():
+                    continue
+                # position inside the segment -1..1 for soft ends
+                rel = np.abs((ii[inside] - start + 0.5) / size * 2 - 1)
+                shape = 1 - p["soft"] * rel**2
+                lv = env * shape
+                sel = np.flatnonzero(inside)
+                better = lv > level[sel]
+                level[sel[better]] = lv[better]
+                key[sel[better]] = _hash(np.array([ev]), np.array([j]), ctx.seed + 7)[0]
+        rgb = palette_at(p["palette"], key) * p["brightness"]
+        return rgb.astype(np.float32), level
+
+
+class Sweep(Effect):
+    id, name = "sweep", "Sweep"
+    description = (
+        "A band of light that travels once through the whole room per trigger, e.g. axis 'z' from the floor to the "
+        "ceiling or 'x' from one wall to the other - it passes from strip to strip. trigger 'loop' repeats it "
+        "continuously every `beats`."
+    )
+    params = (
+        Param("color", "color", "#ffffff", "colour of the band"),
+        Param("axis", "axis", "z", "direction of travel ('-z' = ceiling to floor, 'azimuth' = left to right)", dynamic=False),
+        Param(
+            "trigger",
+            "enum",
+            "bar",
+            "start a sweep on every ... ('loop' = back to back)",
+            options=(*EVENTS, "loop"),
+            dynamic=False,
+        ),
+        Param("beats", "number", 2.0, "duration of one sweep in beats", 0.125, 64.0),
+        Param("width", "number", 0.15, "band width as fraction of the room", 0.01, 1.0),
+        Param("tail", "number", 0.3, "length of the fading tail behind the band, fraction of the room", 0.0, 2.0),
+        BRIGHTNESS,
+    )
+
+    def render(self, ctx, p):
+        x = ctx.leds.coord(p["axis"])
+        dur = p["beats"] * ctx.features.beat_period
+        w, tail = p["width"], p["tail"]
+        span = 1 + w + tail  # the band enters below 0 and leaves above 1 completely
+        if p["trigger"] == "loop":
+            starts = [ctx.t - (ctx.cycle(0, p["beats"]) % 1.0) * dur]
+        else:
+            starts = ctx.features.recent(p["trigger"], ctx.t, dur)[-4:]
+        level = np.zeros(ctx.leds.n, np.float32)
+        for t0 in starts:
+            prog = (ctx.t - t0) / dur
+            if not 0 <= prog <= 1:
+                continue
+            head = prog * span - w / 2
+            d = head - x  # > 0: behind the head
+            band = np.clip(1 - np.abs(d) / (w / 2), 0, 1)
+            trail = np.where(d > 0, np.exp(-d / tail) if tail > 0 else 0.0, 0.0)
+            level = np.maximum(level, np.maximum(band, trail * 0.6).astype(np.float32))
+        return _fill(p["color"] * p["brightness"], ctx.leds.n), level
 
 
 class Sparkle(Effect):
@@ -407,6 +511,8 @@ EFFECTS: dict[str, Effect] = {
         Wave(),
         Ripple(),
         Sparkle(),
+        Hits(),
+        Sweep(),
         Fade(),
         Vu(),
         Noise(),

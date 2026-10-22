@@ -40,3 +40,4 @@ class Analysis(BaseModel):
     waveform: list[float]  # peak envelope for drawing, ~WAVEFORM_POINTS values
     beat_source: str = "librosa"  # librosa | beat_this
     beat_note: str | None = None  # why the preferred tracker was not used
+    drums: dict[str, list[float]] = Field(default_factory=dict)  # kick / snare / hihat hit times

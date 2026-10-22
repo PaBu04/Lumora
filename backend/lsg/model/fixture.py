@@ -69,6 +69,22 @@ class CircleGeometry(BaseModel):
     start_deg: float = 0.0
 
 
+class HeartGeometry(BaseModel):
+    """Heart outline around `center` in the plane perpendicular to `normal`, `size` metres wide.
+
+    Without `reference` the heart stands upright (its top points up as far as the plane allows);
+    `reference` is the in-plane direction of the heart's right side, `rotate_deg` turns it in its
+    plane. The strip starts at the bottom tip.
+    """
+
+    type: Literal["heart"] = "heart"
+    center: Vec3
+    size: float = Field(default=0.6, gt=0, description="width in metres")
+    normal: Vec3 = (0.0, -1.0, 0.0)
+    reference: Vec3 | None = None
+    rotate_deg: float = 0.0
+
+
 class MatrixGeometry(BaseModel):
     """Rectangular LED panel. `origin` is the first LED, columns run along `col_dir`, rows along `row_dir`."""
 
@@ -84,7 +100,7 @@ class MatrixGeometry(BaseModel):
 
 
 Geometry = Annotated[
-    PolylineGeometry | BezierGeometry | ArcGeometry | CircleGeometry | MatrixGeometry,
+    PolylineGeometry | BezierGeometry | ArcGeometry | CircleGeometry | HeartGeometry | MatrixGeometry,
     Field(discriminator="type"),
 ]
 

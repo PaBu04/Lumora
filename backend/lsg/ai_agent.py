@@ -104,12 +104,19 @@ Wunsch des Nutzers:
 {task}
 
 Vorgehen:
-1. get_overview (Raum, Strips, Betrachter, Helligkeit, Strombudget) und get_song_analysis (Beats, Takte, Abschnitte).
-2. Show nach den Abschnitten und Beats aufbauen; Clip-Grenzen auf Takte legen. Helligkeiten wahrgenommen wählen
-   (dunkle Szenen 0.05-0.25, Akzente 0.8-1.0, nichts unter 0.03).
-3. validate aufrufen und alle Fehler beheben; bei Strombudgets analyze_power beachten.
-4. Mit render_timeline (ganzer Song oder Abschnitte) prüfen, ob Rhythmus und Übergänge passen; ggf. nachbessern.
-5. Zum Schluss preview mit der show_id starten.
+1. get_overview (Raum, Strips mit Länge und Sichtbarkeit, Betrachter, Helligkeit, Strombudget) und
+   get_song_analysis (Beats, Takte, Abschnitte, Trommeltreffer kick/snare/hihat und ihre Dichte pro Abschnitt).
+2. Erst planen: welche Strips sieht der Betrachter direkt (Details, Rhythmus), welche liegen hinter/neben ihm
+   (nur Raumfarbe, Blitze bei großen Schlägen)? Welche Rolle bekommt jede Strip-Gruppe? Welche Farben pro Abschnitt?
+3. Show nach Abschnitten und Phrasen (4-8 Takte) aufbauen, Clip-Grenzen auf Takte. Halte dich an die Regeln aus
+   den Server-Anweisungen: dunkle Grundstimmung (0.03-0.15), Licht als Akzent; "hits" auf kick/snare/hihat statt
+   ganzer Strips; Muster in Metern (Achse "s"); Effekte durch den Raum ("sweep", Achsen z/x/azimuth); jeder
+   Strip-Gruppe eigene Effekte und alle paar Takte etwas Neues; lange Strips nur sparsam und gedimmt fluten.
+4. validate und analyze_light aufrufen: Fehler beheben; room_light soll etwa 0.01-0.04 sein, keine langen
+   Stellen ohne Bewegung; bei Strombudgets analyze_power beachten.
+5. Mit render_timeline (ganzer Song oder Abschnitte) prüfen, ob Rhythmus, Abwechslung und Übergänge passen;
+   ggf. nachbessern.
+6. Zum Schluss preview mit der show_id starten.
 Antworte am Ende mit 3 bis 6 Sätzen auf Deutsch, was die Show macht."""
 
 

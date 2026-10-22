@@ -7,6 +7,7 @@ import numpy as np
 from lsg.model.song import Analysis, Section
 
 FEATURE_NAMES = ("rms", "low", "mid", "high", "onset")
+HIT_KINDS = ("kick", "snare", "hihat")
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,9 @@ class AudioFrame:
     since_beat: float  # seconds since the last beat
     since_bar: float  # seconds since the last downbeat
     since_onset: float  # seconds since the last onset
+    since_kick: float  # seconds since the last kick drum hit
+    since_snare: float  # seconds since the last snare / clap
+    since_hihat: float  # seconds since the last hi-hat
     section: str  # intro / verse / chorus / bridge / break / outro / ""
     section_label: str
     section_energy: float
@@ -59,6 +63,7 @@ class AudioFeatures:
             self.sections: list[Section] = []
             self.frame_rate = 1.0
             self.curves = {name: np.zeros(1) for name in FEATURE_NAMES}
+            self.hits = {k: np.zeros(0) for k in HIT_KINDS}
             return
         self.bpm = analysis.bpm
         self.duration = analysis.duration
@@ -68,6 +73,12 @@ class AudioFeatures:
         self.sections = analysis.sections
         self.frame_rate = analysis.frame_rate
         self.curves = {name: np.asarray(analysis.features[name], dtype=np.float32) for name in FEATURE_NAMES}
+        if analysis.drums:
+            self.hits = {k: np.asarray(analysis.drums.get(k, []), dtype=np.float64) for k in HIT_KINDS}
+        else:  # analysed before drum detection existed: approximate from the band curves
+            from lsg.audio.drums import from_curves
+
+            self.hits = from_curves(self.curves, self.frame_rate)
 
     @property
     def beat_period(self) -> float:
@@ -103,9 +114,9 @@ class AudioFeatures:
         return _continuous_index(self.downbeats, t, 4 * self.beat_period)
 
     def recent(self, kind: str, t: float, window: float) -> np.ndarray:
-        """Trigger times of `kind` (beat / bar / onset) within [t - window, t]."""
-        marks = {"beat": self.beats, "bar": self.downbeats, "onset": self.onsets}[kind]
-        if len(marks) == 0 and kind != "onset":
+        """Trigger times of `kind` (beat / bar / onset / kick / snare / hihat) within [t - window, t]."""
+        marks = {"beat": self.beats, "bar": self.downbeats, "onset": self.onsets, **self.hits}[kind]
+        if len(marks) == 0 and kind in ("beat", "bar"):
             # no analysis: fall back to a regular grid
             period = self.beat_period * (4 if kind == "bar" else 1)
             last = np.floor(t / period) * period
@@ -140,6 +151,9 @@ class AudioFeatures:
             since_beat=_since(self.beats, t) if len(self.beats) else (t % bp),
             since_bar=_since(self.downbeats, t) if len(self.downbeats) else (t % (4 * bp)),
             since_onset=_since(self.onsets, t),
+            since_kick=_since(self.hits["kick"], t),
+            since_snare=_since(self.hits["snare"], t),
+            since_hihat=_since(self.hits["hihat"], t),
             section=sec.name if sec else "",
             section_label=sec.label if sec else "",
             section_energy=sec.energy if sec else 0.0,

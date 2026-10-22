@@ -8,18 +8,20 @@ import { changeEffect, deleteClips, deleteLayer, findClip, mapClips, moveLayer, 
 type ParamSchema = EffectInfo["params"][string];
 type Dyn = { audio?: string; lfo?: string; keys?: [number, unknown][]; [k: string]: unknown };
 
-const AXES = ["x", "y", "z", "u", "azimuth", "elevation", "distance", "radial", "angle", "fixture"];
+const AXES = ["x", "y", "z", "u", "s", "azimuth", "elevation", "distance", "radial", "angle", "fixture", "view"];
 const AXIS_LABEL: Record<string, string> = {
   x: "x (Raum)",
   y: "y (Raum)",
   z: "z (Höhe)",
-  u: "entlang Strip",
+  u: "entlang Strip (gestreckt)",
+  s: "entlang Strip in Metern",
   azimuth: "links → rechts (Betrachter)",
   elevation: "unten → oben (Betrachter)",
   distance: "nah → fern",
   radial: "Raummitte → außen",
   angle: "um die Raummitte",
   fixture: "je Strip",
+  view: "hinter → vor dem Betrachter",
 };
 const AUDIO = ["rms", "low", "mid", "high", "onset", "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy"];
 const AUDIO_LABEL: Record<string, string> = {
@@ -355,7 +357,7 @@ function ParamControl({
 function TargetEditor({ target, onChange }: { target: Target; onChange: (t: Target) => void }) {
   const project = useStore((s) => s.project)!;
   const tags = [...new Set(project.fixtures.flatMap((f) => f.tags))].sort();
-  const all = !target.fixtures && !target.tags && !(target.where ?? []).length;
+  const all = !target.fixtures && !target.tags && !(target.where ?? []).length && !target.view;
   const toggle = (key: "fixtures" | "tags", id: string) => {
     const cur = new Set(target[key] ?? []);
     if (cur.has(id)) cur.delete(id);
@@ -388,6 +390,20 @@ function TargetEditor({ target, onChange }: { target: Target; onChange: (t: Targ
           </div>
         </>
       )}
+      <div className="unit" style={{ marginBottom: 2 }}>Sichtbarkeit</div>
+      <div className="seg" style={{ marginBottom: 8 }} title="direkt = im Blickfeld des Betrachters, indirekt = hinter/neben ihm (hellt nur den Raum auf)">
+        {(
+          [
+            [null, "alle"],
+            ["direct", "im Blick"],
+            ["indirect", "hinter mir"],
+          ] as const
+        ).map(([v, label]) => (
+          <button key={label} className={(target.view ?? null) === v ? "on" : ""} onClick={() => onChange({ ...target, view: v })}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="unit" style={{ marginBottom: 2 }}>Bereich (UND-verknüpft)</div>
       {(target.where ?? []).map((w, i) => (
         <div key={i} className="row" style={{ flexWrap: "nowrap", marginBottom: 4 }}>
@@ -400,7 +416,7 @@ function TargetEditor({ target, onChange }: { target: Target; onChange: (t: Targ
               onChange({ ...target, where });
             }}
           >
-            {["x", "y", "z", "nx", "ny", "nz", "u", "azimuth", "elevation", "distance"].map((f) => (
+            {["x", "y", "z", "nx", "ny", "nz", "u", "s", "azimuth", "elevation", "distance", "view"].map((f) => (
               <option key={f}>{f}</option>
             ))}
           </select>

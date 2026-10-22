@@ -27,6 +27,30 @@ function planeBasis(normal: Vec3, reference: Vec3 | null): [Vec3, Vec3] {
   return [u, cross(n, u)];
 }
 
+/** Unit heart (width 1, centred), from the bottom tip; same curve as the backend. */
+function heartOutline(steps = 180): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = Math.PI + (2 * Math.PI * i) / steps;
+    pts.push([16 * Math.sin(t) ** 3, 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)]);
+  }
+  const xs = pts.map((p) => p[0]),
+    ys = pts.map((p) => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2,
+    cy = (Math.min(...ys) + Math.max(...ys)) / 2,
+    w = Math.max(...xs) - Math.min(...xs);
+  return pts.map(([x, y]) => [(x - cx) / w, (y - cy) / w]);
+}
+
+/** Right and up of an upright heart (backend: lsg/geometry/sampling.heart_basis). */
+function heartBasis(normal: Vec3, reference: Vec3 | null): [Vec3, Vec3] {
+  if (!reference) {
+    const side = cross([0, 0, 1], norm(normal));
+    if (Math.hypot(...side) > 1e-6) reference = side;
+  }
+  return planeBasis(normal, reference);
+}
+
 /** Polyline approximating a fixture's geometry (for drawing). */
 export function geometryPath(g: Geometry): Vec3[] {
   switch (g.type) {
@@ -59,6 +83,13 @@ export function geometryPath(g: Geometry): Vec3[] {
       }
       return out;
     }
+    case "heart": {
+      const [u, v] = heartBasis(g.normal, g.reference);
+      const a = (g.rotate_deg * Math.PI) / 180;
+      const right = add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
+      const up = add(scale(u, -Math.sin(a)), scale(v, Math.cos(a)));
+      return heartOutline().map(([x, y]) => add(g.center, add(scale(right, x * g.size), scale(up, y * g.size))));
+    }
     case "matrix": {
       const c = scale(norm(g.col_dir), g.pitch * (g.cols - 1));
       const r = scale(norm(g.row_dir), g.pitch * (g.rows - 1));
@@ -76,6 +107,7 @@ export function handles(g: Geometry): Vec3[] {
       return g.points;
     case "arc":
     case "circle":
+    case "heart":
       return [g.center];
     case "matrix":
       return [g.origin];
@@ -92,6 +124,7 @@ export function setHandle(g: Geometry, i: number, p: Vec3): Geometry {
     }
     case "arc":
     case "circle":
+    case "heart":
       return { ...g, center: p };
     case "matrix":
       return { ...g, origin: p };
@@ -107,6 +140,7 @@ export function translateGeometry(g: Geometry, d: Vec3): Geometry {
       return { ...g, points: g.points.map(mv) };
     case "arc":
     case "circle":
+    case "heart":
       return { ...g, center: mv(g.center) };
     case "matrix":
       return { ...g, origin: mv(g.origin) };
@@ -128,16 +162,6 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
   out.splice(to, 0, x);
   return out;
 }
-
-// heart outline as cubic bezier segments, x in [-1, 1], y up from the tip (0) to the lobes (1.75)
-const HEART: [number, number][] = [
-  [0, 0], [-0.3, 0.35], [-1, 0.6], [-1, 1.15],
-  [-1, 1.55], [-0.75, 1.75], [-0.5, 1.75],
-  [-0.25, 1.75], [0, 1.6], [0, 1.35],
-  [0, 1.6], [0.25, 1.75], [0.5, 1.75],
-  [0.75, 1.75], [1, 1.55], [1, 1.15],
-  [1, 0.6], [0.3, 0.35], [0, 0],
-];
 
 export function polygonArea(pts: Vec2[]): number {
   let a = 0;
@@ -232,7 +256,7 @@ export const PRESETS: { id: PresetId; label: string; hint: string }[] = [
   { id: "polyline", label: "Freie Linie", hint: "Polylinie mit eigenen Punkten" },
   { id: "bezier", label: "Kurve", hint: "Bezier-Kurve" },
   { id: "arc", label: "Bogen", hint: "Kreisbogen" },
-  { id: "heart", label: "Herz", hint: "Herz an einer Wand (60 cm breit)" },
+  { id: "heart", label: "Herz", hint: "Herz an einer Wand (Größe und Drehung einstellbar)" },
 ];
 
 export function makePreset(id: PresetId, room: Room, wall = 0): Fixture {
@@ -298,12 +322,13 @@ export function makePreset(id: PresetId, room: Room, wall = 0): Fixture {
         d = onWall(0.8, 1.0, 0.02);
       return baseFixture("Kurve", { type: "bezier", points: [a, [a[0], a[1], 2.0], [d[0], d[1], 2.0], d] });
     }
-    case "heart": {
-      const half = 0.3; // half width in metres
-      const len = Math.hypot(wb[0] - wa[0], wb[1] - wa[1]) || 1;
-      const points = HEART.map(([x, y]) => onWall(0.5 + (x * half) / len, 1.3 + y * half, 0.02));
-      return baseFixture("Herz", { type: "bezier", points }, { tags: ["wall"] });
-    }
+    case "heart":
+      return baseFixture(
+        "Herz",
+        // facing into the room, upright; reference = along the wall so "right" follows the wall
+        { type: "heart", center: onWall(0.5, 1.5, 0.02), size: 0.6, normal: scale(inward, -1), reference: along, rotate_deg: 0 },
+        { tags: ["wall"] },
+      );
     case "arc":
       return baseFixture("Bogen", {
         type: "arc",

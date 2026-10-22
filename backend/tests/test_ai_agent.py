@@ -37,7 +37,8 @@ def test_parse_stream_json():
 def test_prompt_mentions_task_and_brightness():
     song = {"id": "s1", "title": "Demo", "duration": 80.0}
     p = build_prompt("raum", song, "Ruhig und blau", "Blau", None)
-    assert 'create_show an (name "Blau", song_id "s1")' in p and "0.05-0.25" in p and "Ruhig und blau" in p
+    assert 'create_show an (name "Blau", song_id "s1")' in p and "0.03-0.15" in p and "Ruhig und blau" in p
+    assert "hits" in p and "analyze_light" in p and "direkt" in p
     assert "show_id abc" in build_prompt("raum", song, "mehr Strobe", "x", "abc")
 
 

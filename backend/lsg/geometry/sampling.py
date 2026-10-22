@@ -15,6 +15,7 @@ from lsg.model.fixture import (
     BezierGeometry,
     CircleGeometry,
     Fixture,
+    HeartGeometry,
     MatrixGeometry,
     PolylineGeometry,
 )
@@ -62,6 +63,36 @@ def _arc_points(center, radius, normal, reference, start_deg: float, sweep_deg: 
     return np.asarray(center, dtype=np.float64) + radius * (np.cos(a) * u + np.sin(a) * v)
 
 
+HEART_STEPS = 720
+
+
+def heart_outline(steps: int = HEART_STEPS) -> np.ndarray:
+    """Unit heart (width 1, bounding box centred on 0), starting at the bottom tip, x right, y up."""
+    t = np.linspace(np.pi, 3 * np.pi, steps + 1)
+    x = 16 * np.sin(t) ** 3
+    y = 13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t)
+    xy = np.stack([x, y], axis=1)
+    lo, hi = xy.min(axis=0), xy.max(axis=0)
+    return (xy - (lo + hi) / 2) / (hi[0] - lo[0])
+
+
+def heart_basis(normal, reference) -> tuple[np.ndarray, np.ndarray]:
+    """(right, up) of a heart: upright by default, i.e. `up` is world z projected into the plane."""
+    if reference is None:
+        n = _unit(normal)
+        side = np.cross([0.0, 0.0, 1.0], n)
+        reference = side if np.linalg.norm(side) > 1e-6 else None
+    return _plane_basis(normal, reference)
+
+
+def _heart_points(geom: HeartGeometry) -> np.ndarray:
+    u, v = heart_basis(geom.normal, geom.reference)
+    a = np.radians(geom.rotate_deg)
+    right, up = np.cos(a) * u + np.sin(a) * v, -np.sin(a) * u + np.cos(a) * v
+    xy = heart_outline() * geom.size
+    return np.asarray(geom.center, dtype=np.float64) + xy[:, :1] * right + xy[:, 1:] * up
+
+
 def curve_polyline(geom) -> tuple[np.ndarray, bool]:
     """Dense polyline approximating the geometry and whether it is closed."""
     if isinstance(geom, PolylineGeometry):
@@ -72,6 +103,8 @@ def curve_polyline(geom) -> tuple[np.ndarray, bool]:
         return _arc_points(geom.center, geom.radius, geom.normal, geom.reference, geom.start_deg, geom.sweep_deg), False
     if isinstance(geom, CircleGeometry):
         return _arc_points(geom.center, geom.radius, geom.normal, geom.reference, geom.start_deg, 360.0), True
+    if isinstance(geom, HeartGeometry):
+        return _heart_points(geom), True
     raise TypeError(f"{type(geom).__name__} is not a curve")
 
 
