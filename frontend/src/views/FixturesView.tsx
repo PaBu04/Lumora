@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { makePreset, PRESETS, round, wallLength, type PresetId } from "../geometry";
+import { makePreset, moveItem, PRESETS, round, wallLength, type PresetId } from "../geometry";
 import { useStore } from "../store";
-import { Scene3D } from "../three/Scene3D";
+import { MOVE_ALL, Scene3D } from "../three/Scene3D";
 import type { Fixture, Geometry, LedType, Project, Vec3 } from "../types";
 import { Field, Icon, NumberInput, TextInput, Vec3Input } from "../ui";
 
@@ -23,13 +23,16 @@ function GeometryEditor({ f, onChange }: { f: Fixture; onChange: (g: Geometry) =
   const g = f.geometry;
   const selectedPoint = useStore((s) => s.selectedPoint);
   const select = useStore((s) => s.selectFixture);
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
   switch (g.type) {
     case "polyline":
     case "bezier": {
       const isBezier = g.type === "bezier";
+      // bezier: anchors and their control points move together, so only polylines are reordered
+      const sortable = !isBezier;
       return (
         <>
-          <table className="grid">
+          <table className="grid points">
             <thead>
               <tr>
                 <th>#</th>
@@ -39,8 +42,42 @@ function GeometryEditor({ f, onChange }: { f: Fixture; onChange: (g: Geometry) =
             </thead>
             <tbody>
               {g.points.map((p, i) => (
-                <tr key={i} style={selectedPoint === i ? { background: "var(--bg-4)" } : undefined} onClick={() => select(f.id, i)}>
-                  <td className="unit">{isBezier ? (i % 3 === 0 ? `P${i / 3}` : "c") : i + 1}</td>
+                <tr
+                  key={i}
+                  className={`${selectedPoint === i ? "sel" : ""}${drag && drag.over === i && drag.from !== i ? (drag.from < i ? " drop-below" : " drop-above") : ""}`}
+                  onClick={() => select(f.id, i)}
+                  onDragOver={(e) => {
+                    if (!drag) return;
+                    e.preventDefault();
+                    if (drag.over !== i) setDrag({ ...drag, over: i });
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (drag && drag.from !== i) onChange({ ...g, points: moveItem(g.points, drag.from, i) });
+                    setDrag(null);
+                  }}
+                >
+                  <td className="unit">
+                    {sortable ? (
+                      <span
+                        className="grip"
+                        draggable
+                        title="Ziehen zum Umsortieren"
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", String(i));
+                          setDrag({ from: i, over: i });
+                        }}
+                        onDragEnd={() => setDrag(null)}
+                      >
+                        ⠿ {i + 1}
+                      </span>
+                    ) : i % 3 === 0 ? (
+                      `P${i / 3}`
+                    ) : (
+                      "c"
+                    )}
+                  </td>
                   <td>
                     <Vec3Input
                       value={p}
@@ -171,6 +208,7 @@ function FixtureEditor({ f, project }: { f: Fixture; project: Project }) {
   const update = useStore((s) => s.updateProject);
   const select = useStore((s) => s.selectFixture);
   const leds = useStore((s) => s.leds);
+  const selectedPoint = useStore((s) => s.selectedPoint);
   const info = leds?.fixtures.find((x) => x.id === f.id);
   const set = (fn: (f: Fixture) => void) =>
     update((p) => {
@@ -228,7 +266,7 @@ function FixtureEditor({ f, project }: { f: Fixture; project: Project }) {
           )}
           <Field label="Datenrichtung">
             <label className="row">
-              <input type="checkbox" checked={f.reverse} onChange={(e) => set((x) => (x.reverse = e.target.checked))} /> umgekehrt (Einspeisung am Ende)
+              <input type="checkbox" checked={f.reverse} onChange={(e) => set((x) => (x.reverse = e.target.checked))} /> umgekehrt
             </label>
           </Field>
         </>
@@ -248,7 +286,18 @@ function FixtureEditor({ f, project }: { f: Fixture; project: Project }) {
           }
         />
       </Field>
-      <h3>Geometrie</h3>
+      <div className="row between" style={{ margin: "18px 0 8px" }}>
+        <h3 style={{ margin: 0 }}>Geometrie</h3>
+        {(f.geometry.type === "polyline" || f.geometry.type === "bezier") && (
+          <button
+            className={`btn small${selectedPoint === MOVE_ALL ? " active" : ""}`}
+            title="Den ganzen Strip in der 3D-Ansicht an den Pfeilen verschieben"
+            onClick={() => select(f.id, selectedPoint === MOVE_ALL ? null : MOVE_ALL)}
+          >
+            Ganzen Strip verschieben
+          </button>
+        )}
+      </div>
       <GeometryEditor f={f} onChange={(g) => set((x) => (x.geometry = g))} />
       <div className="row between" style={{ marginTop: 12 }}>
         <button
@@ -280,40 +329,6 @@ function FixtureEditor({ f, project }: { f: Fixture; project: Project }) {
       {project.controllers.length > 0 && !project.controllers.some((c) => c.mappings.some((m) => m.fixture_id === f.id)) && (
         <p className="hint">Noch keinem Controller zugeordnet (Tab „Controller").</p>
       )}
-    </div>
-  );
-}
-
-function ViewerEditor({ project }: { project: Project }) {
-  const update = useStore((s) => s.updateProject);
-  const select = useStore((s) => s.selectFixture);
-  const selected = useStore((s) => s.selectedFixture);
-  const v = project.viewer;
-  return (
-    <div className={`card${selected === "__viewer__" ? " selected" : ""}`}>
-      <div className="row between" style={{ marginBottom: 8 }}>
-        <strong>Betrachter</strong>
-        <button className="btn small" onClick={() => select("__viewer__")}>
-          In 3D verschieben
-        </button>
-      </div>
-      <Field label="Position (m)">
-        <Vec3Input value={v.position} onChange={(position) => update((p) => ({ ...p, viewer: { ...p.viewer, position } }))} />
-      </Field>
-      <Field label="Blickrichtung (°)">
-        <NumberInput value={v.yaw_deg} step={5} onChange={(yaw_deg) => update((p) => ({ ...p, viewer: { ...p.viewer, yaw_deg: ((yaw_deg % 360) + 360) % 360 } }))} />
-      </Field>
-      <input
-        type="range"
-        min={0}
-        max={359}
-        value={Math.round(v.yaw_deg)}
-        onChange={(e) => update((p) => ({ ...p, viewer: { ...p.viewer, yaw_deg: +e.target.value } }))}
-      />
-      <Field label="Neigung (°)">
-        <NumberInput value={v.pitch_deg} step={5} min={-89} max={89} onChange={(pitch_deg) => update((p) => ({ ...p, viewer: { ...p.viewer, pitch_deg } }))} />
-      </Field>
-      <p className="hint">0° = Blick entlang +x, 90° = entlang +y. Effekte wie „von links nach rechts" beziehen sich auf diese Blickrichtung.</p>
     </div>
   );
 }
@@ -384,14 +399,13 @@ export function FixturesView() {
         </div>
 
         {fixture && <FixtureEditor f={fixture} project={project} />}
-        <ViewerEditor project={project} />
       </div>
       <div className="pane flush">
         <div className="canvas-wrap">
           <Scene3D editable />
         </div>
         <div className="overlay">
-          <span className="badge">Strip anklicken → Punkte anklicken und an den Pfeilen ziehen (rastet an Wänden, Boden und Decke ein)</span>
+          <span className="badge">Strip anklicken, dann einen Punkt oder die Raute in der Mitte (ganzer Strip) an den Pfeilen ziehen</span>
         </div>
       </div>
     </div>

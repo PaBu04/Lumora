@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { api } from "./api";
 import { useStore, type Tab } from "./store";
 import { Icon } from "./ui";
 // views are loaded on demand so the first paint does not wait for three.js
@@ -132,9 +133,31 @@ function StatusArea() {
           ⚡ {(pb.power.total_ma / 1000).toFixed(1)} A
         </span>
       )}
-      <span className={`status-pill${pb?.mode === "live" ? " live" : ""}`}>
-        <span className="dot" /> {pb?.mode === "live" ? "LIVE" : "Vorschau"}
-      </span>
+    </div>
+  );
+}
+
+/** Where frames go: only the 3D preview, or also to the LEDs. */
+function ModeSwitch() {
+  const mode = useStore((s) => s.playback?.mode);
+  const setPlayback = useStore((s) => s.setPlayback);
+  const notify = useStore((s) => s.notify);
+  if (!mode) return null;
+  const set = async (m: "preview" | "live") => {
+    try {
+      setPlayback(await api.mode(m));
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+  };
+  return (
+    <div className="seg mode-switch" role="group" aria-label="Ausgabe">
+      <button className={mode === "preview" ? "on" : ""} title="Nur die 3D-Vorschau in der App" onClick={() => set("preview")}>
+        Vorschau
+      </button>
+      <button className={mode === "live" ? "on live" : ""} title="Bilder auch an die WLED-Controller senden" onClick={() => set("live")}>
+        <span className="dot" /> Live
+      </button>
     </div>
   );
 }
@@ -170,6 +193,7 @@ export function App() {
         {project && <UndoButtons />}
         <div className="spacer" />
         {project && <StatusArea />}
+        {project && <ModeSwitch />}
       </header>
       <nav className="sidebar">
         {NAV.map((n) => (

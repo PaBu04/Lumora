@@ -4,8 +4,8 @@ import { bounds, geometryPath, polygonArea, round, wallLength } from "../geometr
 import { useStore } from "../store";
 import { Versions } from "../components/Versions";
 import { Scene3D } from "../three/Scene3D";
-import type { Room, Vec2 } from "../types";
-import { Field, NumberInput, TextInput } from "../ui";
+import type { Project, Room, Vec2 } from "../types";
+import { Field, NumberInput, TextInput, Vec3Input } from "../ui";
 
 function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
   const o = (p: Vec2, q: Vec2, r: Vec2) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
@@ -58,7 +58,9 @@ function FloorPlanEditor({
   const fp = project.floorplan;
   const notify = useStore((s) => s.notify);
   const svg = useRef<SVGSVGElement>(null);
+  const update = useStore((s) => s.updateProject);
   const [drag, setDrag] = useState<{ i: number; pts: Vec2[] } | null>(null);
+  const [viewerDrag, setViewerDrag] = useState<Vec2 | null>(null);
   const pts = drag?.pts ?? room.floor;
 
   // view box from the committed room so the view does not jump while dragging
@@ -99,7 +101,20 @@ function FloorPlanEditor({
   const ccw = polygonArea(pts) > 0;
   const editing = mode === "edit";
   const yaw = (project.viewer.yaw_deg * Math.PI) / 180;
-  const [vx, vy] = project.viewer.position;
+  const [vx, vy] = viewerDrag ?? project.viewer.position;
+  const fx = Math.cos(yaw),
+    fy = Math.sin(yaw);
+  const eyes = [-1, 1].map((s) => {
+    const ex = vx - fy * s * unit * 0.28 + fx * unit * 0.3,
+      ey = vy + fx * s * unit * 0.28 + fy * unit * 0.3;
+    return <line key={s} x1={ex} y1={-ey} x2={ex + fx * unit * 1.1} y2={-(ey + fy * unit * 1.1)} stroke="#ffcc33" strokeWidth={unit * 0.16} strokeLinecap="round" />;
+  });
+  const endViewerDrag = () => {
+    if (!viewerDrag) return;
+    const [x, y] = viewerDrag;
+    update((p) => ({ ...p, viewer: { ...p.viewer, position: [x, y, p.viewer.position[2]] } }));
+    setViewerDrag(null);
+  };
 
   return (
     <svg
@@ -114,6 +129,7 @@ function FloorPlanEditor({
         onPlanClick([round(p.x), round(-p.y)]);
       }}
       onPointerMove={(e) => {
+        if (viewerDrag) setViewerDrag(toWorld(e));
         if (!drag) return;
         const next = drag.pts.slice();
         next[drag.i] = toWorld(e);
@@ -122,10 +138,12 @@ function FloorPlanEditor({
       onPointerUp={() => {
         if (drag) commit(drag.pts);
         setDrag(null);
+        endViewerDrag();
       }}
       onPointerLeave={() => {
         if (drag) commit(drag.pts);
         setDrag(null);
+        endViewerDrag();
       }}
     >
       {grid}
@@ -163,9 +181,19 @@ function FloorPlanEditor({
           />
         );
       })}
-      <g>
-        <circle cx={vx} cy={-vy} r={unit * 0.45} fill="#e8ecf4" />
-        <line x1={vx} y1={-vy} x2={vx + Math.cos(yaw) * unit * 1.6} y2={-vy - Math.sin(yaw) * unit * 1.6} stroke="#ffcc33" strokeWidth={unit * 0.22} />
+      <g
+        className="viewer-2d"
+        style={editing ? undefined : { pointerEvents: "none" }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          (e.target as Element).setPointerCapture?.(e.pointerId);
+          setViewerDrag([vx, vy]);
+        }}
+      >
+        <ellipse cx={vx} cy={-vy} rx={unit * 0.75} ry={unit * 0.75} fill="#8b96ad" fillOpacity={0.35} />
+        <circle cx={vx} cy={-vy} r={unit * 0.5} fill="#e8ecf4" />
+        {eyes}
+        <title>Betrachter (ziehen zum Verschieben)</title>
       </g>
       {pts.map((a, i) => {
         const b = pts[(i + 1) % n];
@@ -244,6 +272,52 @@ function FloorPlanEditor({
         </g>
       )}
     </svg>
+  );
+}
+
+function ViewerEditor({ project }: { project: Project }) {
+  const update = useStore((s) => s.updateProject);
+  const select = useStore((s) => s.selectFixture);
+  const selected = useStore((s) => s.selectedFixture);
+  const v = project.viewer;
+  const active = selected === "__viewer__";
+  return (
+    <>
+      <div className="row between" style={{ margin: "18px 0 8px" }}>
+        <h3 style={{ margin: 0 }}>Betrachter</h3>
+        <button className={`btn small${active ? " active" : ""}`} onClick={() => select(active ? null : "__viewer__")}>
+          In 3D verschieben
+        </button>
+      </div>
+      <p className="hint">Wo du sitzt oder stehst und wohin du schaust. Effekte wie „von links nach rechts“ richten sich danach.</p>
+      <Field label="Position (m)">
+        <Vec3Input value={v.position} onChange={(position) => update((p) => ({ ...p, viewer: { ...p.viewer, position } }))} />
+      </Field>
+      <Field label="Blickrichtung">
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <input
+            type="range"
+            className="grow"
+            min={0}
+            max={359}
+            value={Math.round(v.yaw_deg)}
+            onChange={(e) => update((p) => ({ ...p, viewer: { ...p.viewer, yaw_deg: +e.target.value } }))}
+          />
+          <div style={{ width: 72, flex: "none" }}>
+            <NumberInput value={v.yaw_deg} step={5} onChange={(yaw_deg) => update((p) => ({ ...p, viewer: { ...p.viewer, yaw_deg: ((yaw_deg % 360) + 360) % 360 } }))} />
+          </div>
+          <span className="unit">°</span>
+        </div>
+      </Field>
+      <Field label="Neigung">
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <div className="grow">
+            <NumberInput value={v.pitch_deg} step={5} min={-89} max={89} onChange={(pitch_deg) => update((p) => ({ ...p, viewer: { ...p.viewer, pitch_deg } }))} />
+          </div>
+          <span className="unit">°</span>
+        </div>
+      </Field>
+    </>
   );
 }
 
@@ -456,6 +530,8 @@ export function RoomView() {
           </tbody>
         </table>
 
+        <ViewerEditor project={project} />
+
         <h3>Verlauf</h3>
         <p className="hint">Jede gespeicherte Änderung an Raum, Strips, Controllern und Kalibrierung.</p>
         <Versions limit={12} />
@@ -510,7 +586,7 @@ export function RoomView() {
         </div>
         <div style={{ position: "relative" }}>
           <div className="canvas-wrap">
-            <Scene3D />
+            <Scene3D editViewer />
           </div>
           <div className="overlay">
             <span className="badge">3D-Ansicht</span>

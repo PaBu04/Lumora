@@ -98,6 +98,47 @@ export function setHandle(g: Geometry, i: number, p: Vec3): Geometry {
   }
 }
 
+/** Shift a whole fixture by d (all points, centre or origin). */
+export function translateGeometry(g: Geometry, d: Vec3): Geometry {
+  const mv = (p: Vec3): Vec3 => [round(p[0] + d[0]), round(p[1] + d[1]), round(p[2] + d[2])];
+  switch (g.type) {
+    case "polyline":
+    case "bezier":
+      return { ...g, points: g.points.map(mv) };
+    case "arc":
+    case "circle":
+      return { ...g, center: mv(g.center) };
+    case "matrix":
+      return { ...g, origin: mv(g.origin) };
+  }
+}
+
+/** Middle of a fixture's bounding box (where the "move all" handle sits). */
+export function geometryCenter(g: Geometry): Vec3 {
+  const pts = geometryPath(g);
+  const lo = [0, 1, 2].map((j) => Math.min(...pts.map((p) => p[j])));
+  const hi = [0, 1, 2].map((j) => Math.max(...pts.map((p) => p[j])));
+  return [0, 1, 2].map((j) => (lo[j] + hi[j]) / 2) as Vec3;
+}
+
+/** Move list entry `from` to position `to` (drag and drop reordering). */
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  const out = list.slice();
+  const [x] = out.splice(from, 1);
+  out.splice(to, 0, x);
+  return out;
+}
+
+// heart outline as cubic bezier segments, x in [-1, 1], y up from the tip (0) to the lobes (1.75)
+const HEART: [number, number][] = [
+  [0, 0], [-0.3, 0.35], [-1, 0.6], [-1, 1.15],
+  [-1, 1.55], [-0.75, 1.75], [-0.5, 1.75],
+  [-0.25, 1.75], [0, 1.6], [0, 1.35],
+  [0, 1.6], [0.25, 1.75], [0.5, 1.75],
+  [0.75, 1.75], [1, 1.55], [1, 1.15],
+  [1, 0.6], [0.3, 0.35], [0, 0],
+];
+
 export function polygonArea(pts: Vec2[]): number {
   let a = 0;
   for (let i = 0; i < pts.length; i++) {
@@ -179,7 +220,7 @@ function baseFixture(name: string, geometry: Geometry, extra: Partial<Fixture> =
   };
 }
 
-export type PresetId = "ceiling" | "floor" | "wall" | "corner" | "ring" | "matrix" | "polyline" | "bezier" | "arc";
+export type PresetId = "ceiling" | "floor" | "wall" | "corner" | "ring" | "matrix" | "polyline" | "bezier" | "arc" | "heart";
 
 export const PRESETS: { id: PresetId; label: string; hint: string }[] = [
   { id: "ceiling", label: "Deckenumrandung", hint: "Strip rundum knapp unter der Decke" },
@@ -191,6 +232,7 @@ export const PRESETS: { id: PresetId; label: string; hint: string }[] = [
   { id: "polyline", label: "Freie Linie", hint: "Polylinie mit eigenen Punkten" },
   { id: "bezier", label: "Kurve", hint: "Bezier-Kurve" },
   { id: "arc", label: "Bogen", hint: "Kreisbogen" },
+  { id: "heart", label: "Herz", hint: "Herz an einer Wand (60 cm breit)" },
 ];
 
 export function makePreset(id: PresetId, room: Room, wall = 0): Fixture {
@@ -255,6 +297,12 @@ export function makePreset(id: PresetId, room: Room, wall = 0): Fixture {
       const a = onWall(0.2, 1.0, 0.02),
         d = onWall(0.8, 1.0, 0.02);
       return baseFixture("Kurve", { type: "bezier", points: [a, [a[0], a[1], 2.0], [d[0], d[1], 2.0], d] });
+    }
+    case "heart": {
+      const half = 0.3; // half width in metres
+      const len = Math.hypot(wb[0] - wa[0], wb[1] - wa[1]) || 1;
+      const points = HEART.map(([x, y]) => onWall(0.5 + (x * half) / len, 1.3 + y * half, 0.02));
+      return baseFixture("Herz", { type: "bezier", points }, { tags: ["wall"] });
     }
     case "arc":
       return baseFixture("Bogen", {

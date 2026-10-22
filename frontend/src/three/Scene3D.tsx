@@ -1,11 +1,11 @@
-import { Line, OrbitControls, PerspectiveCamera, TransformControls } from "@react-three/drei";
+import { GizmoHelper, GizmoViewport, Line, OrbitControls, OrthographicCamera, PerspectiveCamera, TransformControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { bounds, geometryPath, handles, setHandle, snapPoint } from "../geometry";
+import { bounds, geometryCenter, geometryPath, handles, round, setHandle, snapPoint, translateGeometry } from "../geometry";
 import { useStore } from "../store";
-import type { LedData, Project, Room, Vec3, Viewer } from "../types";
+import type { Fixture, LedData, Project, Room, Vec3, Viewer } from "../types";
 import { liveFrame } from "../ws";
 
 // the backend uses z-up coordinates; make three.js agree
@@ -179,6 +179,49 @@ function Handle({ p, active, onSelect, onMove }: { p: Vec3; active: boolean; onS
   );
 }
 
+/** Grip in the middle of a strip: drag it to move the whole strip. */
+function MoveAllHandle({ fixture, active, onSelect }: { fixture: Fixture; active: boolean; onSelect: () => void }) {
+  const update = useStore((s) => s.updateProject);
+  const group = useRef<THREE.Group>(null!);
+  const center = geometryCenter(fixture.geometry);
+  const rel = geometryPath(fixture.geometry).map((p) => [p[0] - center[0], p[1] - center[1], p[2] - center[2]] as Vec3);
+  return (
+    <>
+      <group ref={group} position={center}>
+        <mesh
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+        >
+          <octahedronGeometry args={[0.08]} />
+          <meshBasicMaterial color={active ? "#ffcc33" : "#7dd3fc"} />
+        </mesh>
+        {active && rel.length > 1 && <Line points={rel} color="#ffcc33" lineWidth={2} transparent opacity={0.6} />}
+      </group>
+      {active && (
+        <TransformControls
+          object={group}
+          mode="translate"
+          size={0.8}
+          onMouseUp={() => {
+            const v = group.current.position;
+            const d: Vec3 = [round(v.x - center[0], 2), round(v.y - center[1], 2), round(v.z - center[2], 2)];
+            if (d.some((x) => x !== 0))
+              update((pr) => {
+                const f = pr.fixtures.find((x) => x.id === fixture.id)!;
+                f.geometry = translateGeometry(f.geometry, d);
+                return pr;
+              });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+export const MOVE_ALL = -1; // selectedPoint value: the whole strip is selected for moving
+
 function FixtureHandles({ project }: { project: Project }) {
   const selected = useStore((s) => s.selectedFixture);
   const point = useStore((s) => s.selectedPoint);
@@ -186,8 +229,17 @@ function FixtureHandles({ project }: { project: Project }) {
   const update = useStore((s) => s.updateProject);
   const fixture = project.fixtures.find((f) => f.id === selected);
   if (!fixture) return null;
+  const many = handles(fixture.geometry).length > 1;
   return (
     <group>
+      {many && (
+        <MoveAllHandle
+          key={`${fixture.id}-all-${JSON.stringify(fixture.geometry)}`}
+          fixture={fixture}
+          active={point === MOVE_ALL}
+          onSelect={() => select(fixture.id, MOVE_ALL)}
+        />
+      )}
       {handles(fixture.geometry).map((p, i) => (
         <Handle
           key={`${fixture.id}-${i}-${p.join(",")}`}
@@ -213,6 +265,11 @@ function viewerForward(v: Viewer): THREE.Vector3 {
   return new THREE.Vector3(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
 }
 
+const BODY = "#8b96ad";
+const BODY_ACTIVE = "#ffcc33";
+
+/** A simple person: head, shoulders and legs, turned to the viewing direction; two short
+ * yellow lines from the eyes show where the viewer looks. */
 function ViewerMarker({ viewer, editable }: { viewer: Viewer; editable: boolean }) {
   const selected = useStore((s) => s.selectedFixture);
   const select = useStore((s) => s.selectFixture);
@@ -220,8 +277,16 @@ function ViewerMarker({ viewer, editable }: { viewer: Viewer; editable: boolean 
   const group = useRef<THREE.Group>(null!);
   const fwd = viewerForward(viewer);
   const [x, y, z] = viewer.position;
-  const arrowEnd: Vec3 = [x + fwd.x * 0.6, y + fwd.y * 0.6, z + fwd.z * 0.6];
   const active = editable && selected === "__viewer__";
+  const color = active ? BODY_ACTIVE : BODY;
+  const yaw = (viewer.yaw_deg * Math.PI) / 180;
+  const side = new THREE.Vector3(-Math.sin(yaw), Math.cos(yaw), 0); // left of the viewing direction
+  const eye = (s: number): Vec3 => [side.x * s * 0.045 + fwd.x * 0.09, side.y * s * 0.045 + fwd.y * 0.09, 0.02];
+  const sight = (s: number): [Vec3, Vec3] => {
+    const a = eye(s);
+    return [a, [a[0] + fwd.x * 0.35, a[1] + fwd.y * 0.35, a[2] + fwd.z * 0.35]];
+  };
+  const leg = z - 0.72; // from the hips to the floor
   return (
     <group key={viewer.position.join(",")}>
       <group
@@ -233,17 +298,34 @@ function ViewerMarker({ viewer, editable }: { viewer: Viewer; editable: boolean 
           select("__viewer__");
         }}
       >
-        <mesh>
-          <sphereGeometry args={[0.11, 20, 16]} />
-          <meshBasicMaterial color={active ? "#ffcc33" : "#e8ecf4"} />
+        {/* head */}
+        <mesh position={[0, 0, 0.03]}>
+          <sphereGeometry args={[0.1, 24, 18]} />
+          <meshLambertMaterial color={color} />
         </mesh>
-        <mesh position={[0, 0, -0.45]}>
-          <cylinderGeometry args={[0.13, 0.18, 0.7, 16]} />
-          <meshBasicMaterial color={active ? "#806a20" : "#4a5468"} />
-        </mesh>
+        <group rotation={[0, 0, yaw]}>
+          {/* torso: a slightly flattened capsule, shoulders across the view */}
+          <mesh position={[0, 0, -0.42]} rotation={[Math.PI / 2, 0, 0]} scale={[0.62, 1, 1]}>
+            <capsuleGeometry args={[0.17, 0.32, 6, 16]} />
+            <meshLambertMaterial color={color} />
+          </mesh>
+          {/* legs */}
+          {leg > 0.25 &&
+            [-1, 1].map((s) => (
+              <mesh key={s} position={[0, s * 0.075, -0.72 - leg / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                <capsuleGeometry args={[0.055, leg - 0.11, 4, 10]} />
+                <meshLambertMaterial color={color} />
+              </mesh>
+            ))}
+        </group>
+        <Line points={sight(1)} color="#ffcc33" lineWidth={2.5} />
+        <Line points={sight(-1)} color="#ffcc33" lineWidth={2.5} />
       </group>
-      <Line points={[viewer.position, arrowEnd]} color="#ffcc33" lineWidth={3} />
-      <Line points={[viewer.position, [x, y, 0]]} color="#465063" lineWidth={1} dashed dashSize={0.05} gapSize={0.05} />
+      {/* footprint on the floor */}
+      <mesh position={[x, y, 0.004]}>
+        <ringGeometry args={[0.16, 0.2, 32]} />
+        <meshBasicMaterial color={active ? BODY_ACTIVE : "#465063"} side={THREE.DoubleSide} />
+      </mesh>
       {active && (
         <TransformControls
           object={group}
@@ -276,34 +358,107 @@ function ViewerCamera({ viewer }: { viewer: Viewer }) {
   return <PerspectiveCamera ref={cam} makeDefault fov={75} near={0.05} far={100} />;
 }
 
-export function Scene3D({ editable = false, viewerCam = false }: { editable?: boolean; viewerCam?: boolean }) {
+// last orbit view, so switching between perspective and orthographic keeps the angle
+const lastView: { pos: Vec3 | null; target: Vec3 | null } = { pos: null, target: null };
+
+function loadOrtho(): boolean {
+  try {
+    return localStorage.getItem("lsg.ortho") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function OrbitCamera({ ortho, home, target, span }: { ortho: boolean; home: Vec3; target: Vec3; span: number }) {
+  const { size } = useThree();
+  const pos = lastView.pos ?? home;
+  const tgt = lastView.target ?? target;
+  // fit the room once when switching to orthographic; the user zooms from there
+  const zoom = useMemo(() => Math.min(size.width, size.height) / (span * 1.7), [ortho]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      {ortho ? (
+        <OrthographicCamera makeDefault position={pos} zoom={zoom} near={-200} far={400} />
+      ) : (
+        <PerspectiveCamera makeDefault position={pos} fov={45} near={0.05} far={200} />
+      )}
+      <OrbitControls
+        key={ortho ? "o" : "p"}
+        makeDefault
+        target={tgt}
+        onChange={(e) => {
+          const c = e?.target;
+          if (!c) return;
+          lastView.pos = [c.object.position.x, c.object.position.y, c.object.position.z];
+          lastView.target = [c.target.x, c.target.y, c.target.z];
+        }}
+      />
+    </>
+  );
+}
+
+export function Scene3D({
+  editable = false,
+  editViewer = false,
+  viewerCam = false,
+}: {
+  editable?: boolean;
+  editViewer?: boolean;
+  viewerCam?: boolean;
+}) {
   const project = useStore((s) => s.project);
   const leds = useStore((s) => s.leds);
   const select = useStore((s) => s.selectFixture);
   const selected = useStore((s) => s.selectedFixture);
+  const [ortho, setOrtho] = useState(loadOrtho);
   if (!project) return null;
   const b = bounds(project.room);
   const hl = editable && leds ? (leds.fixtures.find((f) => f.id === selected) ?? null) : null;
   const cx = (b.x0 + b.x1) / 2,
     cy = (b.y0 + b.y1) / 2;
   const span = Math.max(b.x1 - b.x0, b.y1 - b.y0, project.room.height);
+  const home: Vec3 = [cx - span * 0.9, cy - span * 1.2, project.room.height + span * 0.9];
+  const toggle = (o: boolean) => {
+    setOrtho(o);
+    try {
+      localStorage.setItem("lsg.ortho", o ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
+  };
   return (
-    <Canvas
-      dpr={[1, 2]}
-      gl={{ antialias: true, preserveDrawingBuffer: true }}
-      camera={{ position: [cx - span * 0.9, cy - span * 1.2, project.room.height + span * 0.9], fov: 45, near: 0.05, far: 200 }}
-      onPointerMissed={() => editable && select(null)}
-    >
-      <color attach="background" args={["#07090d"]} />
-      <RoomModel room={project.room} />
-      {leds && <LedInstances leds={leds} highlight={hl} />}
-      <FixturePaths project={project} editable={editable} />
-      {editable && <FixtureHandles project={project} />}
-      {!viewerCam && <ViewerMarker viewer={project.viewer} editable={editable} />}
-      {viewerCam ? <ViewerCamera viewer={project.viewer} /> : <OrbitControls makeDefault target={[cx, cy, project.room.height / 3]} />}
-      <EffectComposer>
-        <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.25} luminanceSmoothing={0.3} />
-      </EffectComposer>
-    </Canvas>
+    <div className="scene3d">
+      <Canvas dpr={[1, 2]} gl={{ antialias: true, preserveDrawingBuffer: true }} onPointerMissed={() => (editable || editViewer) && select(null)}>
+        <color attach="background" args={["#07090d"]} />
+        <hemisphereLight args={["#ffffff", "#2a3040", 1.6]} />
+        <directionalLight position={[2, -3, 5]} intensity={1.2} />
+        <RoomModel room={project.room} />
+        {leds && <LedInstances leds={leds} highlight={hl} />}
+        <FixturePaths project={project} editable={editable} />
+        {editable && <FixtureHandles project={project} />}
+        {!viewerCam && <ViewerMarker viewer={project.viewer} editable={editViewer} />}
+        {viewerCam ? <ViewerCamera viewer={project.viewer} /> : <OrbitCamera ortho={ortho} home={home} target={[cx, cy, project.room.height / 3]} span={span} />}
+        <EffectComposer>
+          <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.25} luminanceSmoothing={0.3} />
+        </EffectComposer>
+        {!viewerCam && (
+          <GizmoHelper alignment="bottom-left" margin={[64, 64]} renderPriority={2}>
+            <GizmoViewport axisColors={["#ef5f6b", "#5fd38d", "#5b9cff"]} labelColor="#0b0d12" axisHeadScale={0.9} />
+          </GizmoHelper>
+        )}
+      </Canvas>
+      {!viewerCam && (
+        <div className="scene-tools">
+          <div className="seg" role="group" aria-label="Kamera">
+            <button className={!ortho ? "on" : ""} title="Perspektivische Ansicht" onClick={() => toggle(false)}>
+              Perspektive
+            </button>
+            <button className={ortho ? "on" : ""} title="Orthografische Ansicht ohne Verzerrung (gut zum Ausrichten)" onClick={() => toggle(true)}>
+              Orthografisch
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

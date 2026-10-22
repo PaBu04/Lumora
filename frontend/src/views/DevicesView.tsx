@@ -93,19 +93,10 @@ function OutputSettings() {
   const pb = useStore((s) => s.playback);
   const setPlayback = useStore((s) => s.setPlayback);
   if (!pb) return null;
-  const live = pb.mode === "live";
   return (
     <div className="card">
-      <div className="row between" style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 10 }}>
         <strong>Ausgabe</strong>
-        <div className="row">
-          <button className={`btn small${!live ? " active" : ""}`} onClick={async () => setPlayback(await api.mode("preview"))}>
-            Nur Vorschau
-          </button>
-          <button className={`btn small${live ? " live" : ""}`} onClick={async () => setPlayback(await api.mode("live"))}>
-            ● Live an LEDs
-          </button>
-        </div>
       </div>
       <Field label="Helligkeit">
         <div className="row">

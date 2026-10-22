@@ -153,7 +153,7 @@ def test_full_workflow(env):
     page.wait_for_selector(".tl-clip")
     show_id = api(env, "/api/playback")["show"]
     assert show_id
-    page.click("button:has-text('Vorschau')")  # -> live
+    page.click(".mode-switch button:has-text('Live')")
     before = httpx.get(env["sim"] + "/sim/stats").json()["frames"]
     page.keyboard.press("Space")
     page.wait_for_timeout(2500)

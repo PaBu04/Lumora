@@ -73,7 +73,6 @@ function Transport({ duration, analysis }: { duration: number; analysis: Analysi
   const setPlayback = useStore((s) => s.setPlayback);
   const t = usePlayhead();
   if (!pb) return null;
-  const live = pb.mode === "live";
   return (
     <div className="transport">
       <button className="btn icon" title="Abspielen / Pause (Leertaste)" disabled={!pb.show} onClick={async () => setPlayback(await (pb.playing ? api.pause() : api.play()))}>
@@ -88,13 +87,6 @@ function Transport({ duration, analysis }: { duration: number; analysis: Analysi
       <div className="seekbar">
         <Waveform analysis={analysis} duration={duration} position={t} onSeek={async (s) => setPlayback(await api.seek(s))} />
       </div>
-      <button
-        className={`btn small${live ? " live" : ""}`}
-        title="Live: Frames an die WLED-Controller senden"
-        onClick={async () => setPlayback(await api.mode(live ? "preview" : "live"))}
-      >
-        {live ? "● LIVE" : "Vorschau"}
-      </button>
     </div>
   );
 }
