@@ -103,7 +103,7 @@ def test_full_workflow(env):
     assert slug == "e2e-raum"
 
     # room template
-    inputs = page.locator(".card input[type=number]")
+    inputs = page.locator(".card:has-text('Breite × Tiefe') input[type=number]")
     inputs.nth(0).fill("6")
     inputs.nth(1).fill("4.5")
     inputs.nth(1).press("Enter")

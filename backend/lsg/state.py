@@ -21,7 +21,7 @@ class AppState:
     def __init__(self, data_dir: Path, audio_backend: str, fps: float):
         self.data_dir = Path(data_dir)
         self.projects = ProjectStore(self.data_dir / "projects")
-        self.settings: dict = {"beat_tracker": "auto"}
+        self.settings: dict = {"beat_tracker": "auto", "shader_isolation": True}
         self.songs = SongLibrary(self.data_dir / "songs", lambda: self.settings.get("beat_tracker", "auto"))
         self.session = PlaybackSession(self, create_player(audio_backend), fps)
         self._analysis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis")
@@ -37,6 +37,10 @@ class AppState:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
+        if isinstance(data.get("shader_isolation"), bool):
+            from lsg.render import shader_host
+
+            self.settings["shader_isolation"] = shader_host.ENABLED = data["shader_isolation"]
         if data.get("beat_tracker") in ("librosa", "beat_this", "auto"):
             self.settings["beat_tracker"] = data["beat_tracker"]
         out = self.session.output

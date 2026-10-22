@@ -113,10 +113,13 @@ class ShowStore:
 
     def load_shaders(self) -> tuple[dict[str, Shader], dict[str, str]]:
         """All loadable shaders plus load errors by name."""
+        from lsg.render import shader_host
+
         shaders, errors = {}, {}
         for name in self.shader_names():
             try:
-                shaders[name] = Shader(name, self.shader_source(name))
+                shader = Shader(name, self.shader_source(name))
+                shaders[name] = shader_host.IsolatedShader(shader) if shader_host.ENABLED else shader
             except ShaderError as exc:
                 errors[name] = str(exc)
         return shaders, errors

@@ -36,6 +36,9 @@ def create_app(
         async with mcp.session_manager.run():
             yield
         await st.ai.shutdown()
+        from lsg.render import shader_host
+
+        shader_host.shutdown()
         await st.session.stop_loop()
         st.shutdown()
 

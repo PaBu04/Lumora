@@ -213,6 +213,20 @@ function IssuesPanel({ slug, show }: { slug: string; show: Show }) {
   );
 }
 
+function IsolationToggle() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    api.settings().then((s) => setOn(s.shader_isolation));
+  }, []);
+  if (on === null) return null;
+  return (
+    <label className="row unit" style={{ marginBottom: 8 }} title="Hängende oder abstürzende Shader werden gestoppt, ohne die App zu beeinträchtigen">
+      <input type="checkbox" checked={on} onChange={async (e) => setOn((await api.saveSettings({ shader_isolation: e.target.checked })).shader_isolation)} />
+      Shader in eigenem Prozess ausführen (empfohlen)
+    </label>
+  );
+}
+
 function ShaderPanel({ slug }: { slug: string }) {
   const [list, setList] = useState<{ shaders: string[]; errors: Record<string, string>; api: string } | null>(null);
   const [name, setName] = useState("");
@@ -231,6 +245,7 @@ function ShaderPanel({ slug }: { slug: string }) {
   return (
     <div>
       <p className="hint">Eigene Effekte in Python/numpy. In Clips als Effekt „shader:&lt;name&gt;" verwenden.</p>
+      <IsolationToggle />
       <div className="row" style={{ marginBottom: 8 }}>
         {list?.shaders.map((s) => (
           <button key={s} className={`btn small${s === name ? " active" : ""}`} onClick={() => open(s)}>

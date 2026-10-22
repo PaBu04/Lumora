@@ -561,11 +561,13 @@ def create_mcp(st: AppState) -> MCPServer:
         slug, p, table = project_and_table(project)
         store = st.show_store(slug)
         try:
+            from lsg.render import shader_host
             from lsg.render.shaders import Shader
 
             shader = Shader(name, code)
+            runner = shader_host.IsolatedShader(shader) if shader_host.ENABLED else shader
             probe = Show(layers=[Layer(clips=[Clip(id="probe", start=0, end=10, effect=f"shader:{name}")])])
-            r = Renderer(p, table, probe, AudioFeatures(None, 10), {name: shader})
+            r = Renderer(p, table, probe, AudioFeatures(None, 10), {name: runner})
             for t in (0.0, 1.3, 4.7):
                 r.render(t)
             if r.errors:

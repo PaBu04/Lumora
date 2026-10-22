@@ -688,6 +688,7 @@ async def ai_cancel(request: Request):
 
 class SettingsBody(BaseModel):
     beat_tracker: str | None = None
+    shader_isolation: bool | None = None
 
 
 @router.get("/settings")
@@ -699,12 +700,18 @@ def get_settings(request: Request):
 
 
 @router.put("/settings")
-def put_settings(request: Request, body: SettingsBody):
+async def put_settings(request: Request, body: SettingsBody):
     st = state(request)
     if body.beat_tracker is not None:
         if body.beat_tracker not in ("librosa", "beat_this", "auto"):
             raise HTTPException(422, "beat_tracker must be librosa, beat_this or auto")
         st.settings["beat_tracker"] = body.beat_tracker
+    if body.shader_isolation is not None:
+        from lsg.render import shader_host
+
+        st.settings["shader_isolation"] = shader_host.ENABLED = body.shader_isolation
+        if st.active_project:
+            await st.shaders_changed(st.active_project)
     st.save_settings()
     return get_settings(request)
 

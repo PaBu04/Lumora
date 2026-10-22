@@ -117,7 +117,7 @@ export const api = {
     post<AiRun>("/api/ai/run", body),
   aiCancel: () => post<AiRun | null>("/api/ai/cancel"),
   settings: () => get<AppSettings>("/api/settings"),
-  saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker">>) => put<AppSettings>("/api/settings", s),
+  saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker" | "shader_isolation">>) => put<AppSettings>("/api/settings", s),
   effects: () => get<{ effects: EffectInfo[]; palettes: Record<string, string[]>; shader_api: string }>("/api/effects"),
 
   playback: () => get<PlaybackState>("/api/playback"),

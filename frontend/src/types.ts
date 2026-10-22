@@ -185,6 +185,7 @@ export interface Version {
 
 export interface AppSettings {
   beat_tracker: "auto" | "librosa" | "beat_this";
+  shader_isolation: boolean;
   beat_this: { installed: boolean; loaded: boolean; error: string | null };
 }
 
