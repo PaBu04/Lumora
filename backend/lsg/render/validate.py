@@ -17,6 +17,8 @@ def validate_show(
     features: AudioFeatures,
     shaders: dict[str, Shader],
     probe_frames: int = 24,
+    power: bool = True,
+    power_fps: float = 2.0,
 ) -> list[dict]:
     """Errors stop a clip from rendering, warnings are hints. Each issue: severity, clip, layer, message."""
     issues: list[dict] = []
@@ -54,4 +56,20 @@ def validate_show(
     for clip_id, msg in renderer.errors.items():
         if clip_id not in reported:
             issues.append({"severity": "error", "clip": clip_id, "layer": layer_of.get(clip_id), "message": msg})
+
+    # perceived brightness below what 8-bit PWM can show (see calibration)
+    cutoff = max(c.cutoff for c in project.calibration.values())
+    for layer, c in show.clips():
+        b = c.params.get("brightness")
+        if isinstance(b, (int, float)) and 0 < b * c.opacity < max(0.03, cutoff * 2):
+            issues.append({"severity": "warning", "clip": c.id, "layer": layer.name,
+                           "message": f"brightness {b * c.opacity:.3f} is at the very bottom of the LED range: it will look "
+                                      "the same as neighbouring dim levels or switch off. Use >= 0.03 (perceived)."})
+
+    if power and project.controllers and (project.power.total_budget_ma or any(c.budget_ma for c in project.controllers)):
+        from lsg.output.pipeline import OutputPipeline
+        from lsg.output.power import analyse_power, power_issues
+
+        report = analyse_power(renderer, OutputPipeline(project, table), fps=power_fps)
+        issues.extend(power_issues(report))
     return issues

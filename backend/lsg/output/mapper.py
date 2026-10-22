@@ -46,17 +46,3 @@ def plan_controllers(project: Project, table: LedTable) -> list[ControllerPlan]:
     return plans
 
 
-def encode(frame: np.ndarray, plan: ControllerPlan, gamma: float = 2.2, brightness: float = 1.0) -> bytes:
-    """Frame (N, 3) float 0..1 -> RGB or RGBW bytes for the controller, unmapped pixels black."""
-    rgb = np.zeros((plan.pixel_count, 3), dtype=np.float32)
-    if plan.pixel_count:
-        rgb[plan.pixel_idx] = frame[plan.table_idx]
-    if gamma != 1.0:
-        rgb = rgb**gamma
-    rgb *= brightness
-    if plan.controller.rgbw:
-        w = np.where(plan.white_mask, rgb.min(axis=1), 0.0)
-        out = np.concatenate([rgb - w[:, None], w[:, None]], axis=1)
-    else:
-        out = rgb
-    return (np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8).tobytes()

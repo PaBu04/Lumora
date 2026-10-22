@@ -148,6 +148,12 @@ export function Icon({ name }: { name: string }) {
         <circle cx="12" cy="12" r="3" />
       </>
     ),
+    calibrate: (
+      <>
+        <path d="M4 20h16" />
+        <path d="M6 20V14M10 20V10M14 20V7M18 20V4" />
+      </>
+    ),
     play: <path d="M7 5v14l12-7z" fill="currentColor" />,
     pause: <path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" />,
     stop: <rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" />,

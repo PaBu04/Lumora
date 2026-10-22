@@ -92,7 +92,9 @@ def test_live_output_reaches_wled(server, wled):
     show["duration"] = 30
     show["layers"] = [{"name": "L", "clips": [{"start": 0, "end": 30, "effect": "solid", "params": {"color": "#ff0000"}}]}]
     httpx.put(f"{server}/api/projects/{slug}/shows/{show['id']}", json=show)
-    httpx.post(f"{server}/api/playback/output", json={"gamma": 1.0})
+    p = httpx.get(f"{server}/api/projects/{slug}").json()
+    p["calibration"]["ws2812b"] = {"curve": "gamma", "gamma": 1.0, "cutoff": 0.0}  # identity curve
+    assert httpx.put(f"{server}/api/projects/{slug}", json=p).status_code == 200
     httpx.post(f"{server}/api/playback/load", json={"project": slug, "show": show["id"]})
     httpx.post(f"{server}/api/playback/mode", json={"mode": "live"})
     httpx.post(f"{server}/api/playback/play")
@@ -103,6 +105,17 @@ def test_live_output_reaches_wled(server, wled):
     assert stats["frames"] > 30 and stats["fps"] > 35
     assert frame[:30] == [0] * 30  # pixels 0..9 unmapped
     assert frame[30:33] == [255, 0, 0] and frame[(10 + 119) * 3 : (10 + 120) * 3] == [255, 0, 0]
+
+    power = httpx.get(f"{server}/api/projects/{slug}/shows/{show['id']}/power", params={"fps": 1}).json()
+    assert power["controllers"]["c1"]["peak_ma"] > 0
+    state = httpx.get(f"{server}/api/playback").json()
+    assert state["power"]["controllers"]["c1"]["ma"] > 0
+
+    # calibration pattern with raw PWM steps
+    httpx.post(f"{server}/api/playback/test", json={"enabled": True, "fixture_id": "s1", "kind": "steps"})
+    time.sleep(0.4)
+    frame = httpx.get(f"http://127.0.0.1:{http_port}/sim/frame").json()["data"]
+    assert sorted(set(frame[30:(10 + 120) * 3]) - {0}) == [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128, 192, 255]
 
     # test pattern: first LED green, last red
     httpx.post(f"{server}/api/playback/test", json={"enabled": True, "fixture_id": "s1"})
@@ -150,6 +163,12 @@ def test_mcp_tools(server):
             assert img.content[0].type == "image" and img.content[0].mime_type == "image/png"
             img = await c.call_tool("render_timeline", {"show_id": sid, "start": 0, "end": 16})
             assert img.content[0].type == "image"
+
+            ov = (await c.call_tool("get_overview", {})).structured_content
+            assert ov["brightness"]["recommended"]["avoid_below"] == 0.03
+            assert ov["power"]["full_white_ma"] > 0
+            pw = (await c.call_tool("analyze_power", {"show_id": sid})).structured_content
+            assert pw["ok"] is False  # no controllers in this project yet
 
             st = (await c.call_tool("preview", {"show_id": sid, "start": 2.0})).structured_content
             assert st["playing"] and st["show"] == sid

@@ -5,6 +5,7 @@ import type {
   Issue,
   LedData,
   PlaybackState,
+  PowerReport,
   Project,
   Show,
   ShowSummary,
@@ -69,6 +70,7 @@ export const api = {
   saveShow: (slug: string, show: Show) => put<Show>(`/api/projects/${slug}/shows/${show.id}`, show),
   deleteShow: (slug: string, id: string) => del(`/api/projects/${slug}/shows/${id}`),
   validate: (slug: string, id: string) => post<Issue[]>(`/api/projects/${slug}/shows/${id}/validate`),
+  power: (slug: string, id: string, fps = 2) => get<PowerReport>(`/api/projects/${slug}/shows/${id}/power?fps=${fps}`),
 
   shaders: (slug: string) =>
     get<{ shaders: string[]; errors: Record<string, string>; api: string }>(`/api/projects/${slug}/shaders`),
@@ -98,9 +100,10 @@ export const api = {
   stop: () => post<PlaybackState>("/api/playback/stop"),
   seek: (t: number) => post<PlaybackState>("/api/playback/seek", { t }),
   mode: (mode: "preview" | "live") => post<PlaybackState>("/api/playback/mode", { mode }),
-  output: (o: { gamma?: number; brightness?: number; audio_latency_ms?: number }) =>
+  output: (o: { brightness?: number; audio_latency_ms?: number }) =>
     post<PlaybackState>("/api/playback/output", o),
-  test: (enabled: boolean, fixture_id: string | null) => post<PlaybackState>("/api/playback/test", { enabled, fixture_id }),
+  test: (enabled: boolean, fixture_id: string | null, kind = "identify", params: Record<string, unknown> = {}) =>
+    post<PlaybackState>("/api/playback/test", { enabled, fixture_id, kind, params }),
 
   discover: (seconds = 3) => get<WledInfo[]>(`/api/devices/discover?seconds=${seconds}`),
   deviceInfo: (host: string) => get<WledInfo>(`/api/devices/info?host=${encodeURIComponent(host)}`),

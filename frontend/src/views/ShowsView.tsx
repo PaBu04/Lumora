@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { SERIES } from "../calibration";
+import { LineChart } from "../components/LineChart";
 import { Timeline, usePlayhead } from "../components/Timeline";
 import { Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
-import type { Analysis, Clip, EffectInfo, Issue, Show } from "../types";
+import type { Analysis, Clip, EffectInfo, Issue, PowerReport, Show } from "../types";
 import { Field, formatTime, Icon } from "../ui";
 
 function NewShowForm({ onCreated }: { onCreated: (id: string) => void }) {
@@ -211,6 +213,44 @@ function JsonPanel({ show, onSave }: { show: Show; onSave: (s: Show) => Promise<
   );
 }
 
+function PowerChart({ slug, show }: { slug: string; show: Show }) {
+  const [report, setReport] = useState<PowerReport | null>(null);
+  const project = useStore((s) => s.project);
+  const rev = useStore((s) => s.showRevision);
+  useEffect(() => {
+    setReport(null);
+    if (project?.controllers.length) api.power(slug, show.id, 2).then(setReport).catch(() => setReport(null));
+  }, [slug, show, rev, project?.controllers.length]);
+  if (!project?.controllers.length) return null;
+  if (!report) return <p className="hint">Berechne Stromverlauf…</p>;
+  const ids = Object.keys(report.controllers);
+  const budgets = ids.filter((id) => report.controllers[id].budget_ma).slice(0, 4);
+  return (
+    <div className="card">
+      <strong>Stromverlauf (vor Drosselung)</strong>
+      <div className="row" style={{ margin: "6px 0" }}>
+        {ids.map((id) => {
+          const c = report.controllers[id];
+          const over = c.budget_ma && c.peak_ma > c.budget_ma;
+          return (
+            <span key={id} className={`badge ${over ? "warn" : ""}`}>
+              {c.name}: max {(c.peak_ma / 1000).toFixed(1)} A{c.budget_ma ? ` / ${(c.budget_ma / 1000).toFixed(1)} A` : ""}
+            </span>
+          );
+        })}
+      </div>
+      <LineChart
+        x={report.times}
+        series={ids.slice(0, 8).map((id, i) => ({ name: report.controllers[id].name, color: SERIES[i], values: report.curves[id].map((v) => v / 1000) }))}
+        refLines={budgets.map((id) => ({ y: report.controllers[id].budget_ma! / 1000, label: `Budget ${report.controllers[id].name}`, color: "#d03b3b" }))}
+        height={150}
+        xFormat={(v) => formatTime(v)}
+        yFormat={(v) => `${v.toFixed(1)} A`}
+      />
+    </div>
+  );
+}
+
 function IssuesPanel({ slug, show }: { slug: string; show: Show }) {
   const [issues, setIssues] = useState<Issue[] | null>(null);
   const rev = useStore((s) => s.showRevision);
@@ -219,15 +259,24 @@ function IssuesPanel({ slug, show }: { slug: string; show: Show }) {
     api.validate(slug, show.id).then(setIssues);
   }, [slug, show, rev]);
   if (!issues) return <p className="hint">Prüfe…</p>;
-  if (issues.length === 0) return <div className="banner info">Keine Probleme gefunden.</div>;
+  if (issues.length === 0)
+    return (
+      <>
+        <PowerChart slug={slug} show={show} />
+        <div className="banner info">Keine Probleme gefunden.</div>
+      </>
+    );
   return (
     <div className="list">
+      <PowerChart slug={slug} show={show} />
       {issues.map((i, k) => (
         <div key={k} className="card" style={{ marginBottom: 0 }}>
           <span className={`badge ${i.severity === "error" ? "err" : "warn"}`}>{i.severity === "error" ? "Fehler" : "Hinweis"}</span>{" "}
-          <span className="unit">
-            {i.layer} / {i.clip}
-          </span>
+          {(i.layer || i.clip) && (
+            <span className="unit">
+              {i.layer} / {i.clip}
+            </span>
+          )}
           <div style={{ marginTop: 4 }}>{i.message}</div>
         </div>
       ))}

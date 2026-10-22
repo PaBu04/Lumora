@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api } from "./api";
 import type { LedData, PlaybackState, Project, ShowSummary, Song } from "./types";
 
-export type Tab = "room" | "fixtures" | "devices" | "songs" | "shows" | "ai";
+export type Tab = "room" | "fixtures" | "devices" | "calibration" | "songs" | "shows" | "ai";
 
 interface Toast {
   id: number;

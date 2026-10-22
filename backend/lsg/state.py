@@ -1,6 +1,7 @@
 """Application state shared by the REST API, the WebSocket and the MCP server."""
 
 import asyncio
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -22,7 +23,23 @@ class AppState:
         self.session = PlaybackSession(self, create_player(audio_backend), fps)
         self._analysis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis")
         self._active_file = self.data_dir / "active_project.txt"
+        self._settings_file = self.data_dir / "settings.json"
         self.loop: asyncio.AbstractEventLoop | None = None
+        self.load_settings()
+
+    # PC-level settings (speakers, master brightness) survive restarts
+    def load_settings(self) -> None:
+        try:
+            data = json.loads(self._settings_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        out = self.session.output
+        for key in ("brightness", "audio_latency_ms"):
+            if isinstance(data.get(key), (int, float)):
+                setattr(out, key, float(data[key]))
+
+    def save_settings(self) -> None:
+        atomic_write_text(self._settings_file, json.dumps(self.session.output.to_dict(), indent=2))
 
     def show_store(self, slug: str) -> ShowStore:
         if slug not in self.projects.list():

@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field, model_validator
 
 from lsg.geometry.sampling import fixture_led_count
+from lsg.model.calibration import LedCalibration, PowerSettings, default_calibration
 from lsg.model.controller import Controller
-from lsg.model.fixture import Fixture
+from lsg.model.fixture import Fixture, LedType
 from lsg.model.room import Room
 from lsg.model.viewer import Viewer
 
@@ -16,6 +17,14 @@ class Project(BaseModel):
     viewer: Viewer = Field(default_factory=Viewer)
     fixtures: list[Fixture] = Field(default_factory=list)
     controllers: list[Controller] = Field(default_factory=list)
+    calibration: dict[LedType, LedCalibration] = Field(default_factory=default_calibration)
+    power: PowerSettings = Field(default_factory=PowerSettings)
+
+    @model_validator(mode="after")
+    def _fill_calibration(self) -> "Project":
+        for led_type, cal in default_calibration().items():
+            self.calibration.setdefault(led_type, cal)
+        return self
 
     @model_validator(mode="after")
     def _check_references(self) -> "Project":

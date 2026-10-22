@@ -8,7 +8,8 @@ from lsg.geometry.led_table import build_led_table
 from lsg.model.controller import Controller, FixtureMapping
 from lsg.model.fixture import LedType
 from lsg.output.ddp import DdpSender, build_packets, parse_packet
-from lsg.output.mapper import encode, plan_controllers
+from lsg.model.calibration import LedCalibration
+from lsg.output.pipeline import OutputPipeline
 
 
 def test_ddp_header_layout():
@@ -34,16 +35,20 @@ def test_mapping_and_encoding(project):
         Controller(id="a", host="x", rgbw=True, mappings=[FixtureMapping(fixture_id="north", start=10, count=5)]),
         Controller(id="b", host="y", mappings=[FixtureMapping(fixture_id="ring"), FixtureMapping(fixture_id="west", start=40, fixture_offset=2)]),
     ]
+    # identity curve so byte values are easy to predict
+    for t in project.calibration:
+        project.calibration[t] = LedCalibration(curve="gamma", gamma=1.0, min_level=1, cutoff=0.0, white_mode="min")
     table = build_led_table(project)
-    plans = plan_controllers(project, table)
+    pipe = OutputPipeline(project, table)
     frame = np.zeros((table.count, 3), np.float32)
     frame[table.fixture_slice("north").start] = [1.0, 1.0, 0.5]
     frame[table.fixture_slice("ring")] = [0.0, 0.0, 1.0]
-    a = encode(frame, plans[0], gamma=1.0)
+    outputs, stats = pipe.encode_all(lambda c: frame)
+    a, b = outputs[0].data, outputs[1].data
     assert len(a) == 15 * 4
-    assert a[40:44] == bytes([128, 128, 0, 128])  # white extracted from RGB(1, 1, .5)
+    assert a[40:44] == bytes([127, 127, 0, 128])  # pwm (255, 255, 128): white extracted
     assert a[:40] == bytes(40)
-    b = encode(frame, plans[1], gamma=1.0)
+    assert set(stats.controllers) == {"a", "b"}
     west = table.fixture_slice("west")
     assert len(b) == (40 + west.stop - west.start - 2) * 3
     assert b[:3] == bytes([0, 0, 255])

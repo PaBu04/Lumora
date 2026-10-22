@@ -69,7 +69,27 @@ export interface Controller {
   mac: string | null;
   rgbw: boolean;
   latency_ms: number;
+  budget_ma: number | null;
   mappings: FixtureMapping[];
+}
+
+export interface LedCalibration {
+  curve: "cie" | "gamma";
+  gamma: number;
+  min_level: number;
+  max_level: number;
+  cutoff: number;
+  white_balance: [number, number, number];
+  dithering: "none" | "spatial" | "temporal";
+  white_mode: "off" | "min" | "color";
+  white_color: string;
+  ma_per_channel: number;
+  ma_idle: number;
+}
+
+export interface PowerSettings {
+  total_budget_ma: number | null;
+  volts: number;
 }
 
 export interface Project {
@@ -79,6 +99,8 @@ export interface Project {
   viewer: Viewer;
   fixtures: Fixture[];
   controllers: Controller[];
+  calibration: Record<LedType, LedCalibration>;
+  power: PowerSettings;
 }
 
 export interface LedData {
@@ -181,12 +203,19 @@ export interface PlaybackState {
   position: number;
   duration: number;
   mode: "preview" | "live";
-  test: { fixture: string | null } | null;
+  test: { fixture: string | null; kind: string; params: Record<string, unknown> } | null;
   led_count: number;
   fps: number;
   render_ms: number;
   clip_errors: Record<string, string>;
-  output: { gamma: number; brightness: number; audio_latency_ms: number };
+  output: { brightness: number; audio_latency_ms: number };
+  power: {
+    total_ma: number;
+    total_requested_ma: number;
+    total_budget_ma: number | null;
+    controllers: Record<string, { ma: number; requested_ma: number; scale: number; budget_ma: number | null }>;
+    peak_ma: Record<string, number>;
+  };
   controller_errors: Record<string, string>;
 }
 
@@ -205,4 +234,13 @@ export interface EffectInfo {
   name: string;
   description: string;
   params: Record<string, { type: string; default: unknown; description: string; min?: number; max?: number; options?: string[] }>;
+}
+
+export interface PowerReport {
+  fps: number;
+  times: number[];
+  controllers: Record<string, { name: string; peak_ma: number; peak_t: number; mean_ma: number; budget_ma: number | null; limited_seconds?: number; min_scale?: number }>;
+  total: { peak_ma: number; peak_t: number; mean_ma: number; budget_ma: number | null; limited_seconds?: number };
+  curves: Record<string, number[]>;
+  total_curve: number[];
 }

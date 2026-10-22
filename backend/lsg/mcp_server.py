@@ -12,6 +12,7 @@ from lsg.geometry.led_table import build_led_table
 from lsg.geometry.sampling import curve_length
 from lsg.model.fixture import MatrixGeometry
 from lsg.model.show import Clip, Layer, Show
+from lsg.output.curve import pwm_of_level
 from lsg.render.autoshow import starter_show
 from lsg.render.colors import PALETTES
 from lsg.render.effects import catalog
@@ -31,6 +32,14 @@ Recommended workflow:
 4. create_show, then add_clips / update_clips / remove_clips (or update_show for a full rewrite).
 5. validate_show, then render_timeline (whole passages) and render_snapshot (single moments) to
    check your work visually. preview starts playback in the app so the user can watch and listen.
+
+Brightness is PERCEIVED brightness (like sRGB): 0.5 looks half as bright as 1.0, the app converts it
+to LED PWM through the calibrated curve of the user's strips. LEDs are very bright in a dark room, so
+- dark, atmospheric scenes work well at 0.05 - 0.25, normal scenes at 0.3 - 0.7, peaks/accents at 0.8 - 1.0;
+- values below ~0.03 are at the bottom of the 8-bit PWM range (1-3) and look identical or switch off;
+- contrast reads best in perceived terms: 0.2 -> 0.6 is a strong change, 0.9 -> 1.0 is barely visible.
+Power: full white on many LEDs draws a lot of current. If get_overview shows power budgets, check
+analyze_power / validate - the limiter dims the whole controller when a scene exceeds its budget.
 
 Conventions: metres, z is up, floor at z = 0. Viewer-relative angles: azimuth 0 = straight ahead,
 negative = left, positive = right; elevation positive = up. Times are seconds of the song.
@@ -63,6 +72,10 @@ Parameter values can be animated (number params; keyframes also for colours and 
      sources: rms, low, mid, high, onset, beat_phase, bar_phase, beat_decay, bar_decay, onset_decay, section_energy
   keyframes:     {"keys": [[0, "#ff0000"], [8, "#0000ff"]], "ease": "linear|smooth|step"}  (seconds from clip start)
   lfo:           {"lfo": "sine|triangle|saw|square", "beats": 2, "min": 0, "max": 1, "phase": 0}  (or "seconds": 3)
+
+Brightness and colour values are perceived (0.5 = looks half as bright). Use 0.05 - 0.25 for dark
+scenes, avoid values below 0.03 (they fall into the lowest PWM steps), and keep big full-white areas
+short if a power budget is set.
 
 Colours: "#ff0080", "#f08", names (red, orange, amber, yellow, lime, green, mint, cyan, sky, blue, purple,
 violet, magenta, pink, white, warmwhite, black), "hsv(200,1,1)" or [r, g, b] 0..255.
@@ -160,6 +173,24 @@ def create_mcp(st: AppState) -> MCPServer:
                       for s in st.songs.list()],
             "shows": [{"id": s.id, "name": s.name, "song_id": s.song_id} for s in st.show_store(slug).list()],
             "shaders": st.show_store(slug).shader_names(),
+            "brightness": {
+                "model": "perceived 0..1 (0.5 looks half as bright), converted to PWM by the calibration curve",
+                "calibration": {
+                    t.value: {"curve": c.curve, "min_pwm": c.min_level, "off_below": c.cutoff,
+                              "pwm_at": {str(v): round(pwm_of_level(v, c), 1) for v in (0.05, 0.1, 0.25, 0.5, 1.0)}}
+                    for t, c in p.calibration.items() if any(f.led_type == t for f in p.fixtures)
+                },
+                "recommended": {"dark": [0.05, 0.25], "normal": [0.3, 0.7], "accent": [0.8, 1.0], "avoid_below": 0.03},
+            },
+            "power": {
+                "volts": p.power.volts,
+                "total_budget_ma": p.power.total_budget_ma,
+                "controllers": [{"id": c.id, "name": c.name, "budget_ma": c.budget_ma,
+                                 "fixtures": [m.fixture_id for m in c.mappings]} for c in p.controllers],
+                "full_white_ma": round(sum(
+                    p.calibration[f.led_type].ma_per_channel * 3 * len(range(table.fixture_slice(f.id).start, table.fixture_slice(f.id).stop))
+                    for f in p.fixtures)),
+            },
             "coordinates": "metres, z up, floor z=0; azimuth negative = left of viewer, elevation positive = up",
         }
 
@@ -367,6 +398,31 @@ def create_mcp(st: AppState) -> MCPServer:
             return _err(exc)
         issues = await asyncio.to_thread(issues_for, slug, p, table, show)
         return {"ok": not any(i["severity"] == "error" for i in issues), "issues": issues}
+
+    @mcp.tool()
+    async def analyze_power(show_id: str, fps: float = 2.0, project: str | None = None) -> dict[str, Any]:
+        """Estimated current per controller over the whole show (before limiting), peaks and how long the
+        power limiter would dim the output. Use it to keep bright scenes within the power budgets."""
+        slug, p, table = project_and_table(project)
+        try:
+            show = load_show(slug, show_id)
+        except KeyError as exc:
+            return _err(exc)
+        if not p.controllers:
+            return {"ok": False, "error": "no controllers configured - power depends on the LED mapping"}
+
+        def work():
+            from lsg.output.pipeline import OutputPipeline
+            from lsg.output.power import analyse_power
+
+            report = analyse_power(renderer_for(slug, p, table, show), OutputPipeline(p, table), fps=min(max(fps, 0.5), 10.0),
+                                   brightness=st.session.output.brightness)
+            report.pop("times")
+            report["curves"] = {k: v[:: max(1, int(len(v) / 120))] for k, v in report["curves"].items()}
+            report["total_curve"] = report["total_curve"][:: max(1, int(len(report["total_curve"]) / 120))]
+            return report
+
+        return {"ok": True, **await asyncio.to_thread(work)}
 
     # ---- shaders ----
 

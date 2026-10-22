@@ -242,6 +242,17 @@ def _renderer(st: AppState, slug: str, show_id: str) -> Renderer:
     return Renderer(project, build_led_table(project), show, _features(st, show), shaders)
 
 
+@router.get("/projects/{slug}/shows/{show_id}/power")
+async def show_power(request: Request, slug: str, show_id: str, fps: float = Query(2.0, ge=0.5, le=10)):
+    """Estimated current per controller over the show (before limiting)."""
+    from lsg.output.pipeline import OutputPipeline
+    from lsg.output.power import analyse_power
+
+    st = state(request)
+    r = _renderer(st, slug, show_id)
+    return await asyncio.to_thread(analyse_power, r, OutputPipeline(r.project, r.table), fps, st.session.output.brightness)
+
+
 @router.get("/projects/{slug}/shows/{show_id}/snapshot.png")
 def snapshot(request: Request, slug: str, show_id: str, t: float = 0.0, view: str = "viewer"):
     r = _renderer(state(request), slug, show_id)
@@ -437,7 +448,6 @@ class ModeBody(BaseModel):
 
 
 class OutputBody(BaseModel):
-    gamma: float | None = Field(default=None, ge=1.0, le=3.0)
     brightness: float | None = Field(default=None, ge=0.0, le=1.0)
     audio_latency_ms: float | None = Field(default=None, ge=-1000, le=2000)
 
@@ -445,6 +455,8 @@ class OutputBody(BaseModel):
 class TestBody(BaseModel):
     enabled: bool
     fixture_id: str | None = None
+    kind: str = "identify"
+    params: dict = Field(default_factory=dict)
 
 
 @router.get("/playback")
@@ -509,6 +521,7 @@ async def playback_output(request: Request, body: OutputBody):
     s = state(request).session
     for k, v in body.model_dump(exclude_none=True).items():
         setattr(s.output, k, v)
+    state(request).save_settings()
     s._dirty = True
     return s.state()
 
@@ -518,7 +531,10 @@ async def playback_test(request: Request, body: TestBody):
     s = state(request).session
     if not s.loaded:
         raise HTTPException(409, "no project loaded")
-    s.set_test(body.fixture_id, body.enabled)
+    try:
+        s.set_test(body.fixture_id, body.enabled, body.kind, body.params)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     return s.state()
 
 

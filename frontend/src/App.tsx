@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore, type Tab } from "./store";
 import { Icon } from "./ui";
 import { AiView } from "./views/AiView";
+import { CalibrationView } from "./views/CalibrationView";
 import { DevicesView } from "./views/DevicesView";
 import { FixturesView } from "./views/FixturesView";
 import { RoomView } from "./views/RoomView";
@@ -12,6 +13,7 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "room", label: "Raum", icon: "room" },
   { id: "fixtures", label: "LED-Strips", icon: "strip" },
   { id: "devices", label: "Controller", icon: "device" },
+  { id: "calibration", label: "Kalibrierung", icon: "calibrate" },
   { id: "songs", label: "Songs", icon: "music" },
   { id: "shows", label: "Shows", icon: "show" },
   { id: "ai", label: "KI / MCP", icon: "ai" },
@@ -86,6 +88,14 @@ function StatusArea() {
       {leds && <span className="status-pill">{leds.count} LEDs</span>}
       {pb?.playing && <span className="status-pill">▶ {pb.show_name}</span>}
       {pb?.test && <span className="status-pill">Testmuster aktiv</span>}
+      {pb && pb.power.total_requested_ma > 0 && (
+        <span
+          className={`status-pill${pb.power.total_requested_ma > pb.power.total_ma + 50 ? " live" : ""}`}
+          title={pb.power.total_requested_ma > pb.power.total_ma + 50 ? `Strombudget greift: ${(pb.power.total_requested_ma / 1000).toFixed(1)} A angefragt` : "geschätzte Stromaufnahme"}
+        >
+          ⚡ {(pb.power.total_ma / 1000).toFixed(1)} A
+        </span>
+      )}
       <span className={`status-pill${pb?.mode === "live" ? " live" : ""}`}>
         <span className="dot" /> {pb?.mode === "live" ? "LIVE" : "Vorschau"}
       </span>
@@ -145,6 +155,7 @@ export function App() {
             {tab === "room" && <RoomView />}
             {tab === "fixtures" && <FixturesView />}
             {tab === "devices" && <DevicesView />}
+            {tab === "calibration" && <CalibrationView />}
             {tab === "songs" && <SongsView />}
             {tab === "shows" && <ShowsView />}
             {tab === "ai" && <AiView />}

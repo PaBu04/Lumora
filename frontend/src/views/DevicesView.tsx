@@ -5,6 +5,40 @@ import { useStore } from "../store";
 import type { Controller, WledInfo } from "../types";
 import { Field, Icon, NumberInput, TextInput } from "../ui";
 
+const amps = (ma: number) => `${(ma / 1000).toFixed(1)} A`;
+
+function PowerSupply() {
+  const project = useStore((s) => s.project)!;
+  const update = useStore((s) => s.updateProject);
+  const pb = useStore((s) => s.playback);
+  const p = pb?.power;
+  return (
+    <>
+      <Field label="Netzteil gesamt (A)">
+        <input
+          type="number"
+          min={0.1}
+          step={0.5}
+          placeholder="unbegrenzt"
+          value={project.power.total_budget_ma ? project.power.total_budget_ma / 1000 : ""}
+          onChange={(e) =>
+            update((pr) => ({ ...pr, power: { ...pr.power, total_budget_ma: e.target.value === "" ? null : Math.max(100, +e.target.value * 1000) } }))
+          }
+        />
+      </Field>
+      {p && (
+        <Field label="Strom jetzt">
+          <span className={`badge ${p.total_budget_ma && p.total_requested_ma > p.total_budget_ma ? "warn" : "info"}`}>
+            {amps(p.total_ma)}
+            {p.total_requested_ma > p.total_ma + 50 && ` (gedrosselt von ${amps(p.total_requested_ma)})`}
+          </span>
+          {p.peak_ma.total !== undefined && <span className="unit"> Spitze {amps(p.peak_ma.total)}</span>}
+        </Field>
+      )}
+    </>
+  );
+}
+
 function OutputSettings() {
   const pb = useStore((s) => s.playback);
   const setPlayback = useStore((s) => s.setPlayback);
@@ -39,9 +73,7 @@ function OutputSettings() {
           </span>
         </div>
       </Field>
-      <Field label="Gamma">
-        <NumberInput value={pb.output.gamma} min={1} max={3} step={0.1} onChange={async (gamma) => setPlayback(await api.output({ gamma }))} />
-      </Field>
+      <PowerSupply />
       <Field label="Audio-Latenz (ms)">
         <NumberInput
           value={pb.output.audio_latency_ms}
@@ -53,6 +85,7 @@ function OutputSettings() {
       </Field>
       <p className="hint">
         Live sendet die Frames per DDP (UDP 4048) an alle Controller. Audio-Latenz &gt; 0 verzögert das Licht, z. B. für Bluetooth-Lautsprecher.
+        Helligkeit ist wahrgenommen (50 % sieht halb so hell aus). Strombudgets dimmen automatisch, wenn eine Szene mehr Strom bräuchte.
         {Object.keys(pb.controller_errors).length > 0 && <span style={{ color: "var(--err)" }}> Sendefehler: {Object.entries(pb.controller_errors).map(([h, e]) => `${h}: ${e}`).join("; ")}</span>}
       </p>
     </div>
@@ -76,6 +109,7 @@ function ControllerCard({ c }: { c: Controller }) {
   const used = c.mappings.reduce((m, x) => Math.max(m, x.start + (x.count ?? countOf(x.fixture_id) - x.fixture_offset)), 0);
   const unmapped = project.fixtures.filter((f) => !project.controllers.some((k) => k.mappings.some((m) => m.fixture_id === f.id)));
   const testing = pb?.test;
+  const power = pb?.power.controllers[c.id];
 
   const refresh = async () => {
     try {
@@ -135,6 +169,26 @@ function ControllerCard({ c }: { c: Controller }) {
         </Field>
         <Field label="Pixel belegt">
           <span className="badge">{used}</span>
+        </Field>
+        <Field label="Budget (A)">
+          <input
+            type="number"
+            min={0.1}
+            step={0.5}
+            placeholder="unbegrenzt"
+            value={c.budget_ma ? c.budget_ma / 1000 : ""}
+            onChange={(e) => set((x) => (x.budget_ma = e.target.value === "" ? null : Math.max(100, +e.target.value * 1000)))}
+          />
+        </Field>
+        <Field label="Strom jetzt">
+          {power ? (
+            <span className={`badge ${power.scale < 1 ? "warn" : "info"}`} title="geschätzt aus den gesendeten PWM-Werten">
+              {amps(power.ma)}
+              {power.scale < 1 && ` · gedrosselt auf ${Math.round(power.scale * 100)} %`}
+            </span>
+          ) : (
+            <span className="unit">–</span>
+          )}
         </Field>
       </div>
       <h3>Zuordnung</h3>
@@ -259,7 +313,7 @@ export function DevicesView() {
       ...p,
       controllers: [
         ...p.controllers,
-        { id: uid(), name: info.name || hostOnly, host: hostOnly, port: 4048, mac: info.mac ?? null, rgbw: !!info.rgbw, latency_ms: 0, mappings: [] },
+        { id: uid(), name: info.name || hostOnly, host: hostOnly, port: 4048, mac: info.mac ?? null, rgbw: !!info.rgbw, latency_ms: 0, budget_ma: null, mappings: [] },
       ],
     }));
     notify(`Controller „${info.name}" hinzugefügt`, "success");

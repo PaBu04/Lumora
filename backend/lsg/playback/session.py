@@ -20,8 +20,11 @@ from lsg.geometry.led_table import LedTable, build_led_table
 from lsg.model.project import Project
 from lsg.model.show import Show
 from lsg.output.ddp import DdpSender
-from lsg.output.mapper import ControllerPlan, encode, plan_controllers
+from lsg.model.calibration import LedCalibration
+from lsg.output.curve import duty_to_lightness
+from lsg.output.pipeline import FrameStats, OutputPipeline
 from lsg.output.wled import resolve_host
+from lsg.playback.patterns import KINDS, pattern_frame
 from lsg.render.engine import Renderer
 
 if TYPE_CHECKING:
@@ -35,9 +38,11 @@ KEEPALIVE_FPS = 10.0  # live mode while paused: keep WLED in realtime mode
 
 @dataclass
 class OutputSettings:
-    gamma: float = 2.2
-    brightness: float = 1.0
+    brightness: float = 1.0  # master brightness, perceived
     audio_latency_ms: float = 0.0  # positive = speakers lag behind (e.g. Bluetooth)
+
+    def to_dict(self) -> dict:
+        return {"brightness": self.brightness, "audio_latency_ms": self.audio_latency_ms}
 
 
 @dataclass
@@ -45,7 +50,7 @@ class Loaded:
     project_slug: str
     project: Project
     table: LedTable
-    plans: list[ControllerPlan]
+    pipeline: OutputPipeline
     hosts: dict[str, str]
     show: Show | None = None
     renderer: Renderer | None = None
@@ -54,6 +59,8 @@ class Loaded:
 @dataclass
 class TestPattern:
     fixture_id: str | None  # None = all fixtures
+    kind: str = "identify"
+    params: dict = field(default_factory=dict)
     started: float = field(default_factory=time.monotonic)
 
 
@@ -74,6 +81,9 @@ class PlaybackSession:
         self._last_live = 0.0
         self._last_state = 0.0
         self.render_ms = 0.0
+        self.power: FrameStats = FrameStats()
+        self._power_peak: dict[str, float] = {}
+        self._power_peak_t = 0.0
         self.lock = asyncio.Lock()
 
     # lifecycle
@@ -97,7 +107,7 @@ class PlaybackSession:
         table = await asyncio.to_thread(build_led_table, project)
         hosts = {c.id: await asyncio.to_thread(resolve_host, c.host) for c in project.controllers}
         show = self.loaded.show if self.loaded and self.loaded.project_slug == slug else None
-        self.loaded = Loaded(slug, project, table, plan_controllers(project, table), hosts, show)
+        self.loaded = Loaded(slug, project, table, OutputPipeline(project, table), hosts, show)
         if show is not None:
             await self._build_renderer(show)
         self._dirty = True
@@ -198,8 +208,10 @@ class PlaybackSession:
         self.mode = mode
         self._dirty = True
 
-    def set_test(self, fixture_id: str | None, enabled: bool) -> None:
-        self.test = TestPattern(fixture_id) if enabled else None
+    def set_test(self, fixture_id: str | None, enabled: bool, kind: str = "identify", params: dict | None = None) -> None:
+        if kind not in KINDS:
+            raise ValueError(f"unknown pattern {kind!r}; use one of {KINDS}")
+        self.test = TestPattern(fixture_id, kind, params or {}) if enabled else None
         if enabled:
             self.player.pause()
         self._dirty = True
@@ -221,15 +233,18 @@ class PlaybackSession:
             "position": round(self.show_time(), 3),
             "duration": round(self.player.duration or (r.duration if r else 0.0), 3),
             "mode": self.mode,
-            "test": {"fixture": self.test.fixture_id} if self.test else None,
+            "test": {"fixture": self.test.fixture_id, "kind": self.test.kind, "params": self.test.params} if self.test else None,
             "led_count": lo.table.count if lo else 0,
             "fps": self.fps,
             "render_ms": round(self.render_ms, 2),
             "clip_errors": dict(r.errors) if r else {},
-            "output": {
-                "gamma": self.output.gamma,
-                "brightness": self.output.brightness,
-                "audio_latency_ms": self.output.audio_latency_ms,
+            "output": self.output.to_dict(),
+            "power": {
+                "total_ma": round(self.power.total_ma),
+                "total_requested_ma": round(self.power.total_requested_ma),
+                "total_budget_ma": lo.project.power.total_budget_ma if lo else None,
+                "controllers": self.power.controllers,
+                "peak_ma": {k: round(v) for k, v in self._power_peak.items()},
             },
             "controller_errors": dict(self.sender.errors),
         }
@@ -254,43 +269,39 @@ class PlaybackSession:
             self.clients.discard(ws)
 
     # frames
-    def _test_frame(self, now: float) -> np.ndarray:
-        lo = self.loaded
-        frame = np.zeros((lo.table.count, 3), np.float32)
-        blink = 1.0 if (now - self.test.started) % 1.0 < 0.6 else 0.25
-        ids = [self.test.fixture_id] if self.test.fixture_id else lo.table.fixture_ids
-        for fid in ids:
-            if fid not in lo.table.fixture_ids:
-                continue
-            sl = lo.table.fixture_slice(fid)
-            frame[sl] = [0.0, 0.0, 0.6 * blink]
-            frame[sl.start] = [0.0, 1.0, 0.0]  # data input = green
-            frame[sl.stop - 1] = [1.0, 0.0, 0.0]  # end = red
-        return frame
-
-    def render_at(self, t: float) -> np.ndarray | None:
+    def render_at(self, t: float) -> tuple[np.ndarray, bool] | None:
+        """Frame at song time t and whether it holds raw PWM values (calibration patterns)."""
         lo = self.loaded
         if lo is None:
             return None
         if self.test is not None:
-            return self._test_frame(time.monotonic())
+            ids = [self.test.fixture_id] if self.test.fixture_id else lo.table.fixture_ids
+            return pattern_frame(self.test.kind, lo.table, ids, self.test.params, time.monotonic() - self.test.started)
         if lo.renderer is None:
-            return np.zeros((lo.table.count, 3), np.float32)
-        return lo.renderer.render(t)
+            return np.zeros((lo.table.count, 3), np.float32), False
+        return lo.renderer.render(t), False
 
-    def _send_live(self, frame_fn) -> None:
+    def _output(self, frame_for, raw: bool, send: bool) -> None:
         lo = self.loaded
-        by_latency: dict[float, np.ndarray] = {}
-        for plan in lo.plans:
-            lat = plan.controller.latency_ms
-            if lat not in by_latency:
-                by_latency[lat] = frame_fn(lat / 1000.0)
-            data = encode(by_latency[lat], plan, self.output.gamma, self.output.brightness)
-            if data:
-                self.sender.send(lo.hosts.get(plan.controller.id, plan.controller.host), plan.controller.port, data, plan.controller.rgbw)
+        outputs, stats = lo.pipeline.encode_all(frame_for, self.output.brightness, raw=raw)
+        self.power = stats
+        now = time.monotonic()
+        if now - self._power_peak_t > 3.0:
+            self._power_peak, self._power_peak_t = {}, now
+        for cid, c in stats.controllers.items():
+            self._power_peak[cid] = max(self._power_peak.get(cid, 0.0), c["requested_ma"])
+        self._power_peak["total"] = max(self._power_peak.get("total", 0.0), stats.total_requested_ma)
+        if not send:
+            return
+        for out in outputs:
+            c = out.plan.controller
+            if out.data:
+                self.sender.send(lo.hosts.get(c.id, c.host), c.port, out.data, c.rgbw)
 
     @staticmethod
-    def ui_message(t: float, frame: np.ndarray) -> bytes:
+    def ui_message(t: float, frame: np.ndarray, raw: bool = False) -> bytes:
+        if raw:  # show raw PWM roughly as it will look
+            frame = duty_to_lightness(frame / 255.0, LedCalibration())
         rgb = (np.clip(frame, 0, 1) * 255 + 0.5).astype(np.uint8)
         return struct.pack("<dI", t, len(frame)) + rgb.tobytes()
 
@@ -324,19 +335,27 @@ class PlaybackSession:
             return
         t = self.show_time()
         start = time.perf_counter()
-        frame = self.render_at(t)
+        result = self.render_at(t)
         self.render_ms = 0.9 * self.render_ms + 0.1 * (time.perf_counter() - start) * 1000
-        if frame is None:
+        if result is None:
             return
-        if self.mode == "live" and lo.plans:
-            if active and self.test is None:
-                self._send_live(lambda dt: frame if dt == 0 else self.render_at(t + dt))
-            else:
-                self._send_live(lambda dt: frame)
-            self._last_live = now
+        frame, raw = result
+        if lo.pipeline.plans:
+            live = self.mode == "live"
+            frames: dict[float, np.ndarray] = {0.0: frame}
+
+            def frame_for(controller):
+                dt = controller.latency_ms / 1000.0
+                if dt not in frames:
+                    frames[dt] = self.render_at(t + dt)[0] if active and self.test is None else frame
+                return frames[dt]
+
+            self._output(frame_for, raw, send=live)
+            if live:
+                self._last_live = now
         if self.clients and (self._dirty or now - self._last_ui >= 1 / UI_FPS - 1e-3):
             self._last_ui = now
-            await self._send_all(self.ui_message(t, frame))
+            await self._send_all(self.ui_message(t, frame, raw))
         if self._dirty or now - self._last_state > 0.5:
             self._last_state = now
             await self.broadcast_state()
