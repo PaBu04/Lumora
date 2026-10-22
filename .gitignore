@@ -21,3 +21,6 @@ Thumbs.db
 
 # UI test screenshots
 backend/tests/ui/artifacts/
+
+# generated app icon
+backend/lsg/static/
