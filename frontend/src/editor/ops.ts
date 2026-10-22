@@ -99,6 +99,21 @@ export function changeEffect(clip: Clip, effect: string, effects: EffectInfo[]):
   return { ...clip, effect, params };
 }
 
+/** Insert look clips: layer offsets relative to `baseLayer`, missing layers are created on top. */
+export function insertLookClips(show: Show, items: { layer: number; clip: Clip }[], baseLayer: number, lookName: string): { show: Show; ids: string[] } {
+  let next: Show = { ...show, layers: show.layers.map((l) => ({ ...l, clips: [...l.clips] })) };
+  if (!next.layers.length) next = addLayer(next, "Ebene 1");
+  const ids: string[] = [];
+  for (const { layer, clip } of items) {
+    const li = Math.max(0, baseLayer) + layer;
+    while (li >= next.layers.length) next = addLayer(next, `${lookName} ${next.layers.length + 1}`);
+    const copy = { ...clip, id: newId() };
+    ids.push(copy.id);
+    next.layers[li].clips.push(copy);
+  }
+  return { show: next, ids };
+}
+
 export function addLayer(show: Show, name?: string): Show {
   return { ...show, layers: [...show.layers, { id: newId(), name: name ?? `Ebene ${show.layers.length + 1}`, enabled: true, opacity: 1, clips: [] }] };
 }

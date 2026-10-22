@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { api } from "../api";
 import { useStore } from "../store";
-import type { Clip, EffectInfo, Layer, Show, Target } from "../types";
+import type { Clip, EffectInfo, Layer, Look, Show, Target } from "../types";
 import { Field, NumberInput, Vec3Input } from "../ui";
 import { changeEffect, deleteClips, deleteLayer, findClip, mapClips, moveLayer, round, updateClip, updateLayer } from "./ops";
 
@@ -449,6 +450,7 @@ function ClipInspector({
   palettes,
   apply,
   playhead,
+  onLooksChanged,
 }: {
   show: Show;
   clip: Clip;
@@ -458,6 +460,7 @@ function ClipInspector({
   palettes: Record<string, string[]>;
   apply: (fn: (s: Show) => Show) => void;
   playhead: number;
+  onLooksChanged: () => void;
 }) {
   const info = effects.find((e) => e.id === clip.effect);
   const set = (patch: Partial<Clip>) => apply((s) => updateClip(s, clip.id, patch));
@@ -562,7 +565,7 @@ function ClipInspector({
       <h3 style={{ margin: "14px 0 8px" }}>Ziel</h3>
       <TargetEditor target={clip.target} onChange={(target) => set({ target })} />
       <div className="row between" style={{ marginTop: 14 }}>
-        <span className="unit">Strg+D duplizieren · Entf löschen</span>
+        <SaveLookButton ids={new Set([clip.id])} showId={show.id} onSaved={onLooksChanged} />
         <button className="btn danger small" onClick={() => apply((s) => deleteClips(s, new Set([clip.id])))}>
           Clip löschen
         </button>
@@ -608,10 +611,67 @@ function LayerInspector({ layer, apply, onDeleted }: { layer: Layer; apply: (fn:
   );
 }
 
-function MultiInspector({ ids, apply }: { ids: Set<string>; apply: (fn: (s: Show) => Show) => void }) {
+function SaveLookButton({ ids, showId, onSaved }: { ids: Set<string>; showId: string; onSaved: () => void }) {
+  const slug = useStore((s) => s.slug)!;
+  const notify = useStore((s) => s.notify);
+  return (
+    <button
+      className="btn small"
+      title="Auswahl als wiederverwendbaren Look speichern (Zeiten in Beats)"
+      onClick={async () => {
+        const name = prompt("Name des Looks", "Mein Look");
+        if (!name) return;
+        try {
+          await api.createLook(slug, { name, show_id: showId, clip_ids: [...ids] });
+          notify(`Look „${name}“ gespeichert`, "success");
+          onSaved();
+        } catch (e) {
+          notify((e as Error).message, "error");
+        }
+      }}
+    >
+      ✦ Als Look speichern
+    </button>
+  );
+}
+
+function LookManager({ looks, onChanged }: { looks: Look[]; onChanged: () => void }) {
+  const slug = useStore((s) => s.slug)!;
+  const own = looks.filter((l) => !l.builtin);
   return (
     <div>
-      <strong>{ids.size} Clips ausgewählt</strong>
+      <h3>Eigene Looks</h3>
+      {own.length === 0 && <p className="hint">Noch keine. Clips auswählen und „Als Look speichern“.</p>}
+      <div className="list">
+        {own.map((l) => (
+          <div key={l.id} className="list-item" style={{ cursor: "default" }}>
+            <span className="grow">
+              ✦ {l.name} <span className="unit">· {l.beats} Beats</span>
+            </span>
+            <button
+              className="btn ghost small"
+              onClick={async () => {
+                if (!confirm(`Look „${l.name}“ löschen?`)) return;
+                await api.deleteLook(slug, l.id);
+                onChanged();
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MultiInspector({ ids, apply, showId, onLooksChanged }: { ids: Set<string>; apply: (fn: (s: Show) => Show) => void; showId: string; onLooksChanged: () => void }) {
+  return (
+    <div>
+      <div className="row between">
+        <strong>{ids.size} Clips ausgewählt</strong>
+        <SaveLookButton ids={ids} showId={showId} onSaved={onLooksChanged} />
+      </div>
       <p className="hint">Gemeinsam verschieben per Ziehen; Strg+C / Strg+V kopiert sie an den Playhead.</p>
       <Field label="Deckkraft">
         <input type="range" min={0} max={1} step={0.01} defaultValue={1} onChange={(e) => apply((s) => mapClips(s, ids, (c) => ({ ...c, opacity: +e.target.value })))} />
@@ -643,9 +703,11 @@ export function Inspector(props: {
   palettes: Record<string, string[]>;
   apply: (fn: (s: Show) => Show) => void;
   playhead: number;
+  looks: Look[];
+  onLooksChanged: () => void;
 }) {
   const { show, selection, selectedLayer } = props;
-  if (selection.size > 1) return <MultiInspector ids={selection} apply={props.apply} />;
+  if (selection.size > 1) return <MultiInspector ids={selection} apply={props.apply} showId={show.id} onLooksChanged={props.onLooksChanged} />;
   if (selection.size === 1) {
     const found = findClip(show, [...selection][0]);
     if (found) return <ClipInspector {...props} clip={found.clip} layer={found.layer} />;
@@ -664,7 +726,9 @@ export function Inspector(props: {
         <li>Strg/Shift-Klick: Mehrfachauswahl</li>
         <li>Strg+Z / Strg+Y: rückgängig / wiederholen</li>
         <li>Strg+C / Strg+V / Strg+D, Entf</li>
+        <li>✦ Looks aus der Leiste ziehen; Auswahl als Look speichern</li>
       </ul>
+      <LookManager looks={props.looks} onChanged={props.onLooksChanged} />
     </div>
   );
 }

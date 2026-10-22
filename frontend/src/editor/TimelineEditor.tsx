@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SECTION_COLORS } from "../components/Waveform";
-import type { Analysis, EffectInfo, Show } from "../types";
+import type { Analysis, EffectInfo, Look, Show } from "../types";
 import { formatTime } from "../ui";
 import { liveFrame } from "../ws";
 import { useStore } from "../store";
@@ -89,6 +89,7 @@ export function TimelineEditor({
   zoom,
   setZoom,
   defaultEffect,
+  onDropLook,
 }: {
   show: Show;
   apply: (fn: (s: Show) => Show) => void;
@@ -104,6 +105,7 @@ export function TimelineEditor({
   zoom: number;
   setZoom: (z: number) => void;
   defaultEffect: EffectInfo | { id: string };
+  onDropLook: (lookId: string, at: number, layerIndex: number) => void;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -262,9 +264,16 @@ export function TimelineEditor({
               if (!e.ctrlKey && !e.shiftKey) setSelection(new Set());
             }}
             onDragOver={(e) => {
-              if (e.dataTransfer.types.includes("application/x-lsg-effect")) e.preventDefault();
+              const types = e.dataTransfer.types;
+              if (types.includes("application/x-lsg-effect") || types.includes("application/x-lsg-look")) e.preventDefault();
             }}
             onDrop={(e) => {
+              const look = e.dataTransfer.getData("application/x-lsg-look");
+              if (look) {
+                e.preventDefault();
+                onDropLook(look, snapT(timeAt(e.clientX), false), li);
+                return;
+              }
               const id = e.dataTransfer.getData("application/x-lsg-effect");
               if (id) {
                 e.preventDefault();
@@ -410,7 +419,19 @@ export function TimelineEditor({
   );
 }
 
-export function EffectBar({ effects, shaders, selected, onPick }: { effects: EffectInfo[]; shaders: string[]; selected: string; onPick: (id: string) => void }) {
+export function EffectBar({
+  effects,
+  shaders,
+  looks,
+  selected,
+  onPick,
+}: {
+  effects: EffectInfo[];
+  shaders: string[];
+  looks: Look[];
+  selected: string;
+  onPick: (id: string) => void;
+}) {
   const items = [...effects.map((e) => ({ id: e.id, name: e.name, description: e.description })), ...shaders.map((s) => ({ id: `shader:${s}`, name: `⚙ ${s}`, description: "eigener Shader" }))];
   return (
     <div className="effect-bar">
@@ -431,6 +452,25 @@ export function EffectBar({ effects, shaders, selected, onPick }: { effects: Eff
         >
           <span className="swatch" style={{ background: effectColor(e.id) }} />
           {e.name}
+        </div>
+      ))}
+      {looks.length > 0 && (
+        <span className="unit" style={{ whiteSpace: "nowrap", marginLeft: 8 }}>
+          Looks:
+        </span>
+      )}
+      {looks.map((l) => (
+        <div
+          key={l.id}
+          className="effect-chip look"
+          draggable
+          title={`${l.description || "eigener Look"}\n${l.beats} Beats · in eine Ebene ziehen`}
+          onDragStart={(ev) => {
+            ev.dataTransfer.setData("application/x-lsg-look", l.id);
+            ev.dataTransfer.effectAllowed = "copy";
+          }}
+        >
+          ✦ {l.name}
         </div>
       ))}
     </div>

@@ -166,6 +166,7 @@ pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 
 .effect-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--bg-3); font-size: 12px; cursor: grab; white-space: nowrap; }
 .effect-chip:hover { border-color: #485268; }
 .effect-chip.active { border-color: var(--accent-2); color: var(--accent-2); }
+.effect-chip.look { border-style: dashed; border-color: #6b5a2a; color: #ffd27a; }
 .tl-edge { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
 .tl-clip:hover .tl-edge { background: rgba(255,255,255,0.25); }
 .param { padding: 8px 0; border-bottom: 1px solid var(--line); }

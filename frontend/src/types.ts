@@ -156,6 +156,15 @@ export interface AiRun {
   model: string | null;
 }
 
+export interface Look {
+  id: string;
+  name: string;
+  description: string;
+  builtin: boolean;
+  beats: number;
+  clips: { layer: number; clip: Record<string, unknown> }[];
+}
+
 export interface Version {
   id: string;
   time: number;

@@ -285,6 +285,71 @@ async def restore_project_version(request: Request, slug: str, version_id: str):
     return project
 
 
+# looks
+
+
+class NewLook(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    description: str = ""
+    show_id: str
+    clip_ids: list[str] = Field(min_length=1)
+
+
+class InstantiateLook(BaseModel):
+    show_id: str
+    at: float = Field(ge=0)
+
+
+@router.get("/projects/{slug}/looks")
+def list_looks(request: Request, slug: str):
+    from lsg.render.looks import BUILTIN_LOOKS
+
+    st = state(request)
+    _project(st, slug)
+    return [*BUILTIN_LOOKS, *st.show_store(slug).looks()]
+
+
+@router.post("/projects/{slug}/looks")
+def create_look(request: Request, slug: str, body: NewLook):
+    from lsg.render.looks import look_from_clips
+
+    st = state(request)
+    show = _show(st, slug, body.show_id)
+    feats = _features(st, show)
+    try:
+        look = look_from_clips(body.name, show, set(body.clip_ids), feats.beat_position, body.description)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    st.show_store(slug).save_look(look)
+    return look
+
+
+@router.delete("/projects/{slug}/looks/{look_id}")
+def delete_look(request: Request, slug: str, look_id: str):
+    try:
+        state(request).show_store(slug).delete_look(look_id)
+    except KeyError:
+        raise _404(f"look {look_id!r}")
+    return {"ok": True}
+
+
+@router.post("/projects/{slug}/looks/{look_id}/instantiate")
+def instantiate_look(request: Request, slug: str, look_id: str, body: InstantiateLook):
+    """Clips of a look converted to seconds for a position in a show (the UI inserts them itself)."""
+    from lsg.render.looks import BUILTIN_LOOKS, apply_look
+
+    st = state(request)
+    look = next((x for x in [*BUILTIN_LOOKS, *st.show_store(slug).looks()] if x.id == look_id), None)
+    if look is None:
+        raise _404(f"look {look_id!r}")
+    show = _show(st, slug, body.show_id)
+    feats = _features(st, show)
+    b0 = feats.beat_position(body.at)
+    empty = Show(id=show.id, name=show.name, layers=[])
+    placed, _ = apply_look(empty, look, body.at, 0, lambda b: feats.time_at_beat(b0 + b))
+    return [{"layer": li, "clip": c} for li, layer in enumerate(placed.layers) for c in layer.clips]
+
+
 @router.post("/projects/{slug}/shows/{show_id}/validate")
 def validate(request: Request, slug: str, show_id: str):
     st = state(request)

@@ -61,6 +61,28 @@ class ShowStore:
         path.unlink()
         shutil.rmtree(self.shows_dir / f"{show_id}.history", ignore_errors=True)
 
+    # looks (custom ones; built-in looks live in lsg.render.looks)
+    def _looks_path(self) -> Path:
+        return self.shows_dir.parent / "looks.json"
+
+    def looks(self) -> list:
+        from lsg.render.looks import Look
+
+        path = self._looks_path()
+        if not path.is_file():
+            return []
+        return [Look.model_validate(x) for x in json.loads(path.read_text(encoding="utf-8"))]
+
+    def save_look(self, look) -> None:
+        looks = [x for x in self.looks() if x.id != look.id] + [look]
+        atomic_write_text(self._looks_path(), json.dumps([x.model_dump() for x in looks], indent=2))
+
+    def delete_look(self, look_id: str) -> None:
+        looks = self.looks()
+        if not any(x.id == look_id for x in looks):
+            raise KeyError(look_id)
+        atomic_write_text(self._looks_path(), json.dumps([x.model_dump() for x in looks if x.id != look_id], indent=2))
+
     # shaders
     def _shader_path(self, name: str) -> Path:
         if not NAME_RE.match(name):

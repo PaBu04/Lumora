@@ -5,7 +5,9 @@ import type {
   EffectInfo,
   Fixture,
   Issue,
+  Clip,
   LedData,
+  Look,
   PlaybackState,
   PowerReport,
   Project,
@@ -76,6 +78,12 @@ export const api = {
   restoreShowVersion: (slug: string, id: string, vid: string) => post<Show>(`/api/projects/${slug}/shows/${id}/versions/${vid}/restore`),
   projectVersions: (slug: string) => get<Version[]>(`/api/projects/${slug}/versions`),
   restoreProjectVersion: (slug: string, vid: string) => post<Project>(`/api/projects/${slug}/versions/${vid}/restore`),
+  looks: (slug: string) => get<Look[]>(`/api/projects/${slug}/looks`),
+  createLook: (slug: string, body: { name: string; show_id: string; clip_ids: string[]; description?: string }) =>
+    post<Look>(`/api/projects/${slug}/looks`, body),
+  deleteLook: (slug: string, id: string) => del(`/api/projects/${slug}/looks/${id}`),
+  instantiateLook: (slug: string, id: string, show_id: string, at: number) =>
+    post<{ layer: number; clip: Clip }[]>(`/api/projects/${slug}/looks/${id}/instantiate`, { show_id, at }),
   validate: (slug: string, id: string) => post<Issue[]>(`/api/projects/${slug}/shows/${id}/validate`),
   power: (slug: string, id: string, fps = 2) => get<PowerReport>(`/api/projects/${slug}/shows/${id}/power?fps=${fps}`),
 

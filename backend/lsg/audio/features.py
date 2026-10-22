@@ -87,6 +87,18 @@ class AudioFeatures:
     def beat_position(self, t: float) -> float:
         return _continuous_index(self.beats, t, self.beat_period)
 
+    def time_at_beat(self, b: float) -> float:
+        """Inverse of beat_position: song time of a (fractional) beat position."""
+        marks, period = self.beats, self.beat_period
+        if len(marks) < 2:
+            return b * period
+        if b <= 0:
+            return float(marks[0] + b * period)
+        if b >= len(marks) - 1:
+            return float(marks[-1] + (b - (len(marks) - 1)) * period)
+        i = int(b)
+        return float(marks[i] + (b - i) * (marks[i + 1] - marks[i]))
+
     def bar_position(self, t: float) -> float:
         return _continuous_index(self.downbeats, t, 4 * self.beat_period)
 

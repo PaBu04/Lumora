@@ -7,10 +7,10 @@ import { Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
 import { Inspector } from "../editor/Inspector";
-import { allClips, deleteClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
+import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
-import type { Analysis, Clip, EffectInfo, Issue, PowerReport, Show } from "../types";
+import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show } from "../types";
 import { Field, formatTime, Icon } from "../ui";
 
 function NewShowForm({ onCreated }: { onCreated: (id: string) => void }) {
@@ -411,6 +411,11 @@ export function ShowsView() {
   const [snapMode, setSnapMode] = useState<SnapMode>("beat");
   const [zoom, setZoom] = useState(1);
   const [pick, setPick] = useState("pulse");
+  const [looks, setLooks] = useState<Look[]>([]);
+  const refreshLooks = useCallback(() => {
+    if (slug) api.looks(slug).then(setLooks);
+  }, [slug]);
+  useEffect(refreshLooks, [refreshLooks]);
   const rev = useStore((s) => s.showRevision);
   const playhead = usePlayhead();
 
@@ -598,7 +603,7 @@ export function ShowsView() {
                 {editor.saving ? "speichert…" : editor.error ? "⚠ Fehler" : "gespeichert"}
               </span>
             </div>
-            <EffectBar effects={effects} shaders={shaders} selected={pick} onPick={setPick} />
+            <EffectBar effects={effects} shaders={shaders} looks={looks} selected={pick} onPick={setPick} />
           </div>
         ) : (
           <div />
@@ -629,6 +634,21 @@ export function ShowsView() {
             zoom={zoom}
             setZoom={setZoom}
             defaultEffect={defaultEffect}
+            onDropLook={async (lookId, at, li) => {
+              const look = looks.find((l) => l.id === lookId);
+              try {
+                const items = await api.instantiateLook(slug, lookId, show.id, at);
+                let ids: string[] = [];
+                apply((s) => {
+                  const r = insertLookClips(s, items, li, look?.name ?? "Look");
+                  ids = r.ids;
+                  return r.show;
+                });
+                setSelection(new Set(ids));
+              } catch (e) {
+                notify((e as Error).message, "error");
+              }
+            }}
           />
         ) : (
           <div className="timeline" style={{ display: "grid", placeItems: "center" }}>
@@ -666,6 +686,8 @@ export function ShowsView() {
               palettes={palettes}
               apply={apply}
               playhead={playhead}
+              looks={looks}
+              onLooksChanged={refreshLooks}
             />
           )}
           {show && panel === "json" && <JsonPanel show={show} onSave={async (s) => apply(() => s)} />}

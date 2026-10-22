@@ -452,6 +452,52 @@ def create_mcp(st: AppState) -> MCPServer:
         return {"ok": True, "show_id": show.id, "clips": sum(len(l.clips) for l in show.layers)}
 
     @mcp.tool()
+    def list_looks(project: str | None = None) -> list[dict[str, Any]]:
+        """Reusable clip groups (built-in and saved by the user). Times are in beats, so a look fits any tempo."""
+        from lsg.render.looks import BUILTIN_LOOKS
+
+        slug = st.resolve_project(project)
+        return [
+            {
+                "id": x.id,
+                "name": x.name,
+                "description": x.description,
+                "beats": x.beats,
+                "layers": 1 + max(c.layer for c in x.clips),
+            }
+            for x in [*BUILTIN_LOOKS, *st.show_store(slug).looks()]
+        ]
+
+    @mcp.tool()
+    async def apply_look(
+        show_id: str, look_id: str, at: float, layer: str | None = None, project: str | None = None
+    ) -> dict[str, Any]:
+        """Insert a look at song time `at` (snapped to the nearest beat). `layer` = name of the lowest layer to use
+        (created if missing; additional look layers are added above)."""
+        from lsg.render.looks import BUILTIN_LOOKS
+        from lsg.render.looks import apply_look as place
+
+        slug = st.resolve_project(project)
+        try:
+            show = load_show(slug, show_id)
+        except KeyError as exc:
+            return _err(exc)
+        look = next((x for x in [*BUILTIN_LOOKS, *st.show_store(slug).looks()] if x.id == look_id), None)
+        if look is None:
+            return _err(KeyError(f"unknown look {look_id!r}"))
+        feats = features_for(show)
+        b0 = round(feats.beat_position(at))
+        names = [l.name for l in show.layers]
+        if layer and layer not in names:
+            show.layers.append(Layer(name=layer))
+            names.append(layer)
+        li = names.index(layer) if layer else len(show.layers)
+        show, ids = place(show, look, feats.time_at_beat(b0), li, lambda b: feats.time_at_beat(b0 + b))
+        result = await save_and_check(slug, show)
+        result["added"] = ids
+        return result
+
+    @mcp.tool()
     async def delete_show(show_id: str, project: str | None = None) -> dict[str, Any]:
         """Delete a show."""
         slug = st.resolve_project(project)
