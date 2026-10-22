@@ -76,6 +76,68 @@ function CurveCharts({ cal }: { cal: LedCalibration }) {
   );
 }
 
+function SyncCard() {
+  const project = useStore((s) => s.project)!;
+  const update = useStore((s) => s.updateProject);
+  const pb = useStore((s) => s.playback);
+  const setPlayback = useStore((s) => s.setPlayback);
+  const [bpm, setBpm] = useState(100);
+  const syncing = !!pb?.sync;
+  return (
+    <div className={`card${syncing ? " selected" : ""}`}>
+      <div className="row between" style={{ marginBottom: 6 }}>
+        <strong>Synchronisation Ton ↔ Licht</strong>
+        <button className={`btn small${syncing ? " active" : ""}`} onClick={async () => setPlayback(await api.sync(!syncing, bpm))}>
+          {syncing ? "Sync-Test beenden" : "Sync-Test starten"}
+        </button>
+      </div>
+      <p className="hint">
+        Spielt einen Klick auf jeden Beat über die Lautsprecher, alle LEDs blitzen mit (Taktanfang pink). Stell dich an den Betrachterplatz und
+        verschiebe die Regler, bis Klick und Blitz gleichzeitig wirken. Kommt das Licht zu früh, Audio-Latenz erhöhen.
+      </p>
+      {!syncing && (
+        <Field label="Tempo">
+          <select value={bpm} onChange={(e) => setBpm(+e.target.value)}>
+            {[60, 80, 100, 120].map((b) => (
+              <option key={b} value={b}>
+                {b} BPM
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label={`Audio-Latenz ${pb?.output.audio_latency_ms ?? 0} ms`}>
+        <input
+          type="range"
+          min={-200}
+          max={600}
+          step={5}
+          value={pb?.output.audio_latency_ms ?? 0}
+          onChange={async (e) => setPlayback(await api.output({ audio_latency_ms: +e.target.value }))}
+        />
+      </Field>
+      {project.controllers.map((c) => (
+        <Field key={c.id} label={`${c.name} ${c.latency_ms} ms`}>
+          <input
+            type="range"
+            min={-200}
+            max={300}
+            step={5}
+            value={c.latency_ms}
+            onChange={(e) =>
+              update((p) => {
+                p.controllers.find((x) => x.id === c.id)!.latency_ms = +e.target.value;
+                return p;
+              })
+            }
+          />
+        </Field>
+      ))}
+      {project.controllers.length > 1 && <p className="hint">Controller-Latenz: reagiert ein Controller später als die anderen, seinen Wert erhöhen.</p>}
+    </div>
+  );
+}
+
 function Step({ n, title, children, pattern, onShow, active }: { n: number; title: string; children: React.ReactNode; pattern: string; onShow: (kind: string) => void; active: boolean }) {
   return (
     <div className={`card${active ? " selected" : ""}`}>
@@ -277,6 +339,8 @@ export function CalibrationView() {
             </>
           )}
         </Step>
+
+        <SyncCard />
 
         <div className="card">
           <strong>Stromaufnahme {TYPE_LABEL[ledType]}</strong>

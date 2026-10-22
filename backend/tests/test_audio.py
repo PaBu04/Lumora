@@ -100,3 +100,36 @@ def test_tempo_correction(demo_analysis):
     back = scale_tempo(doubled, 0.5)
     assert back.bpm == pytest.approx(a.bpm, rel=0.01)
     assert set(np.round(a.downbeats, 3)) <= set(np.round(back.beats, 3))
+
+
+def test_neural_beat_tracker_is_used_when_available(demo_analysis, monkeypatch):
+    from lsg.audio import ml_beats
+    from lsg.audio.analysis import analyse_file
+
+    path, _ = demo_analysis
+    grid = np.arange(0.25, 18.0, 0.5)
+    monkeypatch.setattr(ml_beats, "installed", lambda: True)
+    monkeypatch.setattr(ml_beats, "track", lambda p: (grid, grid[::4]))
+    a = analyse_file(path, "auto")
+    assert a.beat_source == "beat_this" and a.beat_note is None
+    assert a.beats[:3] == pytest.approx([0.25, 0.75, 1.25]) and a.bpm == pytest.approx(120, abs=0.01)
+    assert a.downbeats[1] == pytest.approx(2.25)
+
+
+def test_neural_beat_tracker_falls_back(demo_analysis, monkeypatch):
+    from lsg.audio import ml_beats
+    from lsg.audio.analysis import analyse_file
+
+    path, _ = demo_analysis
+
+    def broken(p):
+        raise OSError("HTTP Error 503")
+
+    monkeypatch.setattr(ml_beats, "installed", lambda: True)
+    monkeypatch.setattr(ml_beats, "track", broken)
+    a = analyse_file(path, "beat_this")
+    assert a.beat_source == "librosa" and "OSError" in a.beat_note
+    assert a.bpm == pytest.approx(120, abs=0.5)
+    monkeypatch.setattr(ml_beats, "installed", lambda: False)
+    assert "not installed" in analyse_file(path, "beat_this").beat_note
+    assert analyse_file(path, "librosa").beat_note is None

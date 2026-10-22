@@ -19,7 +19,8 @@ class AppState:
     def __init__(self, data_dir: Path, audio_backend: str, fps: float):
         self.data_dir = Path(data_dir)
         self.projects = ProjectStore(self.data_dir / "projects")
-        self.songs = SongLibrary(self.data_dir / "songs")
+        self.settings: dict = {"beat_tracker": "auto"}
+        self.songs = SongLibrary(self.data_dir / "songs", lambda: self.settings.get("beat_tracker", "auto"))
         self.session = PlaybackSession(self, create_player(audio_backend), fps)
         self._analysis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis")
         self._active_file = self.data_dir / "active_project.txt"
@@ -33,13 +34,15 @@ class AppState:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
+        if data.get("beat_tracker") in ("librosa", "beat_this", "auto"):
+            self.settings["beat_tracker"] = data["beat_tracker"]
         out = self.session.output
         for key in ("brightness", "audio_latency_ms"):
             if isinstance(data.get(key), (int, float)):
                 setattr(out, key, float(data[key]))
 
     def save_settings(self) -> None:
-        atomic_write_text(self._settings_file, json.dumps(self.session.output.to_dict(), indent=2))
+        atomic_write_text(self._settings_file, json.dumps({**self.session.output.to_dict(), **self.settings}, indent=2))
 
     def show_store(self, slug: str) -> ShowStore:
         if slug not in self.projects.list():

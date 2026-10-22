@@ -1,5 +1,6 @@
 import type {
   Analysis,
+  AppSettings,
   EffectInfo,
   Fixture,
   Issue,
@@ -91,6 +92,8 @@ export const api = {
   reanalyse: (id: string) => post(`/api/songs/${id}/analyse`),
   scaleTempo: (id: string, factor: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { factor }),
 
+  settings: () => get<AppSettings>("/api/settings"),
+  saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker">>) => put<AppSettings>("/api/settings", s),
   effects: () => get<{ effects: EffectInfo[]; palettes: Record<string, string[]>; shader_api: string }>("/api/effects"),
 
   playback: () => get<PlaybackState>("/api/playback"),
@@ -105,6 +108,7 @@ export const api = {
   test: (enabled: boolean, fixture_id: string | null, kind = "identify", params: Record<string, unknown> = {}) =>
     post<PlaybackState>("/api/playback/test", { enabled, fixture_id, kind, params }),
 
+  sync: (enabled: boolean, bpm = 100) => post<PlaybackState>("/api/playback/sync", { enabled, bpm }),
   discover: (seconds = 3) => get<WledInfo[]>(`/api/devices/discover?seconds=${seconds}`),
   deviceInfo: (host: string) => get<WledInfo>(`/api/devices/info?host=${encodeURIComponent(host)}`),
 };

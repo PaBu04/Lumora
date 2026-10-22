@@ -24,8 +24,9 @@ def _title_from_filename(name: str) -> tuple[str, str]:
 
 
 class SongLibrary:
-    def __init__(self, root: Path | str):
+    def __init__(self, root: Path | str, beat_tracker=lambda: "librosa"):
         self.root = Path(root)
+        self.beat_tracker = beat_tracker  # callable: current setting
         self._lock = threading.Lock()
         self._analysis_cache: dict[str, Analysis] = {}
 
@@ -101,7 +102,7 @@ class SongLibrary:
         song.status, song.error = "running", None
         self.save(song)
         try:
-            analysis = analyse_file(self.audio_path(song_id))
+            analysis = analyse_file(self.audio_path(song_id), self.beat_tracker())
             atomic_write_text(self._dir(song_id) / "analysis.json", analysis.model_dump_json())
             self._analysis_cache[song_id] = analysis
             song.status, song.duration = "done", analysis.duration

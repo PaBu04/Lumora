@@ -38,3 +38,5 @@ class Analysis(BaseModel):
     frame_rate: float
     features: dict[str, list[float]]  # rms, low, mid, high, onset
     waveform: list[float]  # peak envelope for drawing, ~WAVEFORM_POINTS values
+    beat_source: str = "librosa"  # librosa | beat_this
+    beat_note: str | None = None  # why the preferred tracker was not used

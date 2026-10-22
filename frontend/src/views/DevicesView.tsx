@@ -5,6 +5,33 @@ import { useStore } from "../store";
 import type { Controller, WledInfo } from "../types";
 import { Field, Icon, NumberInput, TextInput } from "../ui";
 
+function StatusLine({ id }: { id: string }) {
+  const st = useStore((s) => s.playback?.controller_status?.[id]);
+  if (!st) return <p className="hint">Status wird abgefragt…</p>;
+  if (!st.ok) return <div className="banner err">WLED {st.error}</div>;
+  const i = st.info!;
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div className="row">
+        <span className="badge ok">verbunden</span>
+        {i.version && <span className="badge">WLED {i.version}</span>}
+        {i.arch && <span className="badge">{String(i.arch).toUpperCase()}</span>}
+        {i.live && <span className="badge info">empfängt {i.fps ?? "?"} FPS</span>}
+        {i.rssi !== undefined && i.rssi !== null && (
+          <span className={`badge ${i.rssi < -75 ? "warn" : ""}`}>
+            WLAN {i.rssi} dBm{i.signal ? ` (${i.signal} %)` : ""}
+          </span>
+        )}
+      </div>
+      {st.warnings.map((w) => (
+        <div key={w} className="banner err" style={{ marginTop: 6, marginBottom: 0 }}>
+          {w}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const amps = (ma: number) => `${(ma / 1000).toFixed(1)} A`;
 
 function PowerSupply() {
@@ -141,6 +168,7 @@ function ControllerCard({ c }: { c: Controller }) {
           </button>
         </div>
       </div>
+      <StatusLine id={c.id} />
       {info && (
         <div className={`banner ${info.error ? "err" : "info"}`}>
           {info.error

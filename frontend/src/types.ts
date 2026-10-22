@@ -137,6 +137,13 @@ export interface Analysis {
   frame_rate: number;
   features: Record<"rms" | "low" | "mid" | "high" | "onset", number[]>;
   waveform: number[];
+  beat_source: string;
+  beat_note: string | null;
+}
+
+export interface AppSettings {
+  beat_tracker: "auto" | "librosa" | "beat_this";
+  beat_this: { installed: boolean; loaded: boolean; error: string | null };
 }
 
 export interface Target {
@@ -217,6 +224,15 @@ export interface PlaybackState {
     peak_ma: Record<string, number>;
   };
   controller_errors: Record<string, string>;
+  controller_status: Record<string, ControllerStatus>;
+  sync: { bpm: number; previous: string | null } | null;
+}
+
+export interface ControllerStatus {
+  ok: boolean;
+  error?: string;
+  warnings: string[];
+  info?: WledInfo & { fps?: number; rssi?: number; signal?: number; arch?: string; live?: boolean };
 }
 
 export interface WledInfo {

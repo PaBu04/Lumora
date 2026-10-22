@@ -86,7 +86,7 @@ def test_live_output_reaches_wled(server, wled):
     http_port, ddp_port = wled
     info = httpx.get(f"{server}/api/devices/info", params={"host": f"127.0.0.1:{http_port}"}).json()
     assert info["led_count"] == 200 and info["name"] == "Sim"
-    slug = setup_project(server, [{"id": "c1", "host": "127.0.0.1", "port": ddp_port,
+    slug = setup_project(server, [{"id": "c1", "host": f"127.0.0.1:{http_port}", "port": ddp_port,
                                    "mappings": [{"fixture_id": "s1", "start": 10}]}])
     show = httpx.post(f"{server}/api/projects/{slug}/shows", json={"name": "S", "template": "empty"}).json()
     show["duration"] = 30
@@ -116,6 +116,16 @@ def test_live_output_reaches_wled(server, wled):
     time.sleep(0.4)
     frame = httpx.get(f"http://127.0.0.1:{http_port}/sim/frame").json()["data"]
     assert sorted(set(frame[30:(10 + 120) * 3]) - {0}) == [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128, 192, 255]
+
+    # sync test: click track loops, LEDs flash; the controller monitor reports the simulator
+    st = httpx.post(f"{server}/api/playback/sync", json={"enabled": True, "bpm": 120}).json()
+    assert st["sync"]["bpm"] == 120 and st["playing"] and st["show"] == "__sync__"
+    time.sleep(3.6)
+    st = httpx.get(f"{server}/api/playback").json()
+    status = st["controller_status"]["c1"]
+    assert status["ok"] and status["info"]["name"] == "Sim" and status["warnings"] == []
+    st = httpx.post(f"{server}/api/playback/sync", json={"enabled": False}).json()
+    assert st["sync"] is None and st["show"] == show["id"]
 
     # test pattern: first LED green, last red
     httpx.post(f"{server}/api/playback/test", json={"enabled": True, "fixture_id": "s1"})

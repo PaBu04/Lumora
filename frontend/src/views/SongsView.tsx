@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { SECTION_COLORS, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
-import type { Analysis, Song } from "../types";
+import type { Analysis, AppSettings, Song } from "../types";
 import { Field, formatTime, Icon, TextInput } from "../ui";
 
 function StatusBadge({ song }: { song: Song }) {
@@ -45,8 +45,14 @@ function SongDetail({ song }: { song: Song }) {
         {analysis && <span className="badge">{analysis.beats.length} Beats</span>}
         {analysis && <span className="badge">{analysis.downbeats.length} Takte</span>}
         {analysis && <span className="badge">{analysis.sections.length} Abschnitte</span>}
+        {analysis && (
+          <span className={`badge ${analysis.beat_source === "beat_this" ? "info" : ""}`} title={analysis.beat_note ?? ""}>
+            Beats: {analysis.beat_source === "beat_this" ? "KI-Modell" : "Standard"}
+          </span>
+        )}
       </div>
       {song.status === "error" && <div className="banner err">Analyse fehlgeschlagen: {song.error}</div>}
+      {analysis?.beat_note && <div className="banner info">Hinweis zur Beat-Erkennung: {analysis.beat_note}</div>}
       <div className="card" style={{ padding: 8 }}>
         <Waveform analysis={analysis} duration={song.duration} height={150} curves />
       </div>
@@ -151,6 +157,36 @@ function SongDetail({ song }: { song: Song }) {
   );
 }
 
+function TrackerSetting() {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const songs = useStore((s) => s.songs);
+  useEffect(() => {
+    api.settings().then(setSettings);
+  }, [songs]);
+  if (!settings) return null;
+  const bt = settings.beat_this;
+  return (
+    <div className="card">
+      <Field label="Beat-Erkennung">
+        <select value={settings.beat_tracker} onChange={async (e) => setSettings(await api.saveSettings({ beat_tracker: e.target.value as AppSettings["beat_tracker"] }))}>
+          <option value="auto">automatisch (KI-Modell wenn verfügbar)</option>
+          <option value="librosa">Standard (schnell)</option>
+          <option value="beat_this" disabled={!bt.installed}>
+            KI-Modell beat_this{bt.installed ? "" : " (nicht installiert)"}
+          </option>
+        </select>
+      </Field>
+      <p className="hint" style={{ margin: 0 }}>
+        {bt.installed
+          ? bt.error
+            ? `KI-Modell installiert, aber nicht ladbar: ${bt.error}`
+            : "KI-Modell installiert (genauere Beats und Takte, langsamer). Gilt für neue Analysen."
+          : 'Für genauere Beats: pip install -e ".[ml]" (installiert PyTorch, ca. 1 GB).'}
+      </p>
+    </div>
+  );
+}
+
 export function SongsView() {
   const songs = useStore((s) => s.songs);
   const refreshSongs = useStore((s) => s.refreshSongs);
@@ -228,6 +264,7 @@ export function SongsView() {
             Demo-Song erzeugen
           </button>
         </div>
+        <TrackerSetting />
         <div className="list">
           {songs.length === 0 && <p className="hint">Noch keine Songs.</p>}
           {songs.map((s) => (

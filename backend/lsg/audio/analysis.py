@@ -189,12 +189,29 @@ def _sections(
     return sections
 
 
-def analyse_file(path: Path | str) -> Analysis:
+def analyse_file(path: Path | str, beat_tracker: str = "librosa") -> Analysis:
+    """beat_tracker: "librosa" (built in), "beat_this" (neural model, optional extra) or "auto"."""
     y, _ = librosa.load(path, sr=SR, mono=True)
-    return analyse_signal(y)
+    note = None
+    if beat_tracker in ("beat_this", "auto"):
+        from lsg.audio import ml_beats
+
+        if ml_beats.installed():
+            try:
+                beats, downbeats = ml_beats.track(path)
+                if len(beats) >= 8:
+                    return analyse_signal(y, beats=beats, downbeats=downbeats, beat_source="beat_this")
+                note = "beat_this found too few beats"
+            except Exception as exc:
+                note = f"beat_this unavailable ({type(exc).__name__}), used built-in tracker"
+        elif beat_tracker == "beat_this":
+            note = "beat_this is not installed, used built-in tracker"
+    result = analyse_signal(y)
+    return result.model_copy(update={"beat_note": note}) if note else result
 
 
-def analyse_signal(y: np.ndarray) -> Analysis:
+def analyse_signal(y: np.ndarray, beats: np.ndarray | None = None, downbeats: np.ndarray | None = None,
+                   beat_source: str = "librosa") -> Analysis:
     duration = len(y) / SR
     spec = np.abs(librosa.stft(y, n_fft=2048, hop_length=HOP))
     freqs = librosa.fft_frequencies(sr=SR, n_fft=2048)
@@ -211,24 +228,27 @@ def analyse_signal(y: np.ndarray) -> Analysis:
     onset_env = librosa.onset.onset_strength(y=y, sr=SR, hop_length=HOP)
     onset_n = _normalise(onset_env)
 
-    _, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=SR, hop_length=HOP, units="frames")
-    tracked = frame_times[np.asarray(beat_frames, dtype=int)]
+    if beats is None:
+        _, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=SR, hop_length=HOP, units="frames")
+        tracked = frame_times[np.asarray(beat_frames, dtype=int)]
 
-    # fine, bass-weighted onset curve for beat placement
-    # (not clipped, so strong kicks keep their weight over hi-hats and off-beat bass)
-    full = librosa.onset.onset_strength(y=y, sr=SR, hop_length=FINE_HOP)
-    low = librosa.onset.onset_strength(y=y, sr=SR, hop_length=FINE_HOP, fmax=200, n_mels=32)
-    full = full / (np.percentile(full, 99) + 1e-9)
-    low = low / (np.percentile(low, 99) + 1e-9)
-    pulse = full + 1.5 * low
-    pulse_rate = SR / FINE_HOP
-    active = frame_times[rms > 0.05]
-    span = (float(active[0]), float(active[-1])) if active.size else (0.0, duration)
-    beats = _fit_beats(tracked, pulse, pulse_rate, span)
-    beats = _octave_correct(beats, pulse, pulse_rate)
+        # fine, bass-weighted onset curve for beat placement
+        # (not clipped, so strong kicks keep their weight over hi-hats and off-beat bass)
+        full = librosa.onset.onset_strength(y=y, sr=SR, hop_length=FINE_HOP)
+        low = librosa.onset.onset_strength(y=y, sr=SR, hop_length=FINE_HOP, fmax=200, n_mels=32)
+        full = full / (np.percentile(full, 99) + 1e-9)
+        low = low / (np.percentile(low, 99) + 1e-9)
+        pulse = full + 1.5 * low
+        pulse_rate = SR / FINE_HOP
+        active = frame_times[rms > 0.05]
+        span = (float(active[0]), float(active[-1])) if active.size else (0.0, duration)
+        beats = _fit_beats(tracked, pulse, pulse_rate, span)
+        beats = _octave_correct(beats, pulse, pulse_rate)
+        downbeats = _downbeats(beats, pulse, pulse_rate, 1.0 * low)
+    elif downbeats is None or len(downbeats) == 0:
+        downbeats = beats[::4]
 
     bpm = 60.0 / float(np.polyfit(np.arange(len(beats)), beats, 1)[0]) if len(beats) > 3 else 120.0
-    downbeats = _downbeats(beats, pulse, pulse_rate, 1.0 * low)
 
     onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=SR, hop_length=HOP, units="frames")
     onsets = frame_times[onset_frames]
@@ -260,6 +280,7 @@ def analyse_signal(y: np.ndarray) -> Analysis:
             "onset": _round(onset_n),
         },
         waveform=_round(peaks),
+        beat_source=beat_source,
     )
 
 

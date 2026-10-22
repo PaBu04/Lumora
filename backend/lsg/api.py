@@ -425,6 +425,31 @@ def song_audio(request: Request, song_id: str):
         raise _404(f"song {song_id!r}")
 
 
+# settings
+
+class SettingsBody(BaseModel):
+    beat_tracker: str | None = None
+
+
+@router.get("/settings")
+def get_settings(request: Request):
+    from lsg.audio import ml_beats
+
+    st = state(request)
+    return {**st.settings, "beat_this": ml_beats.status()}
+
+
+@router.put("/settings")
+def put_settings(request: Request, body: SettingsBody):
+    st = state(request)
+    if body.beat_tracker is not None:
+        if body.beat_tracker not in ("librosa", "beat_this", "auto"):
+            raise HTTPException(422, "beat_tracker must be librosa, beat_this or auto")
+        st.settings["beat_tracker"] = body.beat_tracker
+    st.save_settings()
+    return get_settings(request)
+
+
 # effects
 
 @router.get("/effects")
@@ -523,6 +548,25 @@ async def playback_output(request: Request, body: OutputBody):
         setattr(s.output, k, v)
     state(request).save_settings()
     s._dirty = True
+    return s.state()
+
+
+class SyncBody(BaseModel):
+    enabled: bool
+    bpm: float = Field(default=100.0, ge=40, le=200)
+
+
+@router.post("/playback/sync")
+async def playback_sync(request: Request, body: SyncBody):
+    """Click track + LED flashes on every beat to tune audio and controller latencies."""
+    s = state(request).session
+    try:
+        if body.enabled:
+            await s.start_sync(body.bpm)
+        else:
+            await s.stop_sync()
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
     return s.state()
 
 

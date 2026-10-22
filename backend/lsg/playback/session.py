@@ -25,6 +25,10 @@ from lsg.output.curve import duty_to_lightness
 from lsg.output.pipeline import FrameStats, OutputPipeline
 from lsg.output.wled import resolve_host
 from lsg.playback.patterns import KINDS, pattern_frame
+from lsg.playback.sync import SYNC_SHOW_ID, click_track, sync_features, sync_show
+
+SYNC_SECONDS = 60.0
+MONITOR_SECONDS = 3.0
 from lsg.render.engine import Renderer
 
 if TYPE_CHECKING:
@@ -82,6 +86,9 @@ class PlaybackSession:
         self._last_state = 0.0
         self.render_ms = 0.0
         self.power: FrameStats = FrameStats()
+        self.sync: dict | None = None  # {"bpm": .., "previous": show id}
+        self.controller_status: dict[str, dict] = {}
+        self._monitor_task: asyncio.Task | None = None
         self._power_peak: dict[str, float] = {}
         self._power_peak_t = 0.0
         self.lock = asyncio.Lock()
@@ -89,8 +96,11 @@ class PlaybackSession:
     # lifecycle
     def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
 
     async def stop_loop(self) -> None:
+        if self._monitor_task:
+            self._monitor_task.cancel()
         if self._task:
             self._task.cancel()
             try:
@@ -155,6 +165,15 @@ class PlaybackSession:
         """Hot reload after edits (UI or MCP) without interrupting playback."""
         if not self.loaded or self.loaded.project_slug != slug:
             return
+        if self.sync is not None:
+            if show_id is None:  # latencies or LEDs changed while syncing: keep the click going
+                playing, pos = self.player.playing, self.player.time()
+                await self.load_project(slug)
+                await self._build_sync_renderer()
+                self.player.seek(pos)
+                if playing:
+                    self.player.play()
+            return
         if show_id is None:
             # project or shaders changed
             playing, pos = self.player.playing, self.player.time()
@@ -181,6 +200,38 @@ class PlaybackSession:
                     self.player.load(path, None if path else self.loaded.renderer.duration)
         self._dirty = True
         await self.broadcast_state()
+
+    # sync test (latency calibration)
+    async def _build_sync_renderer(self) -> None:
+        lo = self.loaded
+        show = sync_show(SYNC_SECONDS)
+        lo.renderer = await asyncio.to_thread(Renderer, lo.project, lo.table, show, sync_features(self.sync["bpm"], SYNC_SECONDS), {})
+        lo.show = show
+
+    async def start_sync(self, bpm: float = 100.0) -> None:
+        lo = self.loaded
+        if lo is None:
+            raise ValueError("no project loaded")
+        previous = lo.show.id if lo.show and lo.show.id != SYNC_SHOW_ID else (self.sync or {}).get("previous")
+        self.sync = {"bpm": bpm, "previous": previous}
+        self.test = None
+        self.player.stop()
+        await self._build_sync_renderer()
+        path = click_track(self.app.data_dir / "sync" / f"click_{bpm:.0f}.wav", bpm, SYNC_SECONDS)
+        self.player.load(path)
+        self.player.play()
+        self._dirty = True
+        await self.broadcast_state()
+
+    async def stop_sync(self) -> None:
+        if self.sync is None:
+            return
+        previous = self.sync.get("previous")
+        self.sync = None
+        self.player.stop()
+        if self.loaded:
+            await self.load_show(self.loaded.project_slug, previous)
+        self._dirty = True
 
     # transport
     def play(self) -> None:
@@ -247,6 +298,8 @@ class PlaybackSession:
                 "peak_ma": {k: round(v) for k, v in self._power_peak.items()},
             },
             "controller_errors": dict(self.sender.errors),
+            "controller_status": self.controller_status,
+            "sync": self.sync,
         }
 
     async def broadcast_state(self) -> None:
@@ -305,6 +358,26 @@ class PlaybackSession:
         rgb = (np.clip(frame, 0, 1) * 255 + 0.5).astype(np.uint8)
         return struct.pack("<dI", t, len(frame)) + rgb.tobytes()
 
+    async def _monitor_loop(self) -> None:
+        """Poll the WLED controllers of the loaded project while someone is looking or live mode is on."""
+        from lsg.output.wled import controller_status
+
+        while True:
+            await asyncio.sleep(MONITOR_SECONDS)
+            lo = self.loaded
+            if lo is None or not lo.pipeline.plans or not (self.clients or self.mode == "live"):
+                continue
+            try:
+                results = await asyncio.gather(*(
+                    controller_status(p.controller.host, p.pixel_count, self.fps, self.mode == "live")
+                    for p in lo.pipeline.plans
+                ))
+                self.controller_status = {p.controller.id: r for p, r in zip(lo.pipeline.plans, results)}
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("controller monitor failed")
+
     async def _loop(self) -> None:
         period = 1.0 / self.fps
         next_tick = time.perf_counter()
@@ -327,6 +400,9 @@ class PlaybackSession:
         lo = self.loaded
         if lo is None:
             return
+        if self.sync is not None and self.player.finished:  # loop the click track
+            self.player.seek(0)
+            self.player.play()
         active = self.player.playing or self.test is not None
         if not active and not self._dirty and not (self.mode == "live" and now - self._last_live >= 1 / KEEPALIVE_FPS):
             if now - self._last_state > 1.0:

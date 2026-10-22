@@ -52,6 +52,13 @@ class DdpProtocol(asyncio.DatagramProtocol):
             sim.frame_times = [t for t in sim.frame_times if now - t < 2.0] + [now]
 
 
+def _fps(sim: SimState) -> float:
+    ft = sim.frame_times
+    if len(ft) > 1 and ft[-1] > ft[0] and time.monotonic() - ft[-1] < 1.0:
+        return (len(ft) - 1) / (ft[-1] - ft[0])
+    return 0.0
+
+
 def make_app(sim: SimState, name: str) -> FastAPI:
     app = FastAPI()
 
@@ -63,7 +70,8 @@ def make_app(sim: SimState, name: str) -> FastAPI:
             "mac": "".join(f"{b:02x}" for b in name.encode()[:6].ljust(6, b"0")),
             "arch": "sim",
             "live": bool(sim.frame_times) and time.monotonic() - sim.frame_times[-1] < 2.5,
-            "leds": {"count": sim.leds, "rgbw": sim.rgbw, "lc": 3 if sim.rgbw else 1, "fps": 0, "maxpwr": 5000},
+            "leds": {"count": sim.leds, "rgbw": sim.rgbw, "lc": 3 if sim.rgbw else 1, "fps": round(_fps(sim)), "maxpwr": 5000},
+            "wifi": {"rssi": -58, "signal": 84, "channel": 6},
         }
 
     @app.get("/json/state")
@@ -77,9 +85,7 @@ def make_app(sim: SimState, name: str) -> FastAPI:
 
     @app.get("/sim/stats")
     def stats():
-        ft = sim.frame_times
-        fps = (len(ft) - 1) / (ft[-1] - ft[0]) if len(ft) > 1 and ft[-1] > ft[0] else 0.0
-        return {"frames": sim.frames, "packets": sim.packets, "fps": round(fps, 1)}
+        return {"frames": sim.frames, "packets": sim.packets, "fps": round(_fps(sim), 1)}
 
     @app.get("/sim/frame")
     def frame():

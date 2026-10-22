@@ -18,6 +18,7 @@ async def fetch_info(host: str, timeout: float = 2.0) -> dict:
         info = r.json()
     leds = info.get("leds", {})
     lc = leds.get("lc", 1)
+    wifi = info.get("wifi", {}) or {}
     return {
         "host": host,
         "name": info.get("name", host),
@@ -29,7 +30,33 @@ async def fetch_info(host: str, timeout: float = 2.0) -> dict:
         "max_power_ma": leds.get("maxpwr"),
         "arch": info.get("arch"),
         "live": info.get("live", False),
+        "rssi": wifi.get("rssi"),
+        "signal": wifi.get("signal"),
     }
+
+
+# rough DDP limits at ~50 FPS (one output); more LEDs lower the achievable frame rate
+LED_LIMITS = {"esp8266": 600, "esp32": 1500}
+
+
+async def controller_status(host: str, pixels: int, sending_fps: float, live: bool) -> dict:
+    """Reachability and health of one controller with human readable warnings."""
+    try:
+        info = await fetch_info(host, timeout=1.5)
+    except Exception as exc:
+        return {"ok": False, "error": f"nicht erreichbar ({type(exc).__name__})", "warnings": []}
+    warnings = []
+    if info["led_count"] and pixels > info["led_count"]:
+        warnings.append(f"WLED hat nur {info['led_count']} LEDs konfiguriert, zugeordnet sind {pixels}")
+    arch = str(info.get("arch") or "").lower()
+    limit = next((v for k, v in LED_LIMITS.items() if arch.startswith(k)), None)
+    if limit and pixels > limit:
+        warnings.append(f"{pixels} LEDs an einem {arch.upper()}: über ca. {limit} sinkt die Bildrate (Strips auf mehrere Controller verteilen)")
+    if info.get("rssi") is not None and info["rssi"] < -75:
+        warnings.append(f"schwaches WLAN ({info['rssi']} dBm): Pakete können verloren gehen")
+    if live and info.get("fps") and info["fps"] < 0.8 * sending_fps:
+        warnings.append(f"WLED zeigt {info['fps']} FPS bei {sending_fps:.0f} gesendeten: Frames gehen verloren oder der Controller ist überlastet")
+    return {"ok": True, "info": info, "warnings": warnings}
 
 
 async def set_state(host: str, state: dict, timeout: float = 2.0) -> dict:
