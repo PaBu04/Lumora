@@ -32,6 +32,22 @@ def polygon_area(points: list[Vec2]) -> float:
     return 0.5 * sum(points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1] for i in range(n))
 
 
+class FloorplanImage(BaseModel):
+    """Photo / blueprint shown under the floor plan editor to trace walls."""
+
+    filename: str
+    px_width: int = Field(gt=0)
+    px_height: int = Field(gt=0)
+    x: float = 0.0  # world position of the image's lower left corner (metres)
+    y: float = 0.0
+    width_m: float = Field(default=5.0, gt=0.1, le=500)
+    opacity: float = Field(default=0.5, ge=0.05, le=1.0)
+
+    @property
+    def height_m(self) -> float:
+        return self.width_m * self.px_height / self.px_width
+
+
 class Room(BaseModel):
     """Room = floor polygon (x/y in metres) extruded to `height`."""
 

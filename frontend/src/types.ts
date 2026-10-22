@@ -92,6 +92,16 @@ export interface PowerSettings {
   volts: number;
 }
 
+export interface FloorplanImage {
+  filename: string;
+  px_width: number;
+  px_height: number;
+  x: number;
+  y: number;
+  width_m: number;
+  opacity: number;
+}
+
 export interface Project {
   schema_version: number;
   name: string;
@@ -101,6 +111,7 @@ export interface Project {
   controllers: Controller[];
   calibration: Record<LedType, LedCalibration>;
   power: PowerSettings;
+  floorplan: FloorplanImage | null;
 }
 
 export interface LedData {

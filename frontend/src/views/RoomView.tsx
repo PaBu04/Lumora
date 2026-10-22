@@ -37,19 +37,41 @@ const SHAPES: Record<string, (w: number, d: number) => Vec2[]> = {
   },
 };
 
-function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec2[]) => void }) {
+type PlanMode = "edit" | "scale" | "trace";
+
+function FloorPlanEditor({
+  room,
+  onChange,
+  mode,
+  marks,
+  onPlanClick,
+  imageUrl,
+}: {
+  room: Room;
+  onChange: (floor: Vec2[]) => void;
+  mode: PlanMode;
+  marks: Vec2[];
+  onPlanClick: (p: Vec2) => void;
+  imageUrl: string | null;
+}) {
   const project = useStore((s) => s.project)!;
+  const fp = project.floorplan;
   const notify = useStore((s) => s.notify);
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<{ i: number; pts: Vec2[] } | null>(null);
   const pts = drag?.pts ?? room.floor;
 
   // view box from the committed room so the view does not jump while dragging
+  const fpBox = fp ? { x0: fp.x, y0: fp.y, x1: fp.x + fp.width_m, y1: fp.y + (fp.width_m * fp.px_height) / fp.px_width } : null;
   const vb = useMemo(() => {
-    const b = bounds(room);
+    const r = bounds(room);
+    const b = fpBox
+      ? { x0: Math.min(r.x0, fpBox.x0), y0: Math.min(r.y0, fpBox.y0), x1: Math.max(r.x1, fpBox.x1), y1: Math.max(r.y1, fpBox.y1) }
+      : r;
     const m = Math.max(1, Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.18);
     return { x: b.x0 - m, y: -(b.y1 + m), w: b.x1 - b.x0 + 2 * m, h: b.y1 - b.y0 + 2 * m };
-  }, [room]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, fpBox?.x0, fpBox?.y0, fpBox?.x1, fpBox?.y1]);
   const unit = Math.max(vb.w, vb.h) / 60; // ~ one "pixel-ish" size for strokes and labels
 
   const toWorld = (e: React.PointerEvent): Vec2 => {
@@ -75,6 +97,7 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
 
   const n = pts.length;
   const ccw = polygonArea(pts) > 0;
+  const editing = mode === "edit";
   const yaw = (project.viewer.yaw_deg * Math.PI) / 180;
   const [vx, vy] = project.viewer.position;
 
@@ -83,6 +106,13 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
       ref={svg}
       className="floorplan"
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+      style={{ cursor: mode === "edit" ? undefined : "crosshair" }}
+      onPointerDown={(e) => {
+        if (mode === "edit") return;
+        const ctm = svg.current!.getScreenCTM()!.inverse();
+        const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm);
+        onPlanClick([round(p.x), round(-p.y)]);
+      }}
       onPointerMove={(e) => {
         if (!drag) return;
         const next = drag.pts.slice();
@@ -99,7 +129,27 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
       }}
     >
       {grid}
-      <polygon points={pts.map(([x, y]) => `${x},${-y}`).join(" ")} fill="#121722" stroke="#7a86a0" strokeWidth={unit * 0.15} strokeLinejoin="round" />
+      {fp && fpBox && imageUrl && (
+        <image
+          href={imageUrl}
+          x={fpBox.x0}
+          y={-fpBox.y1}
+          width={fpBox.x1 - fpBox.x0}
+          height={fpBox.y1 - fpBox.y0}
+          opacity={fp.opacity}
+          preserveAspectRatio="none"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
+      <polygon
+        points={pts.map(([x, y]) => `${x},${-y}`).join(" ")}
+        fill="#121722"
+        fillOpacity={fp ? 0.35 : 1}
+        stroke="#7a86a0"
+        strokeWidth={unit * 0.15}
+        strokeLinejoin="round"
+        style={{ pointerEvents: "none" }}
+      />
       {project.fixtures.map((f) => {
         const path = geometryPath(f.geometry);
         return (
@@ -139,6 +189,7 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
               {len.toFixed(2)} m
             </text>
             <circle
+              style={editing ? undefined : { display: "none" }}
               className="insert"
               cx={mx}
               cy={-my}
@@ -160,6 +211,7 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
         <circle
           key={`v${i}`}
           className="vertex"
+          style={editing ? undefined : { pointerEvents: "none", opacity: 0.4 }}
           cx={x}
           cy={-y}
           r={unit * 0.5}
@@ -177,6 +229,20 @@ function FloorPlanEditor({ room, onChange }: { room: Room; onChange: (floor: Vec
           <title>{`Ecke ${i + 1}: ${x.toFixed(2)} / ${y.toFixed(2)} m (Doppelklick: löschen)`}</title>
         </circle>
       ))}
+      {marks.length > 0 && (
+        <g style={{ pointerEvents: "none" }}>
+          <polyline
+            points={marks.map(([x, y]) => `${x},${-y}`).join(" ")}
+            fill="none"
+            stroke={mode === "scale" ? "#ffcc33" : "#00d4ff"}
+            strokeWidth={unit * 0.2}
+            strokeDasharray={mode === "scale" ? `${unit * 0.6} ${unit * 0.4}` : undefined}
+          />
+          {marks.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={-y} r={unit * 0.4} fill={mode === "scale" ? "#ffcc33" : "#00d4ff"} />
+          ))}
+        </g>
+      )}
     </svg>
   );
 }
@@ -188,6 +254,10 @@ export function RoomView() {
   const notify = useStore((s) => s.notify);
   const refreshProjects = useStore((s) => s.refreshProjects);
   const [shape, setShape] = useState("Rechteck");
+  const [mode, setMode] = useState<PlanMode>("edit");
+  const [marks, setMarks] = useState<Vec2[]>([]);
+  const [imgVersion, setImgVersion] = useState(0);
+  const setProject = useStore.setState;
   const [w, setW] = useState(5);
   const [d, setD] = useState(4);
   if (!project || !slug) return null;
@@ -230,6 +300,88 @@ export function RoomView() {
           <span className="badge">{area.toFixed(1)} m²</span>
           <span className="badge">Umfang {perimeter.toFixed(1)} m</span>
           <span className="badge">{room.floor.length} Wände</span>
+        </div>
+
+        <h3>Plan oder Foto nachzeichnen</h3>
+        <div className="card">
+          {!project.floorplan ? (
+            <>
+              <p className="hint" style={{ marginTop: 0 }}>Grundriss-Bild (Foto, Bauplan, Skizze) hochladen, Maßstab festlegen und die Ecken nachklicken.</p>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const pr = await api.uploadFloorplan(slug, file);
+                    setProject({ project: pr });
+                    setImgVersion((v) => v + 1);
+                    notify("Bild geladen – jetzt den Maßstab festlegen", "success");
+                  } catch (err) {
+                    notify((err as Error).message, "error");
+                  }
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {mode === "scale" && <div className="banner info">Zwei Punkte im Bild anklicken, deren echten Abstand du kennst (z. B. eine Wand).</div>}
+              {mode === "trace" && (
+                <div className="banner info">
+                  Ecken des Raums der Reihe nach anklicken ({marks.length} gesetzt).
+                  <div className="row" style={{ marginTop: 6 }}>
+                    <button
+                      className="btn primary small"
+                      disabled={marks.length < 3}
+                      onClick={() => {
+                        if (!isSimplePolygon(marks)) return notify("Die Linien kreuzen sich – bitte Ecken in Reihenfolge setzen", "error");
+                        setFloor(marks);
+                        setMarks([]);
+                        setMode("edit");
+                        notify("Grundriss übernommen", "success");
+                      }}
+                    >
+                      Als Grundriss übernehmen
+                    </button>
+                    <button className="btn small" disabled={!marks.length} onClick={() => setMarks((m) => m.slice(0, -1))}>
+                      Letzte Ecke entfernen
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="row" style={{ marginBottom: 8 }}>
+                <button className={`btn small${mode === "scale" ? " active" : ""}`} onClick={() => { setMarks([]); setMode(mode === "scale" ? "edit" : "scale"); }}>
+                  Maßstab festlegen
+                </button>
+                <button className={`btn small${mode === "trace" ? " active" : ""}`} onClick={() => { setMarks([]); setMode(mode === "trace" ? "edit" : "trace"); }}>
+                  Nachzeichnen
+                </button>
+                <button
+                  className="btn ghost small danger"
+                  onClick={async () => {
+                    setProject({ project: await api.deleteFloorplan(slug) });
+                    setMode("edit");
+                    setMarks([]);
+                  }}
+                >
+                  Bild entfernen
+                </button>
+              </div>
+              <Field label="Deckkraft">
+                <input type="range" min={0.05} max={1} step={0.05} value={project.floorplan.opacity} onChange={(e) => update((p) => ({ ...p, floorplan: { ...p.floorplan!, opacity: +e.target.value } }))} />
+              </Field>
+              <Field label="Breite (m)">
+                <NumberInput value={project.floorplan.width_m} min={0.2} step={0.1} onChange={(v) => update((p) => ({ ...p, floorplan: { ...p.floorplan!, width_m: v } }))} />
+              </Field>
+              <Field label="Position x / y (m)">
+                <div className="row" style={{ flexWrap: "nowrap" }}>
+                  <NumberInput value={project.floorplan.x} step={0.05} onChange={(v) => update((p) => ({ ...p, floorplan: { ...p.floorplan!, x: v } }))} />
+                  <NumberInput value={project.floorplan.y} step={0.05} onChange={(v) => update((p) => ({ ...p, floorplan: { ...p.floorplan!, y: v } }))} />
+                </div>
+              </Field>
+            </>
+          )}
         </div>
 
         <h3>Vorlage</h3>
@@ -322,7 +474,36 @@ export function RoomView() {
       </div>
       <div className="pane flush" style={{ display: "grid", gridTemplateRows: "minmax(0, 1.1fr) minmax(0, 1fr)", overflow: "hidden" }}>
         <div style={{ position: "relative", borderBottom: "1px solid var(--line)", minHeight: 0, overflow: "hidden" }}>
-          <FloorPlanEditor room={room} onChange={setFloor} />
+          <FloorPlanEditor
+            room={room}
+            onChange={setFloor}
+            mode={mode}
+            marks={marks}
+            imageUrl={project.floorplan ? `/api/projects/${slug}/floorplan?v=${imgVersion}-${project.floorplan.filename}` : null}
+            onPlanClick={(p) => {
+              if (mode === "trace") setMarks((m) => [...m, p]);
+              if (mode === "scale") {
+                const next = [...marks, p].slice(-2);
+                setMarks(next);
+                if (next.length === 2 && project.floorplan) {
+                  const d = Math.hypot(next[1][0] - next[0][0], next[1][1] - next[0][1]);
+                  const real = parseFloat((prompt(`Wie lang ist diese Strecke in Wirklichkeit (m)? Aktuell ${d.toFixed(2)} m`, d.toFixed(2)) ?? "").replace(",", "."));
+                  if (Number.isFinite(real) && real > 0 && d > 0) {
+                    const k = real / d;
+                    update((pr) => {
+                      const f = pr.floorplan!;
+                      // scale around the first point so it stays where it is
+                      pr.floorplan = { ...f, width_m: round(f.width_m * k), x: round(next[0][0] - (next[0][0] - f.x) * k), y: round(next[0][1] - (next[0][1] - f.y) * k) };
+                      return pr;
+                    });
+                    notify(`Maßstab gesetzt (×${k.toFixed(3)})`, "success");
+                  }
+                  setMarks([]);
+                  setMode("edit");
+                }
+              }
+            }}
+          />
           <div className="overlay">
             <span className="badge">Grundriss (Draufsicht)</span>
           </div>

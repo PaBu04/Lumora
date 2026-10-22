@@ -123,6 +123,66 @@ async def activate(request: Request, slug: str):
     return st.session.state()
 
 
+FLOORPLAN_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+@router.post("/projects/{slug}/floorplan")
+async def upload_floorplan(request: Request, slug: str, file: UploadFile = File(...)):
+    """Photo or blueprint to trace the room from; initially scaled to the width of the room."""
+    from PIL import Image, UnidentifiedImageError
+
+    from lsg.model.room import FloorplanImage
+
+    st = state(request)
+    project = _project(st, slug)
+    ext = Path(file.filename or "plan.png").suffix.lower()
+    if ext not in FLOORPLAN_TYPES:
+        raise HTTPException(422, f"unsupported image type {ext!r}")
+    data = await file.read()
+    if len(data) > 30 * 1024 * 1024:
+        raise HTTPException(413, "image larger than 30 MB")
+    try:
+        import io
+
+        with Image.open(io.BytesIO(data)) as img:
+            w, h = img.size
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(422, "not a readable image")
+    pdir = st.projects.project_dir(slug)
+    for old in pdir.glob("floorplan.*"):
+        old.unlink()
+    (pdir / f"floorplan{ext}").write_bytes(data)
+    (x0, y0, _), (x1, _, _) = project.room.bounds
+    project.floorplan = FloorplanImage(filename=f"floorplan{ext}", px_width=w, px_height=h, x=x0, y=y0, width_m=max(1.0, x1 - x0))
+    st.projects.save(slug, project)
+    await st.project_changed(slug)
+    return project
+
+
+@router.get("/projects/{slug}/floorplan")
+def get_floorplan(request: Request, slug: str):
+    st = state(request)
+    project = _project(st, slug)
+    if not project.floorplan:
+        raise _404("floor plan image")
+    path = st.projects.project_dir(slug) / project.floorplan.filename
+    if not path.is_file():
+        raise _404("floor plan image")
+    return FileResponse(path)
+
+
+@router.delete("/projects/{slug}/floorplan")
+async def delete_floorplan(request: Request, slug: str):
+    st = state(request)
+    project = _project(st, slug)
+    for old in st.projects.project_dir(slug).glob("floorplan.*"):
+        old.unlink()
+    project.floorplan = None
+    st.projects.save(slug, project)
+    await st.project_changed(slug)
+    return project
+
+
 @router.get("/projects/{slug}/leds")
 def project_leds(request: Request, slug: str):
     """LED positions for the 3D view (positions flattened x,y,z...)."""

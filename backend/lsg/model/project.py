@@ -4,7 +4,7 @@ from lsg.geometry.sampling import fixture_led_count
 from lsg.model.calibration import LedCalibration, PowerSettings, default_calibration
 from lsg.model.controller import Controller
 from lsg.model.fixture import Fixture, LedType
-from lsg.model.room import Room
+from lsg.model.room import FloorplanImage, Room
 from lsg.model.viewer import Viewer
 
 SCHEMA_VERSION = 1
@@ -19,6 +19,7 @@ class Project(BaseModel):
     controllers: list[Controller] = Field(default_factory=list)
     calibration: dict[LedType, LedCalibration] = Field(default_factory=default_calibration)
     power: PowerSettings = Field(default_factory=PowerSettings)
+    floorplan: FloorplanImage | None = None
 
     @model_validator(mode="after")
     def _fill_calibration(self) -> "Project":

@@ -65,6 +65,12 @@ export const api = {
   saveProject: (slug: string, p: Project) => put<Project>(`/api/projects/${slug}`, p),
   deleteProject: (slug: string) => del(`/api/projects/${slug}`),
   activate: (slug: string) => post<PlaybackState>(`/api/projects/${slug}/activate`),
+  uploadFloorplan: (slug: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return post<Project>(`/api/projects/${slug}/floorplan`, fd);
+  },
+  deleteFloorplan: (slug: string) => del<Project>(`/api/projects/${slug}/floorplan`),
   leds: (slug: string) => get<LedData>(`/api/projects/${slug}/leds`),
   fixturePreview: (f: Fixture) => post<{ count: number; length: number }>("/api/fixtures/preview", f),
 
