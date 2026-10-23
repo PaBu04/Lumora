@@ -36,24 +36,38 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - **Synchronisation:** Sync-Test (Klick auf jeden Beat + LED-Blitz) zum Einstellen von Audio- und Controller-Latenz.
 
 **Musik**
-- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten, Trommeltreffern (Kick, Snare, Hi-Hat),
-  Abschnitten (Intro/Strophe/Refrain/
-  Break/Bridge/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2 und auf 0,1 BPM genau.
-- Optional genauere Beat-Erkennung mit dem neuronalen Modell *beat_this* (`pip install -e ".[ml]"`).
+- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten (3/4 oder 4/4), Abschnitten
+  (Intro/Strophe/Refrain/Break/Bridge/Build-up/Drop/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2 und
+  auf 0,1 BPM genau (bleibt bei einer neuen Analyse erhalten).
+- **Instrumente:** Der Song wird mit dem KI-Modell *Hybrid Demucs* in Schlagzeug, Bass, Gesang und den Rest
+  (Keys, Synths, Gitarren) getrennt (~1 Minute pro Song auf der CPU). Daraus entstehen Instrumentenspuren:
+  Kick/Snare/Hi-Hat/Crash mit Anschlagstärke (Wirbel und Fills so schnell wie gespielt, nicht im Raster),
+  Bass-, Gesangs- und Lead-Noten mit Tonhöhe und Länge, Gesangsphrasen, Drum-Fills, Build-ups, Drops und
+  Passagen ohne Schlagzeug, dazu Lautstärkekurven je Instrument. Ohne PyTorch werden Schlagzeug/Bass/Rest
+  geschätzt (kein Gesang).
+- Genauere Beat- und Takterkennung mit dem neuronalen Modell *beat_this*; beide Modelle kommen mit
+  `pip install -e ".[ml]"` (PyTorch, ca. 1 GB; Modelldaten werden beim ersten Mal geladen).
 - **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –
   wahlweise auf den Ton, den der PC gerade abspielt (Browser, Spotify …; Windows-Loopback), oder auf ein Mikrofon.
 
 **Shows**
 - Grafischer Timeline-Editor: Clips ziehen, kürzen, an Beats/Takte einrasten, Mehrfachauswahl, Kopieren/Einfügen,
   Ebenen; Inspektor mit Reglern, Farbwählern, Paletten und den Modi Wert / Audio / LFO / Keyframes; Ziel-Editor.
-- 16 Effekte, darunter *Hits* (kurze LED-Segmente leuchten auf Kick/Snare/Hi-Hat auf) und *Sweep* (ein Lichtband
-  läuft durch den ganzen Raum, z. B. vom Boden zur Decke, über alle Strips hinweg). Muster lassen sich in Metern
-  entlang der Strips legen (Achse `s`), damit lange und kurze Strips gleich aussehen.
+- 18 Effekte, darunter *Hits* (kurze LED-Segmente leuchten auf Schlägen auf), *Notes* (Noten eines Instruments,
+  Position = Tonhöhe, leuchtet so lange wie der Ton), *Sweep* (ein Lichtband läuft durch den ganzen Raum) und
+  *Rise* (Build-up bis zum Drop). Effekte lassen sich von jeder Instrumentenspur auslösen (Kick, Snare, Bass,
+  Gesang, Lead, Fill, Drop …) und folgen der Anschlagstärke; Auslöser *once* macht aus einem Clip einen
+  einmaligen Cue. Muster lassen sich in Metern entlang der Strips legen (Achse `s`).
+- **Cues einspielen:** Während der Song läuft, per Klick oder Taste 1–7 einzelne Effekte setzen (Blitz,
+  Raumblitz, Ring, Wischer, Funkeln, Rise bis zum nächsten Drop) – rasten auf den nächsten Schlag ein. Eine
+  Musik-Zeile in der Timeline zeigt Drops, Build-ups, Fills und Gesang; Clips rasten dort ein.
+- **Dynamik:** leise Stellen des Songs dunkeln die ganze Show ab, laute bleiben hell.
 - Der Betrachter sieht nicht alle LEDs: Ziele „im Blick“ / „hinter mir“ trennen Detail-Effekte von Raumlicht.
 - Eigene Effekte als Python/numpy-Shader (laufen in einem eigenen Prozess), **Looks** als
   wiederverwendbare Clip-Gruppen mit Zeiten in Beats (vier mitgeliefert, eigene aus jeder Auswahl).
-- Starter-Show aus Songstruktur und Raum: dunkle Grundstimmung, jeder sichtbare Strip mit eigenem Effekt,
-  Trommeltreffer und Raum-Sweeps; die Prüfung warnt vor zu heller oder zu gleichförmiger Show.
+- Starter-Show aus Instrumenten und Raum: jeder sichtbare Strip zeigt ein Instrument (Schlagzeug als kleine
+  Treffer, Gesang/Lead und Bass als Noten), Cues auf Drops, Build-ups, Fills und Crashes, leise Passagen fast
+  dunkel; die Prüfung warnt vor zu heller Show, hellen leisen Stellen, fehlendem Kontrast und Stillstand.
 - 3D-Vorschau mit Bloom und Betrachter-Sicht; alle Bereiche lassen sich an den Trennlinien größer/kleiner ziehen.
 - **Export** als FSEQ-v2-Paket für xLights / Falcon Player (kalibrierte Werte, Audio, Kanal-Zuordnung).
 
@@ -99,6 +113,7 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 | `LSG_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
 | `LSG_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
 | `LSG_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
+| `LSG_STEMS`    | `auto`      | Instrumententrennung: `auto`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
 
 ## Erste Schritte mit echten LEDs
 
@@ -127,7 +142,10 @@ KI-Programme zeigt der Knopf *MCP* oben rechts.
 - Claude Desktop (`claude_desktop_config.json`):
   `{ "mcpServers": { "lightshow": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp"] } } }`
 
-Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effects`, `get_show_format`,
+Die KI bekommt die Instrumentenspuren (wer trägt welchen Abschnitt, Drops, Build-ups, Fills, Noten) und darf den
+Song kurz im Internet recherchieren.
+
+Werkzeuge: `get_overview`, `get_song_analysis`, `get_song_events`, `get_led_positions`, `list_effects`, `get_show_format`,
 `create_show`, `add_clips`, `update_clips`, `remove_clips`, `update_show`, `delete_show`, `validate`,
 `analyze_light`, `analyze_power`, `list_looks`, `apply_look`, `list_show_versions`, `restore_show_version`, `write_shader`,
 `get_shader`, `get_shader_api`, `render_snapshot`, `render_timeline`, `preview`, `playback`.
@@ -150,7 +168,8 @@ Werkzeuge: `get_overview`, `get_song_analysis`, `get_led_positions`, `list_effec
 ```
 
 Helligkeiten sind wahrgenommen: Grundstimmung 0,03–0,15, Akzente 0,6–1,0, nichts unter 0,03. Lange Strips
-hellen den ganzen Raum auf und brauchen weniger. Die vollständige Beschreibung liefert `get_show_format`.
+hellen den ganzen Raum auf und brauchen weniger. `"dynamics": 0.6` auf der Show dunkelt leise Passagen ab;
+Trigger wie `"kick"`, `"vocal"`, `"drop"` oder `"once"` (einmaliger Cue zum Clip-Start). Die vollständige Beschreibung liefert `get_show_format`.
 
 ## Architektur
 
@@ -159,7 +178,8 @@ frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  
 backend/lsg/
   model/      Raum, Fixtures, Controller, Kalibrierung, Betrachter, Songs, Shows
   geometry/   Fixture → LED-Positionen, betrachterbezogene Koordinaten
-  audio/      Analyse (librosa, optional beat_this), Live-Analyse, Bibliothek, Player, Demo-Songs
+  audio/      Analyse (librosa, beat_this), Instrumententrennung (Demucs) und -spuren, Live-Analyse, Bibliothek,
+              Player, Demo-Songs
   render/     Effekte, Parameter, Shader (+ Worker-Prozess), Looks, Engine, Validierung, Snapshots
   output/     Kalibrierkurve, Ausgabe-Pipeline mit Strombegrenzung, DDP, WLED-API/mDNS, FSEQ-Export
   playback/   Takt-Schleife, Testmuster, Sync-Test, Live-Eingang
@@ -173,7 +193,8 @@ Eine einzige Render-Engine erzeugt Vorschau, Live-Ausgabe, Export und KI-Snapsho
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest            # ~100 Unit- und Integrationstests
+.venv\Scripts\python -m pytest            # ~125 Unit- und Integrationstests
+.venv\Scripts\python -m pytest -m ml      # mit den neuronalen Modellen (Demucs)
 .venv\Scripts\python -m pytest -m ui      # Browser-Ende-zu-Ende-Test (braucht gebautes Frontend + Playwright)
 .venv\Scripts\python -m ruff check lsg tests
 cd ..\frontend; npm run lint; npm run typecheck
