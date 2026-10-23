@@ -5,7 +5,7 @@ import { levelForPwm, pwmOf, SERIES } from "../calibration";
 import { LineChart } from "../components/LineChart";
 import { useStore } from "../store";
 import type { LedCalibration, LedType } from "../types";
-import { Field, NumberInput } from "../ui";
+import { Field, Icon, NumberInput } from "../ui";
 
 const TYPE_LABEL: Record<LedType, string> = { ws2812b: "WS2812B", sk6812: "SK6812 (RGB)", sk6812_rgbw: "SK6812 RGBW" };
 const RAW_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32];
@@ -25,12 +25,12 @@ function CurveCharts({ cal }: { cal: LedCalibration }) {
     <>
       <div className="card">
         <strong>PWM-Wert je wahrgenommener Helligkeit</strong>
-        <p className="hint">Shows rechnen mit wahrgenommener Helligkeit; diese Kurve setzt sie in den Wert um, den die LED bekommt.</p>
+        <p className="hint">Wahrgenommene Helligkeit der Show → Wert, den die LED bekommt.</p>
         <LineChart
           x={full.x}
           series={[{ name: "PWM", color: SERIES[0], values: full.y }]}
           yMax={256}
-          height={200}
+          height={150}
           xFormat={pct}
           yFormat={(v) => v.toFixed(0)}
           xLabel="wahrgenommen"
@@ -47,7 +47,7 @@ function CurveCharts({ cal }: { cal: LedCalibration }) {
         <LineChart
           x={dark.x}
           series={[{ name: "PWM", color: SERIES[0], values: dark.y }]}
-          height={170}
+          height={130}
           xFormat={pct}
           yFormat={(v) => v.toFixed(0)}
           xLabel="wahrgenommen"
@@ -55,21 +55,19 @@ function CurveCharts({ cal }: { cal: LedCalibration }) {
           refLines={[{ y: cal.min_level, label: `Mindeststufe ${cal.min_level}`, color: "#a3abbd" }]}
         />
         <table className="grid" style={{ marginTop: 8 }}>
-          <thead>
-            <tr>
-              <th>wahrgenommen</th>
-              {[0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1].map((v) => (
-                <th key={v}>{pct(v)}</th>
-              ))}
-            </tr>
-          </thead>
           <tbody>
-            <tr>
-              <td className="unit">PWM</td>
-              {[0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1].map((v) => (
-                <td key={v}>{pwmOf(v, cal).toFixed(1)}</td>
-              ))}
-            </tr>
+            {[
+              [0.02, 0.05, 0.1, 0.2],
+              [0.3, 0.5, 0.75, 1],
+            ].map((row, i) => (
+              <tr key={i}>
+                {row.map((v) => (
+                  <td key={v} style={{ whiteSpace: "nowrap", padding: "4px 6px" }}>
+                    <span className="unit">{pct(v)}</span>&nbsp;→&nbsp;{pwmOf(v, cal).toFixed(1)}
+                  </td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -139,18 +137,110 @@ function SyncCard() {
   );
 }
 
-function Step({ n, title, children, pattern, onShow, active }: { n: number; title: string; children: React.ReactNode; pattern: string; onShow: (kind: string) => void; active: boolean }) {
+const PATTERN_LABEL: Record<string, string> = {
+  steps: "Mindeststufe",
+  ramp: "Gleichmäßige Stufen",
+  dark: "Dunkle Szenen",
+  white: "Weißabgleich",
+};
+
+function Step({
+  n,
+  title,
+  children,
+  pattern,
+  onShow,
+  onStop,
+  active,
+}: {
+  n: number;
+  title: string;
+  children: React.ReactNode;
+  pattern: string;
+  onShow: (kind: string) => void;
+  onStop: () => void;
+  active: boolean;
+}) {
   return (
-    <div className={`card${active ? " selected" : ""}`}>
+    <div className={`card cal-step${active ? " running" : ""}`}>
       <div className="row between" style={{ marginBottom: 6 }}>
-        <strong>
-          {n}. {title}
+        <strong className="row" style={{ gap: 8 }}>
+          <span className="step-no">{n}</span> {title}
         </strong>
-        <button className={`btn small${active ? " active" : ""}`} onClick={() => onShow(pattern)}>
-          {active ? "Muster läuft" : "Muster zeigen"}
+        <button
+          className={`btn small${active ? " active" : ""}`}
+          title={active ? "Testmuster ausschalten" : "Testmuster dieses Schritts auf dem Test-Strip zeigen"}
+          onClick={() => (active ? onStop() : onShow(pattern))}
+        >
+          <Icon name={active ? "stop" : "play"} /> {active ? "Muster beenden" : "Muster zeigen"}
         </button>
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Where the test patterns appear and which one runs – looks different from the steps on purpose. */
+function OutputBar({
+  live,
+  setLive,
+  fixtures,
+  target,
+  setFixture,
+  running,
+  stop,
+}: {
+  live: boolean;
+  setLive: (live: boolean) => void;
+  fixtures: { id: string; name: string }[];
+  target: string | null;
+  setFixture: (id: string) => void;
+  running: string | null;
+  stop: () => void;
+}) {
+  return (
+    <div className="cal-output">
+      <div className="cal-output-item">
+        <span className="unit">Testmuster erscheinen</span>
+        <div className="seg" role="group" aria-label="Ausgabe der Testmuster">
+          <button className={!live ? "on" : ""} title="Nur in der 3D-Vorschau" onClick={() => setLive(false)}>
+            nur in der Vorschau
+          </button>
+          <button className={live ? "on live" : ""} title="Auch an die echten LEDs senden (gilt für die ganze App, wie „Live“ oben rechts)" onClick={() => setLive(true)}>
+            <span className="dot" /> auf den LEDs
+          </button>
+        </div>
+      </div>
+      <div className="cal-output-item">
+        <span className="unit">auf dem Strip</span>
+        <select value={target ?? ""} style={{ width: 200 }} onChange={(e) => setFixture(e.target.value)}>
+          {fixtures.length === 0 && <option value="">(kein Strip dieses Typs)</option>}
+          {fixtures.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="cal-output-item grow" style={{ justifyContent: "flex-end" }}>
+        {running ? (
+          <>
+            <span className="cal-running">
+              <span className="dot" /> Muster läuft: {PATTERN_LABEL[running] ?? running}
+            </span>
+            <button className="btn small" onClick={stop}>
+              Beenden
+            </button>
+          </>
+        ) : (
+          <span className="unit">Kein Muster aktiv</span>
+        )}
+      </div>
+      {!live && (
+        <p className="hint" style={{ margin: 0, flexBasis: "100%" }}>
+          Zum Kalibrieren „auf den LEDs“ wählen – die Werte lassen sich nur am echten Strip beurteilen, am besten im abgedunkelten Raum.
+        </p>
+      )}
     </div>
   );
 }
@@ -185,9 +275,17 @@ export function CalibrationView() {
   };
   const live = pb?.mode === "live";
   const darkFloor = levelForPwm(cal.min_level + 1, cal);
+  const stop = async () => setPlayback(await api.test(false, null));
+  const setLive = async (on: boolean) => {
+    try {
+      setPlayback(await api.mode(on ? "live" : "preview"));
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+  };
 
   return (
-    <Panes id="calibration" sizes={[null, 400]} className="view">
+    <Panes id="calibration-v2" sizes={[null, 380]} className="view">
       <div className="pane">
         <div className="row between">
           <h2>Kalibrierung</h2>
@@ -201,42 +299,20 @@ export function CalibrationView() {
         </div>
         <p className="hint">
           LEDs werden nicht gleichmäßig heller: Die Stufen 1 → 2 → 3 sind große Sprünge, 254 → 255 sieht man nicht. Die App rechnet deshalb in
-          wahrgenommener Helligkeit und setzt sie hier in PWM-Werte um. Kalibriere einmal pro LED-Typ – am besten im abgedunkelten Raum.
+          wahrgenommener Helligkeit und setzt sie in PWM-Werte um. Kalibriere einmal pro LED-Typ: Schritte 1–4 nacheinander durchgehen, jeweils
+          das Muster zeigen und am Strip einstellen.
         </p>
-        <CurveCharts cal={cal} />
-      </div>
-
-      <div className="pane">
-        <div className="card">
-          <div className="row between" style={{ marginBottom: 8 }}>
-            <strong>Assistent</strong>
-            <div className="row">
-              {!live && (
-                <button className="btn small" onClick={async () => setPlayback(await api.mode("live"))} title="Muster auch an die echten LEDs senden">
-                  An LEDs senden
-                </button>
-              )}
-              {testing && (
-                <button className="btn small active" onClick={async () => setPlayback(await api.test(false, null))}>
-                  Muster beenden
-                </button>
-              )}
-            </div>
-          </div>
-          {!live && <p className="hint">Muster erscheinen in der 3D-Vorschau; für die Kalibrierung „An LEDs senden" aktivieren.</p>}
-          <Field label="Test-Strip">
-            <select value={target ?? ""} onChange={(e) => setFixture(e.target.value)}>
-              {fixtures.length === 0 && <option value="">(kein Strip dieses Typs)</option>}
-              {fixtures.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <Step n={1} title="Mindeststufe finden" pattern="steps" onShow={(k) => show(k)} active={testing?.kind === "steps"}>
+        <OutputBar
+          live={live}
+          setLive={setLive}
+          fixtures={fixtures}
+          target={target}
+          setFixture={setFixture}
+          running={testing ? testing.kind : null}
+          stop={stop}
+        />
+        <div className="cal-steps">
+        <Step n={1} title="Mindeststufe finden" pattern="steps" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "steps"}>
           <p className="hint">
             Der Strip zeigt Segmente mit den Roh-Werten 1, 2, 3, 4, 5, 6, 8 … 255. Welches ist das erste Segment, das klar und farbtreu leuchtet?
           </p>
@@ -249,7 +325,7 @@ export function CalibrationView() {
           </div>
         </Step>
 
-        <Step n={2} title="Gleichmäßige Stufen" pattern="ramp" onShow={(k) => show(k)} active={testing?.kind === "ramp"}>
+        <Step n={2} title="Gleichmäßige Stufen" pattern="ramp" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "ramp"}>
           <p className="hint">8 Segmente mit 12,5 % … 100 % wahrgenommener Helligkeit sollten gleichmäßig ansteigen. Wirken die hellen Segmente zu ähnlich, Gamma erhöhen; wirken die dunklen zu ähnlich, senken.</p>
           <Field label="Kurve">
             <select value={cal.curve} onChange={(e) => set({ curve: e.target.value as LedCalibration["curve"] })}>
@@ -267,7 +343,7 @@ export function CalibrationView() {
           </Field>
         </Step>
 
-        <Step n={3} title="Dunkle Szenen" pattern="dark" onShow={(k) => show(k)} active={testing?.kind === "dark"}>
+        <Step n={3} title="Dunkle Szenen" pattern="dark" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "dark"}>
           <p className="hint">
             Segmente mit 1 %, 2 %, 3 %, 5 %, 7 %, 10 %, 15 %, 20 %. Unter ca. {pct(darkFloor)} liegen die Stufen weniger als einen PWM-Schritt
             auseinander – Dithering verteilt Zwischenwerte räumlich bzw. zeitlich.
@@ -289,7 +365,7 @@ export function CalibrationView() {
           </Field>
         </Step>
 
-        <Step n={4} title="Weißabgleich" pattern="white" onShow={(k) => show(k, { level: whiteLevel })} active={testing?.kind === "white"}>
+        <Step n={4} title="Weißabgleich" pattern="white" onShow={(k) => show(k, { level: whiteLevel })} onStop={stop} active={testing?.kind === "white"}>
           <p className="hint">Weiß sollte neutral wirken (z. B. neben einem weißen Blatt Papier). Den zu starken Kanal reduzieren.</p>
           <Field label={`Helligkeit ${pct(whiteLevel)}`}>
             <input
@@ -353,6 +429,12 @@ export function CalibrationView() {
             <NumberInput value={cal.ma_idle} min={0} max={10} step={0.1} onChange={(v) => set({ ma_idle: v })} />
           </Field>
         </div>
+        </div>
+      </div>
+
+      <div className="pane">
+        <h3 style={{ marginTop: 0 }}>Ergebnis: Helligkeitskurve</h3>
+        <CurveCharts cal={cal} />
       </div>
     </Panes>
   );
