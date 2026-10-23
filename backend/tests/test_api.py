@@ -60,6 +60,27 @@ def test_project_crud(client):
     assert r.json() == {"count": 138, "length": 4.6}
 
 
+def test_copy_project(client):
+    slug = make_project(client)
+    show = client.post(f"/api/projects/{slug}/shows", json={"name": "Leer"}).json()
+    r = client.post("/api/projects", json={"name": "Wohnzimmer Kopie", "copy_from": slug})
+    assert r.status_code == 200, r.text
+    copy = r.json()["slug"]
+    assert copy != slug and client.get("/api/projects").json()["active"] == copy
+    project = client.get(f"/api/projects/{copy}").json()
+    assert project["name"] == "Wohnzimmer Kopie" and [f["id"] for f in project["fixtures"]] == ["front", "ring"]
+    assert [s["id"] for s in client.get(f"/api/projects/{copy}/shows").json()] == [show["id"]]
+    assert len(client.get(f"/api/projects/{copy}/history").json()) == 1  # history starts fresh
+    # changing the copy leaves the original alone
+    project["fixtures"] = project["fixtures"][:1]
+    client.put(f"/api/projects/{copy}", json=project)
+    assert len(client.get(f"/api/projects/{slug}").json()["fixtures"]) == 2
+
+    bare = client.post("/api/projects", json={"name": "Nur Raum", "copy_from": slug, "copy_shows": False}).json()["slug"]
+    assert client.get(f"/api/projects/{bare}/shows").json() == []
+    assert client.post("/api/projects", json={"name": "x", "copy_from": "missing"}).status_code == 404
+
+
 def test_song_show_playback_flow(client):
     slug = make_project(client)
     song = client.post("/api/songs/demo", params={"bpm": 128}).json()

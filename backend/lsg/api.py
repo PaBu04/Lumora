@@ -59,6 +59,8 @@ def _show(st: AppState, slug: str, show_id: str) -> Show:
 class NewProject(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     room: Room | None = None
+    copy_from: str | None = None  # slug of a project to copy
+    copy_shows: bool = True
 
 
 @router.get("/projects")
@@ -77,6 +79,11 @@ def list_projects(request: Request):
 @router.post("/projects")
 async def create_project(request: Request, body: NewProject):
     st = state(request)
+    if body.copy_from:
+        _project(st, body.copy_from)
+        slug = st.projects.copy(body.copy_from, body.name, body.copy_shows)
+        await st.activate_project(slug)
+        return {"slug": slug, "project": st.projects.load(slug)}
     room = body.room or Room(floor=[(0, 0), (5, 0), (5, 4), (0, 4)], height=2.5)
     project = Project(name=body.name, room=room)
     project.viewer.position = ((room.bounds[0][0] + room.bounds[1][0]) / 2, room.bounds[0][1] + 0.5, 1.6)

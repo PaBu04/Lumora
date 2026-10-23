@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "./api";
 import { useStore, type Tab } from "./store";
-import { Icon, Modal } from "./ui";
+import { Field, Icon, Modal } from "./ui";
 // views are loaded on demand so the first paint does not wait for three.js
 const McpInfo = lazy(() => import("./views/AiView").then((m) => ({ default: m.McpInfo })));
 const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
@@ -41,11 +41,82 @@ function Welcome() {
   );
 }
 
+/** New room: empty, or a copy of an existing one (to try a variant without touching the original). */
+function NewProjectDialog({ onClose }: { onClose: () => void }) {
+  const projects = useStore((s) => s.projects);
+  const current = useStore((s) => s.slug);
+  const create = useStore((s) => s.createProject);
+  const notify = useStore((s) => s.notify);
+  const [source, setSource] = useState("");
+  const [shows, setShows] = useState(true);
+  const [name, setName] = useState("Neuer Raum");
+  const [busy, setBusy] = useState(false);
+  const pick = (slug: string) => {
+    setSource(slug);
+    const from = projects.find((p) => p.slug === slug);
+    setName(from ? `${from.name} (Kopie)` : "Neuer Raum");
+  };
+  const submit = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try {
+      await create(name.trim(), source || undefined, shows);
+      onClose();
+    } catch (e) {
+      notify((e as Error).message, "error");
+      setBusy(false);
+    }
+  };
+  const ordered = [...projects].sort((a, b) => (a.slug === current ? -1 : b.slug === current ? 1 : 0));
+  return (
+    <Modal title="Neuer Raum" onClose={onClose} width={460}>
+      <div className="list new-project">
+        <label className={`list-item${source === "" ? " active" : ""}`}>
+          <input type="radio" name="source" checked={source === ""} onChange={() => pick("")} />
+          <div className="grow">
+            <div>Leerer Raum</div>
+            <div className="meta">Grundriss, Strips und Controller neu anlegen</div>
+          </div>
+        </label>
+        {ordered
+          .filter((p) => !p.error)
+          .map((p) => (
+            <label key={p.slug} className={`list-item${source === p.slug ? " active" : ""}`}>
+              <input type="radio" name="source" checked={source === p.slug} onChange={() => pick(p.slug)} />
+              <div className="grow">
+                <div>Kopie von „{p.name}“</div>
+                <div className="meta">
+                  Raum, {p.fixtures} Strips, {p.controllers} Controller, Kalibrierung
+                </div>
+              </div>
+            </label>
+          ))}
+      </div>
+      {source && (
+        <label className="row" style={{ margin: "10px 0 0" }}>
+          <input type="checkbox" checked={shows} onChange={(e) => setShows(e.target.checked)} /> Shows mitkopieren
+        </label>
+      )}
+      <Field label="Name">
+        <input type="text" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+      </Field>
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
+        <button className="btn" onClick={onClose}>
+          Abbrechen
+        </button>
+        <button className="btn primary" disabled={!name.trim() || busy} onClick={submit}>
+          {source ? "Kopie anlegen" : "Anlegen"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function ProjectSwitcher() {
   const projects = useStore((s) => s.projects);
   const slug = useStore((s) => s.slug);
   const open = useStore((s) => s.openProject);
-  const create = useStore((s) => s.createProject);
+  const [creating, setCreating] = useState(false);
   if (!slug) return null;
   return (
     <div className="row">
@@ -54,8 +125,7 @@ function ProjectSwitcher() {
         style={{ width: 200 }}
         onChange={async (e) => {
           if (e.target.value === "__new__") {
-            const name = prompt("Name des neuen Projekts", "Neuer Raum");
-            if (name) await create(name);
+            setCreating(true);
             return;
           }
           await open(e.target.value);
@@ -66,8 +136,9 @@ function ProjectSwitcher() {
             {p.name}
           </option>
         ))}
-        <option value="__new__">+ Neues Projekt…</option>
+        <option value="__new__">+ Neuer Raum…</option>
       </select>
+      {creating && <NewProjectDialog onClose={() => setCreating(false)} />}
     </div>
   );
 }

@@ -12,7 +12,7 @@ interface Toast {
 
 interface AppStore {
   tab: Tab;
-  projects: { slug: string; name: string; fixtures: number; controllers: number }[];
+  projects: { slug: string; name: string; fixtures: number; controllers: number; error?: string }[];
   slug: string | null;
   project: Project | null;
   leds: LedData | null;
@@ -39,7 +39,7 @@ interface AppStore {
   dismiss: (id: number) => void;
   init: () => Promise<void>;
   openProject: (slug: string) => Promise<void>;
-  createProject: (name: string) => Promise<void>;
+  createProject: (name: string, copyFrom?: string, copyShows?: boolean) => Promise<void>;
   updateProject: (fn: (p: Project) => Project) => void;
   reloadProject: () => Promise<void>;
   refreshLeds: () => Promise<void>;
@@ -129,8 +129,8 @@ export const useStore = create<AppStore>((set, get) => ({
     await api.activate(slug);
   },
 
-  createProject: async (name) => {
-    const { slug } = await api.createProject(name);
+  createProject: async (name, copyFrom, copyShows) => {
+    const { slug } = await api.createProject(name, copyFrom, copyShows);
     await get().refreshProjects();
     await get().openProject(slug);
     get().notify(`Projekt „${name}" angelegt`, "success");

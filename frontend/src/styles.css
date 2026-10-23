@@ -294,3 +294,5 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .cal-step.running { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2) inset; }
 .step-no { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-4); color: var(--text-2); font-size: 12px; }
 .cal-step.running .step-no { background: var(--accent-strong); color: #fff; }
+.new-project .list-item { cursor: pointer; }
+.new-project input[type="radio"] { accent-color: var(--accent); flex: none; }

@@ -17,6 +17,7 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - Betrachter (im Reiter *Raum*) mit Position und Blickrichtung: Effekte können „von links nach rechts durchs
   Blickfeld“ laufen.
 - Rückgängig/Wiederholen (Strg+Z / Strg+Y) und ein Versionsverlauf mit Wiederherstellen.
+- Neuer Raum leer oder als Kopie eines bestehenden (Raum, Strips, Controller, Kalibrierung, wahlweise mit Shows).
 
 **Hardware**
 - WLED-Controller per mDNS finden, Strips Pixelbereichen zuordnen, Testmuster, Live-Ausgabe per DDP (~50 FPS).
@@ -45,6 +46,9 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
   Bass-, Gesangs- und Lead-Noten mit Tonhöhe und Länge, Gesangsphrasen, Drum-Fills, Build-ups, Drops und
   Passagen ohne Schlagzeug, dazu Lautstärkekurven je Instrument. Ohne PyTorch werden Schlagzeug/Bass/Rest
   geschätzt (kein Gesang).
+- Songs lassen sich im Reiter *Songs* abspielen (auch langsamer): Ein Positionsanzeiger läuft über Waveform und
+  Instrumentenspuren (ganzer Song oder mitlaufender 30-/10-s-Ausschnitt), und Anzeigen leuchten auf, sobald Kick,
+  Snare, Bass, Gesang, Fill oder Drop erkannt sind – so lässt sich die Analyse mit dem Ohr prüfen.
 - Genauere Beat- und Takterkennung mit dem neuronalen Modell *beat_this*; beide Modelle kommen mit
   `pip install -e ".[ml]"` (PyTorch, ca. 1 GB; Modelldaten werden beim ersten Mal geladen).
 - **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –

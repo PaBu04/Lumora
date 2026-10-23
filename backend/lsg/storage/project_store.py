@@ -51,6 +51,31 @@ class ProjectStore:
         self.save(slug, project, "system")
         return slug
 
+    def copy(self, source: str, name: str, shows: bool = True) -> str:
+        """New project from an existing one: room, LED strips, controllers, calibration, floor plan image,
+        shaders and looks, optionally the shows. The project's own version history starts fresh."""
+        import shutil
+
+        src = self.project_dir(source)
+        project = self.load(source)
+        project.name = name
+        base = slugify(name)
+        slug, n = base, 2
+        while self.project_dir(slug).exists():
+            slug, n = f"{base}-{n}", n + 1
+
+        def ignore(folder: str, names: list[str]) -> set[str]:
+            if Path(folder) != src:
+                return {x for x in names if x.endswith(".tmp")}
+            skip = {"history", PROJECT_FILE} | {x for x in names if x.endswith(".tmp")}
+            return skip | ({"shows"} if not shows else set())
+
+        shutil.copytree(src, self.project_dir(slug), ignore=ignore)
+        for sub in SUBDIRS:
+            (self.project_dir(slug) / sub).mkdir(exist_ok=True)
+        self.save(slug, project, "system")
+        return slug
+
     def load(self, slug: str) -> Project:
         text = (self.project_dir(slug) / PROJECT_FILE).read_text(encoding="utf-8")
         return Project.model_validate_json(text)
