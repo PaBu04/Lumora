@@ -1,7 +1,7 @@
 import { Panes } from "../components/Panes";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
+import { activity, InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
 import { SECTION_COLORS, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
@@ -67,6 +67,193 @@ function TempoEditor({ song, analysis, onChange }: { song: Song; analysis: Analy
   );
 }
 
+const NOW: { track: string; label: string; color: string }[] = [
+  { track: "kick", label: "Kick", color: "#f87171" },
+  { track: "snare", label: "Snare", color: "#facc15" },
+  { track: "hihat", label: "Hi-Hat", color: "#94a3b8" },
+  { track: "crash", label: "Crash", color: MOMENT_COLORS.crash },
+  { track: "bass", label: "Bass", color: "#a78bfa" },
+  { track: "vocal", label: "Gesang", color: "#2dd4bf" },
+  { track: "lead", label: "Keys / Synth", color: "#60a5fa" },
+  { track: "fill", label: "Fill", color: MOMENT_COLORS.fill },
+  { track: "build", label: "Build-up", color: MOMENT_COLORS.build },
+  { track: "drop", label: "Drop", color: MOMENT_COLORS.drop },
+];
+const ZOOMS: { value: number; label: string }[] = [
+  { value: 0, label: "ganzer Song" },
+  { value: 30, label: "30 s" },
+  { value: 10, label: "10 s" },
+];
+
+function savedZoom(): number {
+  try {
+    return Number(localStorage.getItem("lsg.songs.zoom") ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Plays the song in the browser with a running playhead, so the detected instruments can be checked by ear.
+ * Does not touch the LEDs; a running show is paused. */
+function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const setPlayback = useStore((s) => s.setPlayback);
+  const [playing, setPlaying] = useState(false);
+  const [t, setT] = useState(0);
+  const [rate, setRate] = useState(1);
+  const [zoom, setZoom] = useState(savedZoom);
+  const duration = song.duration || analysis?.duration || 0;
+
+  useEffect(() => {
+    setPlaying(false);
+    setT(0);
+  }, [song.id]);
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => {
+      if (audio.current) setT(audio.current.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+  useEffect(() => {
+    if (audio.current) audio.current.playbackRate = rate;
+  }, [rate, song.id]);
+
+  const toggle = async () => {
+    const a = audio.current;
+    if (!a) return;
+    if (!a.paused) return a.pause();
+    if (useStore.getState().playback?.playing) setPlayback(await api.pause()); // never two songs at once
+    a.playbackRate = rate;
+    await a.play();
+  };
+  const seek = (s: number) => {
+    const a = audio.current;
+    if (!a) return;
+    a.currentTime = Math.max(0, Math.min(duration, s));
+    setT(a.currentTime);
+  };
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || (e.target as HTMLElement).closest("input, textarea, select, button")) return;
+      e.preventDefault();
+      void toggleRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const tracks = analysis?.tracks ?? {};
+  const hasTracks = Object.keys(tracks).length > 0;
+  // zoomed: the window runs with the playhead, a quarter of it already played
+  const from = zoom && duration > zoom ? Math.max(0, Math.min(duration - zoom, t - zoom * 0.25)) : 0;
+  const range: [number, number] | undefined = zoom && duration > zoom ? [from, from + zoom] : undefined;
+  const section = analysis?.sections.find((s) => t >= s.start && t < s.end);
+
+  return (
+    <>
+      <audio
+        ref={audio}
+        src={`/api/songs/${song.id}/audio`}
+        preload="auto"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onSeeked={(e) => setT(e.currentTarget.currentTime)}
+      />
+      <div className="song-transport">
+        <button className="btn icon" title="Abspielen / Pause (Leertaste)" onClick={() => void toggle()}>
+          <Icon name={playing ? "pause" : "play"} />
+        </button>
+        <button className="btn icon" title="Zum Anfang" onClick={() => (audio.current?.pause(), seek(0))}>
+          <Icon name="stop" />
+        </button>
+        <span className="time">
+          {formatTime(t)} / {formatTime(duration)}
+        </span>
+        {section && (
+          <span className="row unit" style={{ gap: 4 }}>
+            <span className="swatch" style={{ background: SECTION_COLORS[section.name] ?? "#64748b" }} /> {section.name} {section.label}
+          </span>
+        )}
+        <span className="grow" />
+        <select
+          value={rate}
+          title="Abspieltempo – langsamer hilft, einzelne Schläge zu prüfen"
+          style={{ width: 100, flex: "none" }}
+          onChange={(e) => setRate(+e.target.value)}
+        >
+          {[1, 0.75, 0.5].map((r) => (
+            <option key={r} value={r}>
+              Tempo {String(r).replace(".", ",")}×
+            </option>
+          ))}
+        </select>
+        {hasTracks && (
+          <div className="seg" role="group" aria-label="Ausschnitt der Instrumente">
+            {ZOOMS.map((z) => (
+              <button
+                key={z.value}
+                className={zoom === z.value ? "on" : ""}
+                title={z.value ? `Instrumente: ${z.label} um die Abspielposition, läuft mit` : "Instrumente: ganzer Song"}
+                onClick={() => {
+                  setZoom(z.value);
+                  try {
+                    localStorage.setItem("lsg.songs.zoom", String(z.value));
+                  } catch {
+                    /* no storage */
+                  }
+                }}
+              >
+                {z.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="card" style={{ padding: 8 }}>
+        <Waveform analysis={analysis} duration={duration} height={150} curves position={t} onSeek={seek} />
+      </div>
+      {analysis && hasTracks && (
+        <>
+          <h3>Instrumente</h3>
+          <div className="now-chips" title="Was die Analyse an der Abspielposition erkannt hat">
+            {NOW.map((n) => {
+              const a = activity(tracks[n.track], t);
+              const lit = a > 0.02;
+              return (
+                <span
+                  key={n.track}
+                  className="now-chip"
+                  style={
+                    lit
+                      ? {
+                          background: `color-mix(in srgb, ${n.color} ${Math.round(15 + 70 * a)}%, transparent)`,
+                          borderColor: n.color,
+                          color: a > 0.4 ? "#fff" : undefined,
+                        }
+                      : undefined
+                  }
+                >
+                  <span className="swatch" style={{ background: n.color }} /> {n.label}
+                </span>
+              );
+            })}
+          </div>
+          <div className="card" style={{ padding: 8 }}>
+            <InstrumentLanes analysis={analysis} duration={duration} position={t} range={range} onSeek={seek} />
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function SongDetail({ song }: { song: Song }) {
   const refreshSongs = useStore((s) => s.refreshSongs);
   const notify = useStore((s) => s.notify);
@@ -121,15 +308,9 @@ function SongDetail({ song }: { song: Song }) {
       )}
       {song.status === "error" && <div className="banner err">Analyse fehlgeschlagen: {song.error}</div>}
       {analysis?.beat_note && <div className="banner info">Hinweis zur Beat-Erkennung: {analysis.beat_note}</div>}
-      <div className="card" style={{ padding: 8 }}>
-        <Waveform analysis={analysis} duration={song.duration} height={150} curves />
-      </div>
+      <SongPlayer song={song} analysis={analysis} />
       {analysis && (analysis.tracks && Object.keys(analysis.tracks).length ? (
         <>
-          <h3>Instrumente</h3>
-          <div className="card" style={{ padding: 8 }}>
-            <InstrumentLanes analysis={analysis} duration={song.duration} />
-          </div>
           <div className="row" style={{ marginBottom: 12 }}>
             {Object.entries(MOMENT_LABELS).map(([k, label]) => (
               <span key={k} className="row unit">

@@ -24,33 +24,68 @@ const LANES: {
   label: string;
   color: string;
   curve?: "drums" | "bass" | "vocals" | "other";
+  /** tracks that light the label up at the playhead */
+  active: string[];
 }[] = [
-  { name: "drums", label: "Schlagzeug", color: "#f87171", curve: "drums" },
-  { name: "bass", label: "Bass", color: "#a78bfa", curve: "bass" },
-  { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals" },
-  { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other" },
-  { name: "moments", label: "Momente", color: "#fbbf24" },
+  { name: "drums", label: "Schlagzeug", color: "#f87171", curve: "drums", active: ["kick", "snare", "hihat", "crash"] },
+  { name: "bass", label: "Bass", color: "#a78bfa", curve: "bass", active: ["bass"] },
+  { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals", active: ["vocal"] },
+  { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["lead"] },
+  { name: "moments", label: "Momente", color: "#fbbf24", active: ["fill", "drop", "build"] },
 ];
 const LANE_H = 30;
 const LABEL_W = 92;
+const HIT_DECAY = 0.15; // seconds a hit keeps glowing
+
+/** Index of the first event at or after t (events are sorted by time). */
+function lowerBound(evs: Ev[], t: number): number {
+  let lo = 0,
+    hi = evs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (evs[mid][0] < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** How strongly a track sounds at t: a held note, or a hit fading out (0..1). */
+export function activity(evs: Ev[] | undefined, t: number): number {
+  if (!evs?.length) return 0;
+  let a = 0;
+  // notes can be long, so look back a few events
+  for (let i = lowerBound(evs, t + 1e-6) - 1, n = 0; i >= 0 && n < 24; i--, n++) {
+    const [s, v, d] = evs[i];
+    if (t - s > 30) break;
+    const end = s + Math.max(d, 0);
+    const level = t <= end ? v : v * Math.exp(-(t - end) / HIT_DECAY);
+    a = Math.max(a, level);
+  }
+  return Math.min(1, a);
+}
 
 /** What each instrument does over time: loudness as a soft band, hits as ticks, notes at their pitch,
- * and the single moments (build-ups, drops, fills, crashes). */
+ * and the single moments (build-ups, drops, fills, crashes). `range` shows only that window of the song;
+ * while a position is given the labels light up with what sounds there. */
 export function InstrumentLanes({
   analysis,
   duration,
   position,
+  range,
   onSeek,
 }: {
   analysis: Analysis;
   duration: number;
   position?: number;
+  range?: [number, number];
   onSeek?: (t: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const dur = duration || analysis.duration || 1;
+  const [t0, t1] = range ?? [0, dur];
 
   useEffect(() => {
-    const tracks = analysis.tracks ?? {};
+    const tracks = (analysis.tracks ?? {}) as Record<string, Ev[]>;
     const c = canvas.current;
     if (!c) return;
     const draw = () => {
@@ -63,55 +98,59 @@ export function InstrumentLanes({
       const g = c.getContext("2d")!;
       g.scale(dpr, dpr);
       g.clearRect(0, 0, W, H);
-      const dur = duration || analysis.duration || 1;
+      const span = Math.max(t1 - t0, 1e-3);
       const w = W - LABEL_W;
-      const x = (t: number) => LABEL_W + (t / dur) * w;
+      const x = (t: number) => LABEL_W + ((t - t0) / span) * w;
+      const len = (d: number) => (d / span) * w;
+      const visible = (name: string, pad = 0) => {
+        const evs = tracks[name] ?? [];
+        // long notes and build-ups start before the window
+        return evs.slice(lowerBound(evs, t0 - pad - 30), lowerBound(evs, t1 + pad)).filter((e) => e[0] + e[2] >= t0 - pad);
+      };
       const fr = analysis.frame_rate;
       g.font = "11px system-ui";
+      // beat grid when there is room for it
+      const beats = analysis.beats.filter((b) => b >= t0 && b <= t1);
+      if (beats.length && w / beats.length > 6) {
+        g.fillStyle = "rgba(255,255,255,0.05)";
+        for (const b of beats) g.fillRect(x(b), 0, 1, H);
+      }
+      g.fillStyle = "rgba(255,255,255,0.13)";
+      for (const b of analysis.downbeats) if (b >= t0 && b <= t1) g.fillRect(x(b), 0, 1, H);
+
       LANES.forEach((lane, li) => {
         const y0 = li * LANE_H;
-        g.fillStyle =
-          li % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)";
+        g.fillStyle = li % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)";
         g.fillRect(0, y0, W, LANE_H);
-        g.fillStyle = "#9aa4b8";
-        g.fillText(lane.label, 6, y0 + LANE_H / 2 + 4);
+        g.save(); // notes and build-ups starting before the window must not run into the label
+        g.beginPath();
+        g.rect(LABEL_W, y0, w, LANE_H);
+        g.clip();
         // instrument loudness as a soft band from the bottom
         const curve = lane.curve ? analysis.features[lane.curve] : undefined;
         if (curve) {
           g.fillStyle = lane.color + "30";
           const step = 2;
           for (let px = 0; px < w; px += step) {
-            const i0 = Math.floor((px / w) * dur * fr);
-            const i1 = Math.max(
-              i0 + 1,
-              Math.floor(((px + step) / w) * dur * fr),
-            );
+            const i0 = Math.floor((t0 + (px / w) * span) * fr);
+            const i1 = Math.max(i0 + 1, Math.floor((t0 + ((px + step) / w) * span) * fr));
             let m = 0;
-            for (let i = i0; i < i1 && i < curve.length; i++)
-              m = Math.max(m, curve[i]);
+            for (let i = Math.max(0, i0); i < i1 && i < curve.length; i++) m = Math.max(m, curve[i]);
             const hh = m * (LANE_H - 4);
             g.fillRect(LABEL_W + px, y0 + LANE_H - 2 - hh, step, hh);
           }
         }
         const notes = (name: string, color: string, lo: number, hi: number) => {
-          const evs = (tracks[name] ?? []) as Ev[];
           g.fillStyle = color;
-          for (const [t, v, d, p] of evs) {
-            const y =
-              p > 0
-                ? y0 +
-                  LANE_H -
-                  4 -
-                  ((Math.min(hi, Math.max(lo, p)) - lo) / (hi - lo)) *
-                    (LANE_H - 8)
-                : y0 + LANE_H / 2;
+          for (const [t, v, d, p] of visible(name)) {
+            const y = p > 0 ? y0 + LANE_H - 4 - ((Math.min(hi, Math.max(lo, p)) - lo) / (hi - lo)) * (LANE_H - 8) : y0 + LANE_H / 2;
             g.globalAlpha = 0.35 + 0.65 * v;
-            g.fillRect(x(t), y - 1, Math.max(1.5, (d / dur) * w), 2.5);
+            g.fillRect(x(t), y - 1, Math.max(1.5, len(d)), 2.5);
           }
           g.globalAlpha = 1;
         };
         const pitchRange = (name: string): [number, number] => {
-          const ps = ((tracks[name] ?? []) as Ev[])
+          const ps = (tracks[name] ?? [])
             .map((e) => e[3])
             .filter((p) => p > 0)
             .sort((a, b) => a - b);
@@ -120,6 +159,7 @@ export function InstrumentLanes({
             hi = ps[Math.floor(ps.length * 0.95)];
           return [lo, Math.max(hi, lo + 5)];
         };
+        const tick = Math.max(1, Math.min(3, len(0.03)));
         if (lane.name === "drums") {
           for (const [name, col, top, bot] of [
             ["hihat", "#94a3b8", 0.1, 0.3],
@@ -128,21 +168,20 @@ export function InstrumentLanes({
             ["crash", "#fde047", 0.05, 0.95],
           ] as const) {
             g.fillStyle = col;
-            for (const [t, v] of (tracks[name] ?? []) as Ev[]) {
+            for (const [t, v] of visible(name)) {
               g.globalAlpha = 0.3 + 0.7 * v;
-              g.fillRect(x(t), y0 + top * LANE_H, 1, (bot - top) * LANE_H);
+              g.fillRect(x(t), y0 + top * LANE_H, tick, (bot - top) * LANE_H);
             }
           }
           g.globalAlpha = 1;
         } else if (lane.name === "vocal") {
           g.fillStyle = MOMENT_COLORS.phrase + "38";
-          for (const [t, , d] of (tracks.phrase ?? []) as Ev[])
-            g.fillRect(x(t), y0 + 2, (d / dur) * w, LANE_H - 4);
+          for (const [t, , d] of visible("phrase")) g.fillRect(x(t), y0 + 2, len(d), LANE_H - 4);
           notes("vocal", lane.color, ...pitchRange("vocal"));
         } else if (lane.name === "bass" || lane.name === "lead") {
           notes(lane.name, lane.color, ...pitchRange(lane.name));
         } else if (lane.name === "moments") {
-          for (const [t, v, d] of (tracks.build ?? []) as Ev[]) {
+          for (const [t, v, d] of visible("build")) {
             const grd = g.createLinearGradient(x(t), 0, x(t + d), 0);
             grd.addColorStop(0, MOMENT_COLORS.build + "00");
             grd.addColorStop(1, MOMENT_COLORS.build + "cc");
@@ -154,15 +193,14 @@ export function InstrumentLanes({
             g.fill();
           }
           g.fillStyle = MOMENT_COLORS.fill;
-          for (const [t, v, d] of (tracks.fill ?? []) as Ev[]) {
+          for (const [t, v, d] of visible("fill")) {
             g.globalAlpha = 0.4 + 0.6 * v;
-            g.fillRect(x(t), y0 + LANE_H - 9, Math.max(2, (d / dur) * w), 6);
+            g.fillRect(x(t), y0 + LANE_H - 9, Math.max(2, len(d)), 6);
           }
           g.globalAlpha = 1;
           g.fillStyle = MOMENT_COLORS.crash;
-          for (const [t] of (tracks.crash ?? []) as Ev[])
-            g.fillRect(x(t) - 1, y0 + 3, 2, 7);
-          for (const [t, v] of (tracks.drop ?? []) as Ev[]) {
+          for (const [t] of visible("crash")) g.fillRect(x(t) - 1, y0 + 3, 2, 7);
+          for (const [t, v] of visible("drop")) {
             g.fillStyle = MOMENT_COLORS.drop;
             g.globalAlpha = 0.4 + 0.6 * v;
             g.fillRect(x(t) - 1, y0 + 1, 2.5, LANE_H - 2);
@@ -170,8 +208,19 @@ export function InstrumentLanes({
             if (v >= 0.8) g.fillText("Drop", x(t) + 4, y0 + 12);
           }
         }
+        g.restore();
+        // label, lit by what sounds at the playhead
+        const a = position === undefined ? 0 : Math.max(...lane.active.map((k) => activity(tracks[k], position)));
+        if (a > 0.02) {
+          g.fillStyle = lane.color;
+          g.globalAlpha = 0.15 + 0.6 * a;
+          g.fillRect(0, y0 + 1, LABEL_W - 4, LANE_H - 2);
+          g.globalAlpha = 1;
+        }
+        g.fillStyle = a > 0.3 ? "#fff" : "#9aa4b8";
+        g.fillText(lane.label, 6, y0 + LANE_H / 2 + 4);
       });
-      if (position !== undefined) {
+      if (position !== undefined && position >= t0 && position <= t1) {
         g.fillStyle = "#fff";
         g.fillRect(x(position) - 0.5, 0, 1.5, H);
       }
@@ -180,7 +229,7 @@ export function InstrumentLanes({
     const ro = new ResizeObserver(draw);
     ro.observe(c);
     return () => ro.disconnect();
-  }, [analysis, duration, position]);
+  }, [analysis, t0, t1, position]);
 
   return (
     <canvas
@@ -192,11 +241,11 @@ export function InstrumentLanes({
         display: "block",
         cursor: onSeek ? "pointer" : "default",
       }}
-      onClick={(e) => {
+      onPointerDown={(e) => {
         if (!onSeek) return;
         const r = e.currentTarget.getBoundingClientRect();
         const f = (e.clientX - r.left - LABEL_W) / (r.width - LABEL_W);
-        if (f >= 0) onSeek(f * (duration || analysis.duration));
+        if (f >= 0) onSeek(Math.min(dur, t0 + f * (t1 - t0)));
       }}
     />
   );

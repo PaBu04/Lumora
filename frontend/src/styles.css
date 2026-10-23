@@ -281,3 +281,6 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .cue-pads input[type=color] { width: 30px; height: 24px; padding: 0; border: none; background: none; flex: none; }
 .tl-music { background: rgba(255,255,255,0.02); cursor: pointer; }
 .tl-moment { position: absolute; pointer-events: auto; border-radius: 1px; }
+.song-transport { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.now-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.now-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--bg-3); color: var(--text-2); font-size: 12px; }
