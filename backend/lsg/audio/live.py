@@ -17,7 +17,7 @@ from collections import deque
 
 import numpy as np
 
-from lsg.audio.features import FEATURE_NAMES, HIT_KINDS, AudioFrame
+from lsg.audio.features import FEATURE_NAMES, HIT_KINDS, NO_EVENTS, AudioFrame, Events
 from lsg.model.song import Section
 
 HOP_SECONDS = 1 / 86.0
@@ -208,8 +208,8 @@ class LiveAudioFeatures:
         return self._period
 
     def level(self, name: str, t: float) -> float:
-        if name == "rms":
-            return self.levels["rms"]
+        if name == "loudness":
+            return self._smooth_energy
         return self.levels.get(name, 0.0)
 
     def beat_position(self, t: float) -> float:
@@ -231,6 +231,14 @@ class LiveAudioFeatures:
         last = t - (pos % 1.0) * period
         marks = last - np.arange(int(window / period) + 1) * period
         return marks[marks >= t - window][::-1]
+
+    def events(self, kind: str, t: float, window: float) -> Events:
+        if kind in ("beat", "bar", "onset", *HIT_KINDS):
+            return Events.of_times(self.recent(kind, t, window))
+        return NO_EVENTS  # instrument tracks need the offline analysis
+
+    def pitch_range(self, kind: str) -> tuple[float, float]:
+        return (36.0, 84.0)
 
     def _since_hit(self, kind: str, t: float) -> float:
         past = [o for o in self.hits[kind] if o <= t]
@@ -261,6 +269,7 @@ class LiveAudioFeatures:
             section="live",
             section_label="L",
             section_energy=self._smooth_energy,
+            loudness=self._smooth_energy,
         )
 
 

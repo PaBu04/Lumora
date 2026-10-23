@@ -78,6 +78,8 @@ class Show(BaseModel):
     song_id: str | None = None
     duration: float | None = Field(default=None, gt=0, description="defaults to the song duration")
     master: float = Field(default=1.0, ge=0, le=1)
+    # 0..1: how much quiet passages of the song darken the whole show (1 = quiet parts nearly dark)
+    dynamics: float = Field(default=0.0, ge=0, le=1)
     layers: list[Layer] = Field(default_factory=list)
 
     def clips(self):

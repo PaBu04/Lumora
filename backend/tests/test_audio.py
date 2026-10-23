@@ -13,7 +13,8 @@ def test_analysis_finds_tempo_and_beats(demo_analysis):
     err = ((beats / 0.5 + 0.5) % 1 - 0.5) * 0.5
     assert np.median(np.abs(err)) < 0.04
     assert len(a.downbeats) >= 6
-    assert set(a.features) == {"rms", "low", "mid", "high", "onset"}
+    assert {"rms", "low", "mid", "high", "onset", "drums", "bass", "density", "tension", "loudness"} <= set(a.features)
+    assert a.version == 2 and a.stems == "approx" and a.beats_per_bar == 4
     assert all(0 <= v <= 1 for v in a.features["rms"])
     assert a.sections[0].start == 0 and a.sections[-1].end == pytest.approx(a.duration)
 
@@ -40,7 +41,7 @@ def test_features_without_analysis():
 
 def test_library_roundtrip(tmp_path, demo_analysis):
     path, _ = demo_analysis
-    lib = SongLibrary(tmp_path)
+    lib = SongLibrary(tmp_path, stems=lambda: "approx")
     song = lib.add_file(path, title="Demo", artist="LSG")
     assert song.duration > 10 and song.status == "pending"
     assert [s.id for s in lib.list()] == [song.id]

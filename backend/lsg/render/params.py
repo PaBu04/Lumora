@@ -25,6 +25,14 @@ AUDIO_SOURCES = (
     "bar_decay",
     "onset_decay",
     "section_energy",
+    # instruments (separated stems) and song shape
+    "drums",
+    "bass",
+    "vocals",
+    "other",
+    "density",
+    "tension",
+    "loudness",
 )
 LFO_SHAPES = ("sine", "triangle", "saw", "square")
 EASES = ("linear", "smooth", "step")

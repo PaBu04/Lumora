@@ -28,12 +28,16 @@ def _flux(spec: np.ndarray, freqs: np.ndarray, lo: float, hi: float, mean: bool 
     return (rise.mean(axis=0) if mean else rise.sum(axis=0)).astype(np.float32)
 
 
-def pick_peaks(curve: np.ndarray, rate: float, min_gap: float, sensitivity: float = 1.0, strength: float = 0.2) -> np.ndarray:
+def pick_peaks(
+    curve: np.ndarray, rate: float, min_gap: float, sensitivity: float = 1.0, strength: float = 0.2, velocity: bool = False
+):
     """Times of local maxima that stand out from their surroundings and reach `strength` x the
-    typical strong hit of the whole song."""
+    typical strong hit of the whole song. velocity=True also returns each peak's height relative
+    to that typical strong hit (0..1)."""
     n = len(curve)
+    empty = np.zeros(0)
     if n < 3:
-        return np.zeros(0)
+        return (empty, empty) if velocity else empty
     w = max(1, round(0.4 * rate))  # local context +-0.4 s
     kernel = np.ones(2 * w + 1) / (2 * w + 1)
     mean = np.convolve(curve, kernel, mode="same")
@@ -42,7 +46,7 @@ def pick_peaks(curve: np.ndarray, rate: float, min_gap: float, sensitivity: floa
     is_peak = (curve[1:-1] > curve[:-2]) & (curve[1:-1] >= curve[2:]) & (curve[1:-1] > thresh[1:-1])
     idx = np.flatnonzero(is_peak) + 1
     if len(idx) == 0:
-        return np.zeros(0)
+        return (empty, empty) if velocity else empty
     strong = np.percentile(curve[idx], 90)
     idx = idx[curve[idx] >= strength * strong]
     gap = max(1, round(min_gap * rate))
@@ -50,7 +54,11 @@ def pick_peaks(curve: np.ndarray, rate: float, min_gap: float, sensitivity: floa
     for i in idx[np.argsort(-curve[idx])]:  # strongest first, then suppress neighbours
         if all(abs(i - k) >= gap for k in keep):
             keep.append(int(i))
-    return np.sort(np.asarray(keep, dtype=np.float64)) / rate
+    keep_a = np.sort(np.asarray(keep, dtype=np.int64))
+    times = keep_a.astype(np.float64) / rate
+    if velocity:
+        return times, np.clip(curve[keep_a] / (strong + 1e-12), 0.0, 1.0)
+    return times
 
 
 def _level(spec: np.ndarray, freqs: np.ndarray, lo: float, hi: float) -> np.ndarray:

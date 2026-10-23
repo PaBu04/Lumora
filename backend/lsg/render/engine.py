@@ -159,9 +159,17 @@ class Renderer:
             a = np.full(cc.view.n, env, np.float32) if alpha is None else alpha * env
             _blend(frame, cc.view.idx, rgb, a, c.blend)
         np.clip(frame, 0.0, 1.0, out=frame)
-        if self.show.master < 1:
-            frame *= self.show.master
+        gain = self.show.master
+        if self.show.dynamics > 0:
+            gain *= dynamics_gain(self.features.level("loudness", t), self.show.dynamics)
+        if gain < 1:
+            frame *= gain
         return frame
+
+
+def dynamics_gain(loudness: float, amount: float) -> float:
+    """Master gain that follows the song: loud passages keep full brightness, quiet ones get dark."""
+    return 1.0 - amount * (1.0 - min(max(loudness, 0.0), 1.0) ** 2)
 
 
 def _blend(frame: np.ndarray, idx: np.ndarray, rgb: np.ndarray, a: np.ndarray, mode: str) -> None:

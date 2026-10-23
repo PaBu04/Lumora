@@ -24,9 +24,10 @@ def _title_from_filename(name: str) -> tuple[str, str]:
 
 
 class SongLibrary:
-    def __init__(self, root: Path | str, beat_tracker=lambda: "librosa"):
+    def __init__(self, root: Path | str, beat_tracker=lambda: "librosa", stems=lambda: "auto"):
         self.root = Path(root)
-        self.beat_tracker = beat_tracker  # callable: current setting
+        self.beat_tracker = beat_tracker  # callables: current settings
+        self.stems = stems
         self._lock = threading.Lock()
         self._analysis_cache: dict[str, Analysis] = {}
 
@@ -96,18 +97,35 @@ class SongLibrary:
         self._analysis_cache.pop(song_id, None)
         shutil.rmtree(d)
 
-    def analyse(self, song_id: str) -> Song:
-        """Run the analysis synchronously (call from a worker thread)."""
+    def analyse(self, song_id: str, keep_tempo: bool = True, on_progress=None) -> Song:
+        """Run the analysis synchronously (call from a worker thread). keep_tempo: a tempo the user
+        corrected by hand stays (older analyses: a whole-number BPM counts as corrected)."""
         song = self.get(song_id)
-        song.status, song.error = "running", None
+        previous = self.analysis(song_id) if keep_tempo else None
+        if previous is not None and not (previous.beats_edited or (previous.version < 2 and float(previous.bpm).is_integer())):
+            previous = None
+        song.status, song.error, song.stage, song.progress = "running", None, "Warten", 0.0
         self.save(song)
+        last = [0.0, ""]
+
+        def progress(stage: str, f: float) -> None:
+            if stage != last[1] or f - last[0] >= 0.05:
+                last[:] = [f, stage]
+                song.stage, song.progress = stage, round(f, 2)
+                self.save(song)
+                if on_progress:
+                    on_progress(song)
+
         try:
-            analysis = analyse_file(self.audio_path(song_id), self.beat_tracker())
+            analysis = analyse_file(
+                self.audio_path(song_id), self.beat_tracker(), stems=self.stems(), progress=progress, keep_tempo=previous
+            )
             atomic_write_text(self._dir(song_id) / "analysis.json", analysis.model_dump_json())
             self._analysis_cache[song_id] = analysis
             song.status, song.duration = "done", analysis.duration
         except Exception as exc:  # report, never crash the worker
             song.status, song.error = "error", str(exc)
+        song.stage = song.progress = None
         self.save(song)
         return song
 

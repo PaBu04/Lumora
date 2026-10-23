@@ -602,13 +602,14 @@ async def delete_song(request: Request, song_id: str):
 
 
 @router.post("/songs/{song_id}/analyse")
-def reanalyse(request: Request, song_id: str):
+def reanalyse(request: Request, song_id: str, keep_tempo: bool = True):
+    """keep_tempo: a hand-corrected tempo stays; false = detect the beats again."""
     st = state(request)
     try:
         st.songs.get(song_id)
     except KeyError:
         raise _404(f"song {song_id!r}")
-    st.analyse_song(song_id)
+    st.analyse_song(song_id, keep_tempo)
     return {"ok": True}
 
 

@@ -8,6 +8,17 @@ from lsg.model.project import Project
 from lsg.model.room import Room
 from lsg.model.viewer import Viewer
 
+
+@pytest.fixture(autouse=True)
+def _no_separation_model(request, monkeypatch):
+    """Tests use the fast harmonic / percussive approximation instead of the Demucs model
+    (tests marked "ml" run the real model)."""
+    if "ml" not in request.keywords:
+        from lsg.audio import stems
+
+        monkeypatch.setattr(stems, "installed", lambda: False)
+
+
 SHORT_STRUCTURE = [
     ("intro", 2, {"hat", "pad"}),
     ("verse", 4, {"kick", "hat", "bass"}),
@@ -54,4 +65,4 @@ def project() -> Project:
 def demo_analysis(tmp_path_factory):
     path = tmp_path_factory.mktemp("audio") / "demo.wav"
     make_demo_track(path, bpm=120, structure=SHORT_STRUCTURE)
-    return path, analyse_file(path)
+    return path, analyse_file(path, stems="approx")  # session fixture: set the stem mode explicitly

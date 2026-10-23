@@ -8,6 +8,7 @@ import math
 
 import numpy as np
 
+from lsg.audio.features import EVENT_KINDS, Events
 from lsg.render.colors import hsv_to_rgb, palette_at
 from lsg.render.context import RenderContext
 from lsg.render.params import Param
@@ -18,8 +19,16 @@ Result = tuple[np.ndarray, np.ndarray | None]
 BRIGHTNESS = Param("brightness", "number", 1.0, "overall intensity 0..1", 0.0, 1.0)
 SPEED = Param("speed", "number", 0.5, "cycles per second (ignored when beats > 0)", -20.0, 20.0)
 BEATS = Param("beats", "number", 0.0, "if > 0: one cycle takes this many beats (tempo-locked)", 0.0, 64.0)
-TRIGGERS = ("beat", "bar", "onset", "half_beat", "two_beats", "kick", "snare", "hihat")
-EVENTS = ("beat", "bar", "onset", "kick", "snare", "hihat")  # triggers with a list of past event times
+# what can trigger an effect: the beat grid, onsets, instrument tracks (see lsg.audio.instruments)
+# and "once" = a single time at the start of the clip (a one-shot cue)
+EVENTS = (*EVENT_KINDS, "once")
+TRIGGERS = (*EVENTS, "half_beat", "two_beats")
+TRIGGER_HELP = (
+    "beat / bar / onset, an instrument track (kick, snare, hihat, crash, bass, vocal, phrase, lead, fill, build, "
+    "drop, no_drums) or once (= one time at the clip start)"
+)
+VELOCITY = Param("velocity", "number", 0.6, "how much a quiet hit is dimmer than a loud one (0 = all equal)", 0.0, 1.0)
+SUSTAIN = Param("sustain", "bool", False, "stay lit while the note / passage lasts, then fade", dynamic=False)
 
 
 def _fill(color: np.ndarray, n: int) -> np.ndarray:
@@ -59,6 +68,25 @@ def _since_trigger(ctx: RenderContext, trigger: str) -> float:
         case "hihat":
             return a.since_hihat
     raise ValueError(trigger)
+
+
+def _events(ctx: RenderContext, trigger: str, window: float) -> Events:
+    """Trigger events within [t - window, t] (clip start for "once")."""
+    if trigger == "once":
+        t0 = ctx.t - ctx.lt
+        return Events(np.array([t0]), np.ones(1), np.array([ctx.duration]), np.zeros(1))
+    return ctx.features.events(trigger, ctx.t, window)
+
+
+def _envelope(age, duration, decay: float, sustain: bool):
+    """Level of an event `age` seconds after it started: 1, then exponential decay (after the
+    event's duration when sustaining)."""
+    hold = np.where(sustain, duration, 0.0)
+    return np.where(age < hold, 1.0, np.exp(-np.maximum(age - hold, 0.0) / decay))
+
+
+def _velocity(strength, amount: float):
+    return 1.0 - amount * (1.0 - np.clip(strength, 0.0, 1.0))
 
 
 def _smoothstep(e0: float, e1: float, x: np.ndarray) -> np.ndarray:
@@ -129,18 +157,34 @@ class Rainbow(Effect):
 
 class Pulse(Effect):
     id, name = "pulse", "Pulse"
-    description = "Flashes on every beat / bar / onset and decays exponentially."
+    description = (
+        "The whole target flashes on every trigger and decays. With trigger 'once' it is a single flash at the "
+        "clip start (a cue). Loud hits flash brighter than quiet ones (velocity)."
+    )
     params = (
         Param("color", "color", "#ffffff", "flash colour"),
-        Param("trigger", "enum", "beat", "what triggers a flash", options=TRIGGERS, dynamic=False),
+        Param("trigger", "enum", "beat", f"what triggers a flash: {TRIGGER_HELP}", options=TRIGGERS, dynamic=False),
         Param("decay", "number", 0.25, "decay time constant in seconds", 0.01, 5.0),
         Param("floor", "number", 0.0, "minimum level between flashes", 0.0, 1.0),
+        VELOCITY,
+        SUSTAIN,
         BRIGHTNESS,
     )
 
     def render(self, ctx, p):
-        since = _since_trigger(ctx, p["trigger"])
-        level = p["floor"] + (1 - p["floor"]) * (math.exp(-since / p["decay"]) if math.isfinite(since) else 0.0)
+        trig = p["trigger"]
+        if trig in ("half_beat", "two_beats"):
+            since = _since_trigger(ctx, trig)
+            peak = math.exp(-since / p["decay"]) if math.isfinite(since) else 0.0
+        else:
+            ev = _events(ctx, trig, max(8 * p["decay"], 30.0 if p["sustain"] else 0.0))
+            if len(ev.times):
+                age = ctx.t - ev.times
+                lv = _envelope(age, ev.duration, p["decay"], p["sustain"]) * _velocity(ev.strength, p["velocity"])
+                peak = float(lv.max())
+            else:
+                peak = 0.0
+        level = p["floor"] + (1 - p["floor"]) * peak
         return _fill(p["color"] * p["brightness"], ctx.leds.n), np.full(ctx.leds.n, level, np.float32)
 
 
@@ -223,18 +267,12 @@ class Ripple(Effect):
     params = (
         Param("color", "color", "#ff00ff", "ring colour"),
         Param("center", "point", "viewer", "origin: [x, y, z] in metres, 'viewer' or 'center'"),
-        Param(
-            "trigger",
-            "enum",
-            "beat",
-            "beat / bar / onset / kick / snare / hihat or interval",
-            options=(*EVENTS, "interval"),
-            dynamic=False,
-        ),
+        Param("trigger", "enum", "beat", f"{TRIGGER_HELP} or interval", options=(*EVENTS, "interval"), dynamic=False),
         Param("interval", "number", 1.0, "seconds between rings when trigger = interval", 0.05, 30.0),
         Param("speed", "number", 4.0, "ring speed in metres per second", 0.1, 50.0),
         Param("width", "number", 0.4, "ring thickness in metres", 0.02, 10.0),
         Param("decay", "number", 1.5, "seconds until a ring has faded", 0.05, 10.0),
+        VELOCITY,
         BRIGHTNESS,
     )
 
@@ -247,15 +285,17 @@ class Ripple(Effect):
             k = math.floor(ctx.lt / p["interval"])
             n = int(p["decay"] / p["interval"]) + 1
             times = ctx.t - ctx.lt + p["interval"] * np.arange(max(0, k - n), k + 1)
+            strength = np.ones(len(times))
         else:
-            times = ctx.features.recent(p["trigger"], ctx.t, p["decay"])
+            ev = _events(ctx, p["trigger"], p["decay"])
+            times, strength = ev.times, ev.strength
         level = np.zeros(ctx.leds.n, np.float32)
-        for tk in times[-12:]:
+        for tk, sk in list(zip(times, strength, strict=True))[-12:]:
             age = ctx.t - tk
             if age < 0 or age > p["decay"]:
                 continue
             ring = np.exp(-(((d - p["speed"] * age) / p["width"]) ** 2)) * (1 - age / p["decay"])
-            level = np.maximum(level, ring)
+            level = np.maximum(level, ring * float(_velocity(sk, p["velocity"])))
         return _fill(p["color"] * p["brightness"], ctx.leds.n), level
 
     @staticmethod
@@ -273,11 +313,21 @@ class Hits(Effect):
     )
     params = (
         Param("palette", "palette", ["#ffffff"], "colours of the segments (picked at random)", dynamic=False),
-        Param("trigger", "enum", "snare", "what lights segments", options=EVENTS, dynamic=False),
+        Param("trigger", "enum", "snare", f"what lights segments: {TRIGGER_HELP}", options=EVENTS, dynamic=False),
         Param("count", "number", 3.0, "segments per hit", 1.0, 32.0),
         Param("size", "number", 12.0, "segment length in LEDs", 1.0, 300.0),
         Param("decay", "number", 0.25, "fade time in seconds", 0.02, 4.0),
         Param("soft", "number", 0.3, "0 = hard segment edges, 1 = soft fade towards the ends", 0.0, 1.0),
+        Param(
+            "place",
+            "enum",
+            "random",
+            "where segments appear: random, or by pitch (low notes at the start of the target, high notes at the end)",
+            options=("random", "pitch"),
+            dynamic=False,
+        ),
+        VELOCITY,
+        SUSTAIN,
         BRIGHTNESS,
     )
 
@@ -286,15 +336,23 @@ class Hits(Effect):
         n = leds.n
         level = np.zeros(n, np.float32)
         key = np.zeros(n, np.float32)  # random value that picks the colour of the winning segment
-        times = ctx.features.recent(p["trigger"], ctx.t, p["decay"] * 5)[-8:]
+        events = _events(ctx, p["trigger"], p["decay"] * 5 + (8.0 if p["sustain"] else 0.0))
         count, size = round(p["count"]), max(1, round(p["size"]))
         fi, ii = leds.fixture_index, leds.index_in_fixture
-        for tk in times:
-            env = math.exp(-(ctx.t - tk) / p["decay"])
+        by_pitch = p["place"] == "pitch"
+        if by_pitch:
+            lo, hi = ctx.features.pitch_range(p["trigger"]) if ctx.features else (36.0, 84.0)
+            order = np.argsort(leds.coord("fixture") * 1e4 + leds.u, kind="stable")  # walk the target strip by strip
+        for tk, sk, dk, pk in list(zip(*events, strict=True))[-8:]:
+            env = float(_envelope(ctx.t - tk, dk, p["decay"], p["sustain"])) * float(_velocity(sk, p["velocity"]))
             if env < 0.01:
                 continue
             ev = round(float(tk) * 1000)
             picks = _hash(np.full(count, ev), np.arange(count), ctx.seed)
+            if by_pitch and pk > 0:
+                x = min(max((pk - lo) / (hi - lo), 0.0), 1.0)
+                picks = np.clip(x + (picks - 0.5) * 0.08, 0.0, 0.999)  # small spread around the note's place
+                picks = (order[(picks * n).astype(int)] + 0.5) / n
             for j, r in enumerate(picks):
                 i0 = min(n - 1, int(r * n))
                 start = int(ii[i0]) - size // 2
@@ -327,36 +385,119 @@ class Sweep(Effect):
             "trigger",
             "enum",
             "bar",
-            "start a sweep on every ... ('loop' = back to back)",
+            f"start a sweep on every ...: {TRIGGER_HELP}; 'loop' = back to back; 'once' = one sweep over the whole clip",
             options=(*EVENTS, "loop"),
             dynamic=False,
         ),
-        Param("beats", "number", 2.0, "duration of one sweep in beats", 0.125, 64.0),
+        Param("beats", "number", 2.0, "duration of one sweep in beats (not used with 'once')", 0.125, 64.0),
         Param("width", "number", 0.15, "band width as fraction of the room", 0.01, 1.0),
         Param("tail", "number", 0.3, "length of the fading tail behind the band, fraction of the room", 0.0, 2.0),
+        VELOCITY,
         BRIGHTNESS,
     )
 
     def render(self, ctx, p):
         x = ctx.leds.coord(p["axis"])
-        dur = p["beats"] * ctx.features.beat_period
+        dur = ctx.duration if p["trigger"] == "once" else p["beats"] * ctx.features.beat_period
         w, tail = p["width"], p["tail"]
         span = 1 + w + tail  # the band enters below 0 and leaves above 1 completely
         if p["trigger"] == "loop":
-            starts = [ctx.t - (ctx.cycle(0, p["beats"]) % 1.0) * dur]
+            starts = [(ctx.t - (ctx.cycle(0, p["beats"]) % 1.0) * dur, 1.0)]
         else:
-            starts = ctx.features.recent(p["trigger"], ctx.t, dur)[-4:]
+            ev = _events(ctx, p["trigger"], dur)
+            starts = list(zip(ev.times, ev.strength, strict=True))[-4:]
         level = np.zeros(ctx.leds.n, np.float32)
-        for t0 in starts:
-            prog = (ctx.t - t0) / dur
+        for t0, sk in starts:
+            prog = (ctx.t - t0) / dur if dur > 0 else 1.0
             if not 0 <= prog <= 1:
                 continue
             head = prog * span - w / 2
             d = head - x  # > 0: behind the head
             band = np.clip(1 - np.abs(d) / (w / 2), 0, 1)
             trail = np.where(d > 0, np.exp(-d / tail) if tail > 0 else 0.0, 0.0)
-            level = np.maximum(level, np.maximum(band, trail * 0.6).astype(np.float32))
+            lv = np.maximum(band, trail * 0.6) * float(_velocity(sk, p["velocity"]))
+            level = np.maximum(level, lv.astype(np.float32))
         return _fill(p["color"] * p["brightness"], ctx.leds.n), level
+
+
+class Notes(Effect):
+    id, name = "notes", "Notes"
+    description = (
+        "Shows the notes of one instrument: every note lights a spot whose position along `axis` follows its pitch "
+        "(low left / bottom, high right / top), stays while the note sounds and fades. Brightness follows how loud the "
+        "note is. Tracks: bass, vocal, lead (keys / synths / guitars) or any drum track. Colours by pitch class "
+        "(color_by pitch) or from the palette."
+    )
+    params = (
+        Param("track", "enum", "lead", "instrument track", options=EVENT_KINDS, dynamic=False),
+        Param("palette", "palette", ["#40c0ff", "#ff4080"], "colours (color_by palette: low -> high notes)", dynamic=False),
+        Param(
+            "color_by",
+            "enum",
+            "palette",
+            "palette (low -> high) or pitch (a hue per note name)",
+            options=("palette", "pitch"),
+            dynamic=False,
+        ),
+        Param("axis", "axis", "u", "where pitch is laid out (u = along each strip, azimuth = left -> right)", dynamic=False),
+        Param("width", "number", 0.08, "spot size as fraction of the axis", 0.005, 1.0),
+        Param("decay", "number", 0.3, "fade after the note ends, seconds", 0.02, 4.0),
+        Param("max_hold", "number", 1.5, "longest time a note stays fully lit, seconds", 0.0, 8.0),
+        VELOCITY,
+        BRIGHTNESS,
+    )
+
+    def render(self, ctx, p):
+        x = ctx.leds.coord(p["axis"])
+        n = ctx.leds.n
+        level = np.zeros(n, np.float32)
+        key = np.zeros(n, np.float32)
+        ev = _events(ctx, p["track"], p["max_hold"] + 5 * p["decay"])
+        lo, hi = ctx.features.pitch_range(p["track"]) if ctx.features else (36.0, 84.0)
+        w = p["width"]
+        for tk, sk, dk, pk in list(zip(*ev, strict=True))[-24:]:
+            env = float(_envelope(ctx.t - tk, min(dk, p["max_hold"]), p["decay"], True)) * float(_velocity(sk, p["velocity"]))
+            if env < 0.01:
+                continue
+            pos = min(max((pk - lo) / (hi - lo), 0.0), 1.0) if pk > 0 else float(_hash(np.array([round(tk * 1000)]), ctx.seed)[0])
+            spot = np.clip(1 - np.abs(x - pos) / (w / 2), 0, 1) ** 0.7 * env
+            better = spot > level
+            level = np.where(better, spot, level)
+            k = ((pk % 12) / 12.0) if p["color_by"] == "pitch" else pos
+            key = np.where(better, k, key)
+        if p["color_by"] == "pitch":
+            rgb = hsv_to_rgb(key, 0.85, p["brightness"])
+        else:
+            rgb = palette_at(p["palette"], key, cyclic=False) * p["brightness"]
+        return rgb.astype(np.float32), level.astype(np.float32)
+
+
+class Rise(Effect):
+    id, name = "rise", "Rise (build-up)"
+    description = (
+        "A build-up over the clip: light fills the target along `axis` from 0 towards 1, flickers faster and gets "
+        "brighter until the clip ends - put it on a 'build' event and end it exactly at the drop. Combine with a "
+        "pulse / ripple trigger 'once' at the drop."
+    )
+    params = (
+        Param("color", "color", "#ffffff", "colour"),
+        Param("axis", "axis", "z", "direction the light climbs (z = floor -> ceiling)", dynamic=False),
+        Param("flicker", "number", 0.6, "0 = smooth, 1 = strong flicker that speeds up towards the end", 0.0, 1.0),
+        Param("start", "number", 0.05, "brightness at the clip start", 0.0, 1.0),
+        Param("curve", "number", 2.0, "1 = linear, higher = most of the rise at the end", 0.5, 6.0),
+        BRIGHTNESS,
+    )
+
+    def render(self, ctx, p):
+        f = ctx.progress ** p["curve"]
+        x = ctx.leds.coord(p["axis"])
+        front = _smoothstep(f + 0.08, f - 0.02, x)  # filled below the front
+        rate = 2 + 22 * f  # flicker frequency rises
+        slot = math.floor(ctx.lt * rate)
+        flick = _hash(ctx.leds.idx, np.full(ctx.leds.n, slot), ctx.seed)
+        flick = 1 - p["flicker"] * (flick > 0.5 + 0.4 * f)
+        level = (p["start"] + (1 - p["start"]) * f) * front * flick
+        return _fill(p["color"] * p["brightness"], ctx.leds.n), level.astype(np.float32)
 
 
 class Sparkle(Effect):
@@ -512,7 +653,9 @@ EFFECTS: dict[str, Effect] = {
         Ripple(),
         Sparkle(),
         Hits(),
+        Notes(),
         Sweep(),
+        Rise(),
         Fade(),
         Vu(),
         Noise(),

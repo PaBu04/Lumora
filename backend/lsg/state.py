@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -22,7 +23,11 @@ class AppState:
         self.data_dir = Path(data_dir)
         self.projects = ProjectStore(self.data_dir / "projects")
         self.settings: dict = {"beat_tracker": "auto", "shader_isolation": True}
-        self.songs = SongLibrary(self.data_dir / "songs", lambda: self.settings.get("beat_tracker", "auto"))
+        self.songs = SongLibrary(
+            self.data_dir / "songs",
+            lambda: self.settings.get("beat_tracker", "auto"),
+            lambda: os.environ.get("LSG_STEMS", "auto"),
+        )
         self.session = PlaybackSession(self, create_player(audio_backend), fps)
         self._analysis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis")
         self._active_file = self.data_dir / "active_project.txt"
@@ -97,11 +102,17 @@ class AppState:
         await self.session.broadcast_event({"kind": "shaders_changed", "project": slug})
 
     # song analysis in the background
-    def analyse_song(self, song_id: str) -> None:
+    def analyse_song(self, song_id: str, keep_tempo: bool = True) -> None:
         loop = self.loop
 
+        def progress(song) -> None:
+            if loop and loop.is_running():
+                event = {"kind": "song_changed", "song": song_id, "status": "running"}
+                event |= {"stage": song.stage, "progress": song.progress}
+                asyncio.run_coroutine_threadsafe(self.session.broadcast_event(event), loop)
+
         def job():
-            song = self.songs.analyse(song_id)
+            song = self.songs.analyse(song_id, keep_tempo, progress)
             if loop and loop.is_running():
                 asyncio.run_coroutine_threadsafe(
                     self.session.broadcast_event({"kind": "song_changed", "song": song_id, "status": song.status}), loop

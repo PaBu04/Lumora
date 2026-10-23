@@ -15,6 +15,8 @@ class Song(BaseModel):
     duration: float = 0.0
     status: AnalysisStatus = "pending"
     error: str | None = None
+    stage: str | None = None  # what the running analysis is doing
+    progress: float | None = None  # 0..1 while running
 
 
 class Section(BaseModel):
@@ -28,7 +30,7 @@ class Section(BaseModel):
 class Analysis(BaseModel):
     """Result of the audio analysis. Feature curves are sampled at `frame_rate` Hz, normalised 0..1."""
 
-    version: int = 1
+    version: int = 1  # 2 = with instrument tracks
     duration: float
     bpm: float
     beats: list[float]
@@ -41,3 +43,8 @@ class Analysis(BaseModel):
     beat_source: str = "librosa"  # librosa | beat_this
     beat_note: str | None = None  # why the preferred tracker was not used
     drums: dict[str, list[float]] = Field(default_factory=dict)  # kick / snare / hihat hit times
+    beats_per_bar: int = 4
+    beats_edited: bool = False  # tempo set by hand: kept when the song is analysed again
+    stems: str | None = None  # how instruments were separated: "demucs", "approx" (no vocals) or None
+    # instrument tracks (see lsg.audio.instruments): name -> events [time, strength, duration, pitch]
+    tracks: dict[str, list[list[float]]] = Field(default_factory=dict)

@@ -23,6 +23,7 @@ dependencies = [
 # neural beat / downbeat tracking (CPU torch: add --extra-index-url https://download.pytorch.org/whl/cpu)
 ml = [
     "torch>=2.4",
+    "torchaudio>=2.4",  # Hybrid Demucs instrument separation
     "beat_this @ https://github.com/CPJKU/beat_this/archive/main.zip",
 ]
 dev = [
@@ -51,8 +52,11 @@ packages = ["lsg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["ui: end-to-end browser tests (need a built frontend and Playwright Chromium)"]
-addopts = "-m 'not ui'"
+markers = [
+    "ui: end-to-end browser tests (need a built frontend and Playwright Chromium)",
+    "ml: tests with the neural models (torch, model weights from the internet)",
+]
+addopts = "-m 'not ui and not ml'"
 
 [tool.ruff]
 line-length = 130

@@ -1,10 +1,13 @@
-"""Offline music analysis: beats, downbeats, onsets, sections and feature curves.
+"""Offline music analysis: beats, downbeats, onsets, sections, feature curves and - from the
+separated instruments - instrument tracks (drum hits, bass / vocal / lead notes, fills,
+build-ups, drops; see lsg.audio.instruments).
 
 All curves are normalised to 0..1 so effects and the AI can use them without knowing
 the loudness of the recording.
 """
 
 import itertools
+from collections.abc import Callable
 from pathlib import Path
 
 import librosa
@@ -88,6 +91,19 @@ def _downbeats(beats: np.ndarray, pulse: np.ndarray, rate: float, low: np.ndarra
     strength = _curve_at(pulse, rate, beats) + _curve_at(low, rate, beats)
     scores = [strength[p::beats_per_bar].mean() for p in range(beats_per_bar)]
     return beats[int(np.argmax(scores)) :: beats_per_bar]
+
+
+def _meter(beats: np.ndarray, pulse: np.ndarray, rate: float, low: np.ndarray) -> int:
+    """3 or 4 beats per bar: the grouping whose strongest beat stands out most clearly."""
+    if len(beats) < 24:
+        return 4
+    strength = _curve_at(pulse, rate, beats) + _curve_at(low, rate, beats)
+
+    def contrast(m: int) -> float:
+        scores = np.array([strength[p::m].mean() for p in range(m)])
+        return float(scores.max() / (scores.mean() + 1e-9))
+
+    return 3 if contrast(3) > 1.15 * contrast(4) else 4
 
 
 def _novelty(features: np.ndarray, kernel: int) -> np.ndarray:
@@ -190,29 +206,117 @@ def _sections(
     return sections
 
 
-def analyse_file(path: Path | str, beat_tracker: str = "librosa") -> Analysis:
-    """beat_tracker: "librosa" (built in), "beat_this" (neural model, optional extra) or "auto"."""
+Progress = Callable[[str, float], None]
+
+
+def analyse_file(
+    path: Path | str,
+    beat_tracker: str = "librosa",
+    stems: str = "auto",
+    progress: Progress | None = None,
+    keep_tempo: Analysis | None = None,
+) -> Analysis:
+    """beat_tracker: "librosa" (built in), "beat_this" (neural model, optional extra) or "auto".
+    stems: "auto" (Hybrid Demucs when installed, else an approximation), "demucs", "approx" or "off".
+    keep_tempo: an earlier analysis whose (hand-corrected) beat grid is kept."""
+
+    def step(stage: str, f: float = 0.0) -> None:
+        if progress:
+            progress(stage, f)
+
+    step("Audio laden")
     y, _ = librosa.load(path, sr=SR, mono=True)
-    note = None
-    if beat_tracker in ("beat_this", "auto"):
+    notes: list[str] = []
+    beats = downbeats = None
+    source = "librosa"
+    keep = keep_tempo is not None and len(keep_tempo.beats) >= 8
+    if keep:
+        beats, downbeats = np.asarray(keep_tempo.beats), np.asarray(keep_tempo.downbeats)
+        source = keep_tempo.beat_source
+    elif beat_tracker in ("beat_this", "auto"):
         from lsg.audio import ml_beats
 
         if ml_beats.installed():
+            step("Beats erkennen", 0.05)
             try:
-                beats, downbeats = ml_beats.track(path)
-                if len(beats) >= 8:
-                    return analyse_signal(y, beats=beats, downbeats=downbeats, beat_source="beat_this")
-                note = "beat_this found too few beats"
+                b, d = ml_beats.track(path)
+                if len(b) >= 8:
+                    beats, downbeats, source = b, d, "beat_this"
+                else:
+                    notes.append("beat_this found too few beats")
             except Exception as exc:
-                note = f"beat_this unavailable ({type(exc).__name__}), used built-in tracker"
+                notes.append(f"beat_this unavailable ({type(exc).__name__}), used built-in tracker")
         elif beat_tracker == "beat_this":
-            note = "beat_this is not installed, used built-in tracker"
-    result = analyse_signal(y)
-    return result.model_copy(update={"beat_note": note}) if note else result
+            notes.append("beat_this is not installed, used built-in tracker")
+
+    separated, stem_mode = None, None
+    if stems != "off":
+        from lsg.audio import stems as stem_sep
+
+        if stems in ("auto", "demucs") and stem_sep.installed():
+            step("Instrumente trennen", 0.1)
+            try:
+                separated = stem_sep.separate(path, SR, lambda f: step("Instrumente trennen", 0.1 + 0.7 * f))
+                stem_mode = "demucs"
+            except Exception as exc:
+                notes.append(f"instrument separation failed ({type(exc).__name__}: {exc}), approximated")
+        if separated is None:
+            step("Instrumente schätzen", 0.5)
+            separated, stem_mode = stem_sep.approximate(y, SR), "approx"
+
+    step("Analysieren", 0.85)
+    result = analyse_signal(y, beats=beats, downbeats=downbeats, beat_source=source, stems=separated)
+    update: dict = {"stems": stem_mode}
+    if keep:
+        update |= {"bpm": keep_tempo.bpm, "beats_edited": keep_tempo.beats_edited, "beats_per_bar": keep_tempo.beats_per_bar}
+    if notes:
+        update["beat_note"] = "; ".join(notes)
+    return result.model_copy(update=update)
+
+
+def _mark_drops(sections: list[Section], tracks: dict, duration: float) -> list[Section]:
+    """Strong drops become section boundaries. A drop with a build-up before it gets a "build"
+    section leading into it and opens a section called "drop"."""
+    drops = [e for e in tracks.get("drop", []) if e[1] >= 0.8]
+    if not drops:
+        return sections
+    builds = {round(b[0] + b[2], 1): b[0] for b in tracks.get("build", [])}
+    cuts = {s.start for s in sections}
+    names: dict[float, str] = {}
+    fixed: set[float] = {0.0}
+
+    def place(t: float, name: str, snap: float) -> None:
+        near = [c for c in cuts if c not in fixed and abs(c - t) < snap]
+        for c in near:
+            cuts.discard(c)
+        cuts.add(t)
+        fixed.add(t)
+        names[t] = name
+
+    for e in drops:
+        t = round(e[0], 3)
+        b = builds.get(round(e[0], 1))
+        place(t, "drop" if b is not None else "", 3.0)
+        if b is not None and e[0] - b >= 3.0:
+            place(round(b, 3), "build", 2.0)
+            for c in [c for c in cuts if b + 0.01 < c < t - 0.01]:  # the build-up is one section
+                cuts.discard(c)
+    bounds = [*sorted(c for c in cuts if c < duration), duration]
+    out = []
+    for a, b in itertools.pairwise(bounds):
+        if b - a < 0.5:
+            continue
+        parent = next((s for s in sections if s.start <= a + 0.01 < s.end), sections[-1])
+        out.append(Section(start=a, end=b, name=names.get(a) or parent.name, label=parent.label, energy=parent.energy))
+    return out
 
 
 def analyse_signal(
-    y: np.ndarray, beats: np.ndarray | None = None, downbeats: np.ndarray | None = None, beat_source: str = "librosa"
+    y: np.ndarray,
+    beats: np.ndarray | None = None,
+    downbeats: np.ndarray | None = None,
+    beat_source: str = "librosa",
+    stems: dict[str, np.ndarray] | None = None,
 ) -> Analysis:
     duration = len(y) / SR
     spec = np.abs(librosa.stft(y, n_fft=2048, hop_length=HOP))
@@ -246,15 +350,28 @@ def analyse_signal(
         span = (float(active[0]), float(active[-1])) if active.size else (0.0, duration)
         beats = _fit_beats(tracked, pulse, pulse_rate, span)
         beats = _octave_correct(beats, pulse, pulse_rate)
-        downbeats = _downbeats(beats, pulse, pulse_rate, 1.0 * low)
+        meter = _meter(beats, pulse, pulse_rate, 1.0 * low)
+        downbeats = _downbeats(beats, pulse, pulse_rate, 1.0 * low, meter)
     elif downbeats is None or len(downbeats) == 0:
         downbeats = beats[::4]
+    beats_per_bar = 4
+    if len(downbeats) > 2 and len(beats) > 8:
+        per_bar = np.median(np.diff(downbeats)) / np.median(np.diff(beats))
+        beats_per_bar = int(min(7, max(2, round(per_bar))))
 
     bpm = 60.0 / float(np.polyfit(np.arange(len(beats)), beats, 1)[0]) if len(beats) > 3 else 120.0
 
-    from lsg.audio.drums import detect as detect_drums
+    tracks: dict[str, list[list[float]]] = {}
+    curves: dict[str, np.ndarray] = {}
+    if stems is not None:
+        from lsg.audio.instruments import analyse_stems
 
-    drum_hits = detect_drums(spec, freqs, SR / HOP)
+        tracks, curves = analyse_stems(stems, y, SR, HOP, np.asarray(beats), np.asarray(downbeats), bands["low"], bands["high"])
+        drum_hits = {k: np.asarray([e[0] for e in tracks.get(k, [])]) for k in ("kick", "snare", "hihat")}
+    else:
+        from lsg.audio.drums import detect as detect_drums
+
+        drum_hits = detect_drums(spec, freqs, SR / HOP)
 
     onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=SR, hop_length=HOP, units="frames")
     onsets = frame_times[onset_frames]
@@ -264,6 +381,8 @@ def analyse_signal(
     mfcc = librosa.feature.mfcc(S=librosa.power_to_db(librosa.feature.melspectrogram(S=spec**2, sr=SR)), n_mfcc=13)
     energy = np.vstack([rms, bands["low"], bands["mid"], bands["high"]])[:, :n]
     sections = _sections(downbeats, duration, chroma[:, :n], mfcc[:, :n], energy, rms[:n], frame_times[:n])
+    if tracks:
+        sections = _mark_drops(sections, tracks, round(duration, 3))
 
     # peak envelope for the waveform display
     chunks = np.array_split(np.abs(y), min(WAVEFORM_POINTS, max(1, len(y))))
@@ -284,10 +403,14 @@ def analyse_signal(
             "mid": _round(bands["mid"]),
             "high": _round(bands["high"]),
             "onset": _round(onset_n),
+            **{k: _round(np.pad(v[: len(rms)], (0, max(0, len(rms) - len(v)))), 2) for k, v in curves.items()},
         },
         waveform=_round(peaks),
         beat_source=beat_source,
         drums={k: _round(v) for k, v in drum_hits.items()},
+        version=2 if tracks else 1,
+        beats_per_bar=beats_per_bar,
+        tracks=tracks,
     )
 
 
@@ -309,9 +432,15 @@ def set_bpm(analysis: Analysis, bpm: float) -> Analysis:
     if len(new_beats) == 0:
         raise ValueError("song too short for this tempo")
     ref = analysis.downbeats[0] if analysis.downbeats else new_beats[0]
-    start = int(np.argmin(np.abs(new_beats - ref))) % 4
+    m = analysis.beats_per_bar
+    start = int(np.argmin(np.abs(new_beats - ref))) % m
     return analysis.model_copy(
-        update={"beats": _round(new_beats), "downbeats": _round(new_beats[start::4]), "bpm": round(float(bpm), 2)}
+        update={
+            "beats": _round(new_beats),
+            "downbeats": _round(new_beats[start::m]),
+            "bpm": round(float(bpm), 2),
+            "beats_edited": True,
+        }
     )
 
 
@@ -328,8 +457,11 @@ def scale_tempo(analysis: Analysis, factor: float) -> Analysis:
         first_db = downbeats[0] if len(downbeats) else beats[0]
         phase = int(np.argmin(np.abs(beats - first_db))) % 2
         new_beats = beats[phase::2]
+    m = analysis.beats_per_bar
     start = int(np.argmin(np.abs(new_beats - (downbeats[0] if len(downbeats) else new_beats[0]))))
-    start %= 4
-    new_downbeats = new_beats[start::4]
+    start %= m
+    new_downbeats = new_beats[start::m]
     bpm = 60.0 / float(np.polyfit(np.arange(len(new_beats)), new_beats, 1)[0])
-    return analysis.model_copy(update={"beats": _round(new_beats), "downbeats": _round(new_downbeats), "bpm": round(bpm, 2)})
+    return analysis.model_copy(
+        update={"beats": _round(new_beats), "downbeats": _round(new_downbeats), "bpm": round(bpm, 2), "beats_edited": True}
+    )
