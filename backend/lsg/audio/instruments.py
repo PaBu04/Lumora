@@ -205,7 +205,13 @@ def _fills(all_hits: np.ndarray, beats: np.ndarray) -> list[tuple[float, float, 
 
 
 def _drops(
-    loud: np.ndarray, bass: np.ndarray, low: np.ndarray, kick_rate: np.ndarray, rate: float, marks: np.ndarray
+    loud: np.ndarray,
+    bass: np.ndarray,
+    drums: np.ndarray,
+    low: np.ndarray,
+    kick_rate: np.ndarray,
+    rate: float,
+    marks: np.ndarray,
 ) -> list[tuple[float, float]]:
     """Bar starts where the bottom end comes in hard: bass, kick and low end clearly stronger right
     after than right before (in EDM the build before a drop is often just as loud overall)."""
@@ -230,7 +236,25 @@ def _drops(
     for t, sc in found:
         if all(abs(t - p) >= 8.0 for p, _ in picked):
             picked.append((t, sc))
-    return sorted(picked)
+
+    # the 2 s windows find the passage; the exact beat is where bass and drums jump most sharply
+    short = round(0.45 * rate)
+
+    def sharp(t: float) -> float:
+        i = round(t * rate)
+        if i - short < 0 or i + short > len(bass):
+            return -1.0
+        return float(
+            bass[i : i + short].mean()
+            - bass[i - short : i].mean()
+            + 0.5 * (drums[i : i + short].mean() - drums[i - short : i].mean())
+        )
+
+    refined = []
+    for t, sc in picked:
+        near = marks[np.abs(marks - t) <= 1.0]
+        refined.append((float(max(near, key=sharp)) if len(near) else t, sc))
+    return sorted(refined)
 
 
 def _build(drop: float, loud: np.ndarray, density: np.ndarray, high: np.ndarray, rate: float, bar: float):
@@ -327,8 +351,9 @@ def analyse_stems(
     fills = _fills(all_hits, beats)
     tracks["fill"] = _events([f[0] for f in fills], [f[2] for f in fills], [f[1] for f in fills])
 
-    marks = downbeats if len(downbeats) >= 4 else beats
-    drops = _drops(loud, env["bass"], fit(low), kick_rate, rate, marks)
+    # every beat is a candidate: a wrong bar phase must not move a drop
+    marks = beats if len(beats) >= 8 else downbeats
+    drops = _drops(loud, env["bass"], env["drums"], fit(low), kick_rate, rate, marks)
     tracks["drop"] = _events([t for t, _ in drops], [s for _, s in drops])
     bar = float(np.median(np.diff(downbeats))) if len(downbeats) > 2 else 2.0
     tension = np.zeros(n, np.float32)

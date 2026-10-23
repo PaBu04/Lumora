@@ -8,6 +8,8 @@ export const SECTION_COLORS: Record<string, string> = {
   bridge: "#f59e0b",
   break: "#14b8a6",
   outro: "#8b5cf6",
+  build: "#fbbf24",
+  drop: "#f43f5e",
 };
 
 /** Waveform with section bands and beat grid; optional playhead and click-to-seek. */

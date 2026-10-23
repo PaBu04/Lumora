@@ -271,3 +271,13 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 }
 .player-area { display: flex; flex-direction: column; min-height: 0; }
 .player-area > .timeline { flex: 1 1 auto; min-height: 0; }
+.progress { position: relative; height: 18px; border-radius: 9px; background: var(--bg-4); overflow: hidden; }
+.progress > div { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); transition: width 0.4s; }
+.progress > span { position: relative; padding: 0 10px; font-size: 11.5px; line-height: 18px; color: var(--text); }
+.cue-pads { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-top: 1px solid var(--line); overflow-x: auto; flex: none; }
+.cue-pads .cue { white-space: nowrap; }
+.cue-pads .cue kbd { font: 10px ui-monospace, monospace; padding: 0 4px; border-radius: 3px; background: var(--bg-4); color: var(--text-2); }
+.cue-pads .cue.fired { background: var(--accent); color: #fff; }
+.cue-pads input[type=color] { width: 30px; height: 24px; padding: 0; border: none; background: none; flex: none; }
+.tl-music { background: rgba(255,255,255,0.02); cursor: pointer; }
+.tl-moment { position: absolute; pointer-events: auto; border-radius: 1px; }

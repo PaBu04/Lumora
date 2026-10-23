@@ -130,6 +130,8 @@ export interface Song {
   duration: number;
   status: "pending" | "running" | "done" | "error";
   error: string | null;
+  stage?: string | null;
+  progress?: number | null;
 }
 
 export interface Section {
@@ -148,11 +150,19 @@ export interface Analysis {
   onsets: number[];
   sections: Section[];
   frame_rate: number;
-  features: Record<"rms" | "low" | "mid" | "high" | "onset", number[]>;
+  features: Record<"rms" | "low" | "mid" | "high" | "onset", number[]> & Partial<Record<InstrumentCurve, number[]>>;
   waveform: number[];
   beat_source: string;
   beat_note: string | null;
+  version?: number;
+  beats_per_bar?: number;
+  beats_edited?: boolean;
+  stems?: string | null;
+  /** instrument tracks: name -> [time, strength, duration, pitch] */
+  tracks?: Record<string, [number, number, number, number][]>;
 }
+
+export type InstrumentCurve = "drums" | "bass" | "vocals" | "other" | "density" | "tension" | "loudness";
 
 export interface AiRun {
   id: string;
@@ -227,6 +237,7 @@ export interface Show {
   song_id: string | null;
   duration: number | null;
   master: number;
+  dynamics?: number;
   layers: Layer[];
 }
 

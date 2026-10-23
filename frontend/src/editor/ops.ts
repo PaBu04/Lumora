@@ -141,8 +141,24 @@ export const round = (v: number) => Math.round(v * 1000) / 1000;
 
 export type SnapMode = "off" | "half" | "beat" | "bar";
 
+/** Single moments of the music (drops, build-up starts, fills, crashes, sung phrases). */
+export function momentTimes(analysis: Analysis | null): number[] {
+  const tr = analysis?.tracks;
+  if (!tr) return [];
+  const out: number[] = [];
+  for (const k of ["drop", "fill", "crash", "phrase"]) for (const e of tr[k] ?? []) out.push(e[0]);
+  for (const e of tr.build ?? []) out.push(e[0], e[0] + e[2]);
+  return out;
+}
+
 export function gridTimes(analysis: Analysis | null, mode: SnapMode, duration: number): number[] {
   if (mode === "off") return [];
+  const moments = momentTimes(analysis);
+  if (moments.length) return [...gridOnly(analysis, mode, duration), ...moments].sort((a, b) => a - b);
+  return gridOnly(analysis, mode, duration);
+}
+
+function gridOnly(analysis: Analysis | null, mode: SnapMode, duration: number): number[] {
   if (!analysis || analysis.beats.length < 2) {
     const step = mode === "bar" ? 2 : mode === "beat" ? 0.5 : 0.25;
     return Array.from({ length: Math.ceil(duration / step) + 1 }, (_, i) => i * step);

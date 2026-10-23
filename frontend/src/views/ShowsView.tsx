@@ -9,6 +9,7 @@ import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
 import { Inspector } from "../editor/Inspector";
 import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
+import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show } from "../types";
@@ -717,6 +718,7 @@ export function ShowsView() {
         ) : (
           <div />
         )}
+        {show && <CuePads analysis={analysis} duration={duration} apply={apply} onAdded={(id) => setSelection(new Set([id]))} />}
         {show ? (
           <TimelineEditor
             show={show}

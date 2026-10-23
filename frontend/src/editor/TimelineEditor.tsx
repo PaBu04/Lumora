@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
 import { SECTION_COLORS } from "../components/Waveform";
 import type { Analysis, EffectInfo, Look, Show } from "../types";
 import { formatTime } from "../ui";
@@ -39,6 +40,8 @@ const EFFECT_COLORS: Record<string, string> = {
   split: "#f97316",
   hits: "#fb7185",
   sweep: "#38bdf8",
+  notes: "#34d399",
+  rise: "#fbbf24",
 };
 export const effectColor = (effect: string) => (effect.startsWith("shader:") ? "#10b981" : (EFFECT_COLORS[effect] ?? "#64748b"));
 
@@ -119,7 +122,7 @@ export function TimelineEditor({
   const pxPerSec = (Math.max(200, width - LABEL_W - 4) / dur) * zoom;
   const x = (s: number) => LABEL_W + s * pxPerSec;
   const grid = useMemo(() => gridTimes(analysis, snapMode, dur), [analysis, snapMode, dur]);
-  const bars = useMemo(() => gridTimes(analysis, "bar", dur), [analysis, dur]);
+  const bars = useMemo(() => (analysis?.downbeats.length ? analysis.downbeats : gridTimes(null, "bar", dur)), [analysis, dur]);
   const n = show.layers.length;
 
   useEffect(() => {
@@ -251,6 +254,56 @@ export function TimelineEditor({
             ) : null,
           )}
         </div>
+
+        {analysis?.tracks && Object.keys(analysis.tracks).length > 0 && (
+          <div className="tl-row tl-music" style={{ height: 22 }} onPointerDown={(e) => onSeek(timeAt(e.clientX))}>
+            <div className="tl-label" style={{ fontSize: 11 }} title="Momente der Musik – Clips rasten hier ein">
+              Musik
+            </div>
+            {(analysis.tracks.phrase ?? []).map(([t, , d], i) => (
+              <div
+                key={`p${i}`}
+                className="tl-moment"
+                title={`Gesang ${formatTime(t)}–${formatTime(t + d)}`}
+                style={{ left: x(t), width: d * pxPerSec, bottom: 1, height: 3, background: MOMENT_COLORS.phrase + "99" }}
+              />
+            ))}
+            {(analysis.tracks.build ?? []).map(([t, , d], i) => (
+              <div
+                key={`b${i}`}
+                className="tl-moment"
+                title={`Build-up ${formatTime(t)}–${formatTime(t + d)}`}
+                style={{
+                  left: x(t),
+                  width: d * pxPerSec,
+                  top: 3,
+                  height: 14,
+                  background: `linear-gradient(90deg, transparent, ${MOMENT_COLORS.build}cc)`,
+                  clipPath: "polygon(0 100%, 100% 0, 100% 100%)",
+                }}
+              />
+            ))}
+            {(analysis.tracks.fill ?? []).map(([t, , d], i) => (
+              <div
+                key={`f${i}`}
+                className="tl-moment"
+                title={`Fill ${formatTime(t)}`}
+                style={{ left: x(t), width: Math.max(3, d * pxPerSec), top: 9, height: 6, background: MOMENT_COLORS.fill }}
+              />
+            ))}
+            {(analysis.tracks.crash ?? []).map(([t], i) => (
+              <div key={`c${i}`} className="tl-moment" title={`Crash ${formatTime(t)}`} style={{ left: x(t) - 1, width: 2, top: 2, height: 7, background: MOMENT_COLORS.crash }} />
+            ))}
+            {(analysis.tracks.drop ?? []).map(([t, v], i) => (
+              <div
+                key={`d${i}`}
+                className="tl-moment"
+                title={`${MOMENT_LABELS.drop} ${formatTime(t)} (Stärke ${Math.round(v * 100)} %)`}
+                style={{ left: x(t) - 1, width: 3, top: 0, height: 22, background: MOMENT_COLORS.drop, opacity: 0.4 + 0.6 * v }}
+              />
+            ))}
+          </div>
+        )}
 
         {rows.map(({ layer, li }) => (
           <div

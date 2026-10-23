@@ -274,6 +274,20 @@ def analyse_file(
     return result.model_copy(update=update)
 
 
+def _rephase_downbeats(beats: np.ndarray, downbeats: np.ndarray, tracks: dict, per_bar: int) -> np.ndarray:
+    """Drops land on the first beat of a bar. When the strong drops agree on another bar phase than
+    the detected downbeats, the downbeats are shifted to it."""
+    drops = [e[0] for e in tracks.get("drop", []) if e[1] >= 0.8]
+    if len(drops) < 1 or len(beats) < 2 * per_bar or len(downbeats) < 2:
+        return downbeats
+    first = int(np.argmin(np.abs(beats - downbeats[0])))
+    phases = [(int(np.argmin(np.abs(beats - d))) - first) % per_bar for d in drops]
+    best = max(set(phases), key=phases.count)
+    if best == 0 or phases.count(best) < max(1, round(len(phases) * 2 / 3)):
+        return downbeats
+    return beats[(first + best) % per_bar :: per_bar]
+
+
 def _mark_drops(sections: list[Section], tracks: dict, duration: float) -> list[Section]:
     """Strong drops become section boundaries. A drop with a build-up before it gets a "build"
     section leading into it and opens a section called "drop"."""
@@ -368,6 +382,7 @@ def analyse_signal(
 
         tracks, curves = analyse_stems(stems, y, SR, HOP, np.asarray(beats), np.asarray(downbeats), bands["low"], bands["high"])
         drum_hits = {k: np.asarray([e[0] for e in tracks.get(k, [])]) for k in ("kick", "snare", "hihat")}
+        downbeats = _rephase_downbeats(np.asarray(beats), np.asarray(downbeats), tracks, beats_per_bar)
     else:
         from lsg.audio.drums import detect as detect_drums
 

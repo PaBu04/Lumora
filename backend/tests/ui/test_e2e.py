@@ -156,6 +156,10 @@ def test_full_workflow(env):
     show_id = api(env, "/api/playback")["show"]
     assert show_id
     page.click(".mode-switch button:has-text('Live')")
+    # play from the chorus: the starter show keeps the drum-less intro dark, and unchanged frames
+    # are only sent as keep-alives
+    httpx.post(env["base"] + "/api/playback/seek", json={"t": 35.0}, timeout=10)
+    page.wait_for_timeout(300)
     before = httpx.get(env["sim"] + "/sim/stats").json()["frames"]
     page.keyboard.press("Space")
     page.wait_for_timeout(2500)
@@ -170,7 +174,7 @@ def test_full_workflow(env):
 
     # editor: drop an effect into a layer, undo it
     n0 = sum(len(l["clips"]) for l in api(env, f"/api/projects/{slug}/shows/{show_id}")["layers"])
-    row = page.locator(".tl-row").nth(1)
+    row = page.locator(".tl-row:not(.tl-music)").nth(1)
     box = row.bounding_box()
     page.locator(".effect-chip:has-text('Sparkle')").drag_to(
         row, target_position={"x": box["width"] * 0.6, "y": box["height"] / 2}

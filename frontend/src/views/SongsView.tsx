@@ -1,6 +1,7 @@
 import { Panes } from "../components/Panes";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
 import { SECTION_COLORS, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
@@ -13,7 +14,11 @@ function StatusBadge({ song }: { song: Song }) {
     case "error":
       return <span className="badge err" title={song.error ?? ""}>Fehler</span>;
     case "running":
-      return <span className="badge info">analysiere…</span>;
+      return (
+        <span className="badge info" title={song.stage ?? ""}>
+          {song.stage ? `${song.stage}${song.progress ? ` ${Math.round(song.progress * 100)} %` : ""}` : "analysiere…"}
+        </span>
+      );
     default:
       return <span className="badge">wartet</span>;
   }
@@ -93,7 +98,22 @@ function SongDetail({ song }: { song: Song }) {
             Beats: {analysis.beat_source === "beat_this" ? "KI-Modell" : "Standard"}
           </span>
         )}
+        {analysis && <span className="badge">{analysis.beats_per_bar ?? 4}/4-Takt</span>}
+        {analysis?.stems && (
+          <span
+            className={`badge ${analysis.stems === "demucs" ? "info" : ""}`}
+            title={analysis.stems === "demucs" ? "Mit dem KI-Modell Hybrid Demucs in Schlagzeug, Bass, Gesang und Rest getrennt" : "Ohne Trennmodell geschätzt (kein Gesang)"}
+          >
+            Instrumente: {analysis.stems === "demucs" ? "getrennt" : "geschätzt"}
+          </span>
+        )}
       </div>
+      {song.status === "running" && (
+        <div className="progress" title={song.stage ?? ""} style={{ margin: "0 0 12px", maxWidth: 720 }}>
+          <div style={{ width: `${Math.round((song.progress ?? 0) * 100)}%` }} />
+          <span>{song.stage ?? "Analyse läuft"}</span>
+        </div>
+      )}
       {analysis && (
         <Field label="Tempo">
           <TempoEditor song={song} analysis={analysis} onChange={setAnalysis} />
@@ -104,6 +124,27 @@ function SongDetail({ song }: { song: Song }) {
       <div className="card" style={{ padding: 8 }}>
         <Waveform analysis={analysis} duration={song.duration} height={150} curves />
       </div>
+      {analysis && (analysis.tracks && Object.keys(analysis.tracks).length ? (
+        <>
+          <h3>Instrumente</h3>
+          <div className="card" style={{ padding: 8 }}>
+            <InstrumentLanes analysis={analysis} duration={song.duration} />
+          </div>
+          <div className="row" style={{ marginBottom: 12 }}>
+            {Object.entries(MOMENT_LABELS).map(([k, label]) => (
+              <span key={k} className="row unit">
+                <span className="swatch" style={{ background: MOMENT_COLORS[k] }} /> {label}
+              </span>
+            ))}
+            <span className="unit">· Noten: Höhe = Tonhöhe, Helligkeit = Lautstärke</span>
+          </div>
+        </>
+      ) : (
+        <div className="banner info">
+          Diese Analyse kennt noch keine Instrumente. „Neu analysieren“ trennt Schlagzeug, Bass, Gesang und den Rest und findet
+          Noten, Fills, Build-ups und Drops – darauf reagieren Shows dann viel genauer. Ein von Hand gesetztes Tempo bleibt erhalten.
+        </div>
+      ))}
       {analysis && (
         <>
           <div className="row" style={{ marginBottom: 12 }}>
@@ -159,13 +200,27 @@ function SongDetail({ song }: { song: Song }) {
       <div className="row" style={{ marginTop: 16 }}>
         <button
           className="btn small"
+          disabled={song.status === "running"}
+          title={analysis?.beats_edited ? "Das von Hand gesetzte Tempo bleibt erhalten" : undefined}
           onClick={async () => {
             await api.reanalyse(song.id);
-            notify("Analyse gestartet");
+            notify("Analyse gestartet – dauert etwa eine Minute");
             setTimeout(refreshSongs, 300);
           }}
         >
           Neu analysieren
+        </button>
+        <button
+          className="btn small ghost"
+          disabled={song.status === "running"}
+          title="Auch Beats und Tempo neu erkennen (ein von Hand gesetztes Tempo geht verloren)"
+          onClick={async () => {
+            await api.reanalyse(song.id, false);
+            notify("Analyse gestartet – Tempo wird neu erkannt");
+            setTimeout(refreshSongs, 300);
+          }}
+        >
+          … mit neuer Tempo-Erkennung
         </button>
       </div>
     </div>
@@ -305,6 +360,13 @@ export function SongsView() {
                     label: "Neu analysieren",
                     onClick: async () => {
                       await api.reanalyse(s.id);
+                      setTimeout(refreshSongs, 300);
+                    },
+                  },
+                  {
+                    label: "Neu analysieren (Tempo neu erkennen)",
+                    onClick: async () => {
+                      await api.reanalyse(s.id, false);
                       setTimeout(refreshSongs, 300);
                     },
                   },

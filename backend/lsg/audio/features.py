@@ -158,6 +158,12 @@ class AudioFeatures:
 
     def pitch_range(self, kind: str) -> tuple[float, float]:
         """Typical lowest / highest note of a track (MIDI), for mapping pitch to position."""
+        cache = self.__dict__.setdefault("_pitch_ranges", {})
+        if kind not in cache:
+            cache[kind] = self._pitch_range(kind)
+        return cache[kind]
+
+    def _pitch_range(self, kind: str) -> tuple[float, float]:
         ev = self.tracks.get(kind)
         p = ev.pitch[ev.pitch > 0] if ev is not None else np.zeros(0)
         if len(p) < 2:

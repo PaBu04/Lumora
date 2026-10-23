@@ -111,7 +111,7 @@ export const api = {
   updateSong: (id: string, patch: { title?: string; artist?: string }) => request<Song>("PATCH", `/api/songs/${id}`, patch),
   deleteSong: (id: string) => del(`/api/songs/${id}`),
   analysis: (id: string) => get<Analysis>(`/api/songs/${id}/analysis`),
-  reanalyse: (id: string) => post(`/api/songs/${id}/analyse`),
+  reanalyse: (id: string, keepTempo = true) => post(`/api/songs/${id}/analyse${keepTempo ? "" : "?keep_tempo=false"}`),
   scaleTempo: (id: string, factor: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { factor }),
   setBpm: (id: string, bpm: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { bpm }),
 

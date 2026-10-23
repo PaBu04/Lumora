@@ -23,7 +23,10 @@ const AXIS_LABEL: Record<string, string> = {
   fixture: "je Strip",
   view: "hinter → vor dem Betrachter",
 };
-const AUDIO = ["rms", "low", "mid", "high", "onset", "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy"];
+const AUDIO = [
+  "rms", "low", "mid", "high", "onset", "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy",
+  "drums", "bass", "vocals", "other", "density", "tension", "loudness",
+];
 const AUDIO_LABEL: Record<string, string> = {
   rms: "Lautstärke",
   low: "Bass",
@@ -36,6 +39,13 @@ const AUDIO_LABEL: Record<string, string> = {
   bar_decay: "Takt-Impuls",
   onset_decay: "Anschlag-Impuls",
   section_energy: "Abschnitts-Energie",
+  drums: "Instrument: Schlagzeug",
+  bass: "Instrument: Bass",
+  vocals: "Instrument: Gesang",
+  other: "Instrument: Rest (Keys, Synths …)",
+  density: "Trommel-Dichte",
+  tension: "Spannung (Build-up)",
+  loudness: "Lautstärke geglättet",
 };
 const NAMED: Record<string, string> = {
   black: "#000000", white: "#ffffff", warmwhite: "#ffb46b", red: "#ff0000", orange: "#ff6000", amber: "#ffa000",
@@ -709,6 +719,26 @@ function MultiInspector({ ids, apply, showId, onLooksChanged }: { ids: Set<strin
   );
 }
 
+/** Whole-show brightness: master level and how much quiet passages of the song darken the show. */
+function ShowSettings({ show, apply }: { show: Show; apply: (fn: (s: Show) => Show) => void }) {
+  const dyn = show.dynamics ?? 0;
+  return (
+    <div className="card" style={{ color: "var(--text)" }}>
+      <strong>Show</strong>
+      <Field label={`Gesamthelligkeit ${Math.round(show.master * 100)} %`}>
+        <input type="range" min={0} max={1} step={0.01} value={show.master} onChange={(e) => apply((s) => ({ ...s, master: +e.target.value }))} />
+      </Field>
+      <Field label={`Dynamik ${Math.round(dyn * 100)} %`}>
+        <input type="range" min={0} max={1} step={0.01} value={dyn} onChange={(e) => apply((s) => ({ ...s, dynamics: +e.target.value }))} />
+      </Field>
+      <p className="hint" style={{ margin: 0 }}>
+        Dynamik: leise Stellen des Songs dunkeln die ganze Show ab, laute bleiben hell. 50–80 % geben einen deutlichen Unterschied
+        zwischen dunklen und hellen Passagen.
+      </p>
+    </div>
+  );
+}
+
 export function Inspector(props: {
   show: Show;
   selection: Set<string>;
@@ -732,6 +762,7 @@ export function Inspector(props: {
   if (layer) return <LayerInspector layer={layer} apply={props.apply} onDeleted={() => props.setSelectedLayer(null)} />;
   return (
     <div className="hint">
+      <ShowSettings show={show} apply={props.apply} />
       <p>Clip oder Ebene in der Timeline anklicken.</p>
       <ul style={{ paddingLeft: 18, lineHeight: 1.7 }}>
         <li>Effekt aus der Leiste in eine Ebene ziehen</li>
