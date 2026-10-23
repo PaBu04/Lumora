@@ -45,7 +45,9 @@ leds    the targeted LEDs; numpy arrays of length leds.n:
 audio   music at time t: audio.rms, .low, .mid, .high, .onset (0..1), audio.bpm,
           audio.beat (continuous beat count), .beat_phase (0..1), .bar, .bar_phase,
           .since_beat, .since_bar, .since_onset, .since_kick, .since_snare, .since_hihat
-          (seconds), .section (name), .section_energy
+          (seconds), .section (name), .section_energy,
+          instruments 0..1: .drums, .bass, .vocals, .other (loudness of each), .density (drum hits),
+          .tension (rises through a build-up), .loudness (smoothed song loudness)
 params  dict of the clip's params (dynamic values already resolved to numbers)
 ctx     (global) clip context: ctx.lt (seconds since clip start), ctx.duration, ctx.progress
 

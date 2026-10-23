@@ -483,7 +483,7 @@ class Rise(Effect):
         Param("color", "color", "#ffffff", "colour"),
         Param("axis", "axis", "z", "direction the light climbs (z = floor -> ceiling)", dynamic=False),
         Param("flicker", "number", 0.6, "0 = smooth, 1 = strong flicker that speeds up towards the end", 0.0, 1.0),
-        Param("start", "number", 0.05, "brightness at the clip start", 0.0, 1.0),
+        Param("floor", "number", 0.05, "level at the clip start", 0.0, 1.0),
         Param("curve", "number", 2.0, "1 = linear, higher = most of the rise at the end", 0.5, 6.0),
         BRIGHTNESS,
     )
@@ -496,7 +496,7 @@ class Rise(Effect):
         slot = math.floor(ctx.lt * rate)
         flick = _hash(ctx.leds.idx, np.full(ctx.leds.n, slot), ctx.seed)
         flick = 1 - p["flicker"] * (flick > 0.5 + 0.4 * f)
-        level = (p["start"] + (1 - p["start"]) * f) * front * flick
+        level = (p["floor"] + (1 - p["floor"]) * f) * front * flick
         return _fill(p["color"] * p["brightness"], ctx.leds.n), level.astype(np.float32)
 
 

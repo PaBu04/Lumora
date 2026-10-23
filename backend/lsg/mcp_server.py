@@ -28,46 +28,57 @@ Neopixel Light Show Generator: program music-synchronised LED light shows for a 
 Workflow:
 1. get_overview - room, viewer, fixtures (LED strips: length, LED count, how much the viewer sees them
    directly), songs and shows in one call.
-2. get_song_analysis - tempo, beats, bars, sections, loudness curves and drum hits (kick / snare / hihat).
+2. get_song_analysis - tempo, bars, sections, loudness curves and the INSTRUMENTS: per section which
+   instruments play (drums, bass, vocals, other = keys / synths / guitars), sung phrases, drops, build-ups,
+   drum fills, crashes. get_song_events - the individual notes and hits of an instrument in a time window.
+   You may also use what you know about the song (title / artist): its mood, hook, famous moments.
 3. list_effects / get_show_format - the effect library and the show JSON format.
 4. create_show (template "empty"), then add_clips / update_clips / remove_clips.
-5. validate (errors, brightness, monotony), analyze_light (room light and motion per section),
-   render_timeline / render_snapshot to look at the result; fix and repeat. preview plays it in the app.
+5. validate (errors, brightness, monotony), analyze_light (room light, quiet passages, contrast per
+   section), render_timeline / render_snapshot to look at the result; fix and repeat. preview plays it.
 
 HOW A GOOD SHOW LOOKS - follow these rules:
-- DARK BY DEFAULT. LEDs in a dark room are very bright. Most of the time most LEDs are off or dim
-  (0.03-0.15); light is an accent that comes and goes with the music. A long strip (hundreds of LEDs)
-  lights up the whole room even at 0.1 - use washes on long strips sparingly and dimly, and prefer
-  effects that light only parts of them (hits, chase, sparkle). analyze_light: room_light 0.01-0.04 is
-  a dark, punchy show; above 0.06 it feels bright and flat.
+- FOLLOW THE SOUND, NOT THE GRID. Music is more than 4/4 beats: light what the instruments actually do.
+  Every effect with a trigger can follow an instrument track: kick, snare, hihat, crash (drum hits with
+  velocity - fills and rolls come out as played, faster in transitions), bass, vocal, lead (notes with
+  pitch and length), phrase (sung passages), fill, build, drop, no_drums. "hits" on kick / snare for the
+  beat, "notes" for melodies and bass lines (position = pitch, stays lit while the note sounds),
+  "pulse" with sustain on phrase for a glow while someone sings. Loud hits are brighter (velocity).
+  Give the instrument that carries a passage the most visible strip in it (e.g. vocals in the verse,
+  the lead synth in the drop, the drums in a fill).
+- CUES FOR SINGLE MOMENTS. Not everything is a looping pattern: put one-shot clips (trigger "once", the
+  clip is the cue) on single moments from the analysis: a drop -> a bright flash on the room ("pulse"
+  once on indirect LEDs) + a "ripple" once from the viewer; a build-up -> "rise" from the build start
+  exactly to the drop; a drum fill -> a "sweep" once over the fill's duration; a crash -> a short flash.
+  Cues make transitions readable and give the show its shape.
+- DARK WHERE THE MUSIC IS QUIET, BRIGHT WHERE IT HITS. The contrast between dark and bright is what makes
+  a show. Passages without drums or with low loudness stay nearly dark - only the melody / voice glows on
+  a few LEDs; the room (indirect LEDs) stays off. Loud parts and drops may be bright, but as accents
+  (short flashes, hits), not as permanent washes. Set the show's "dynamics" (0.5-0.8) so quiet passages
+  automatically get darker. analyze_light: room_light 0.002-0.03 overall, quiet passages below 0.008,
+  bright_p90 several times dark_p10.
 - DIRECT VS INDIRECT. The viewer only sees the LEDs in front of them (target {"view": "direct"}); LEDs
   behind or far beside them (target {"view": "indirect"}) are only seen as light on walls and ceiling.
-  Put detail (hits, chases, sparkle, spotlight, sweeps along a strip) on direct LEDs. Use indirect LEDs
-  for the colour of the room: dim washes, and flashes / strobes on big hits (drops, downbeats).
-  get_overview tells per fixture how much of it is seen directly; one strip can have both parts.
-- SMALL, LOCAL ACCENTS ON DRUMS. Use the "hits" effect (trigger kick / snare / hihat / onset): a few
-  segments of 4-30 LEDs flash at random places and fade - instead of whole strips pulsing. Kick =
-  bigger, warmer segments; snare = sharper, other colour; hihat = tiny glitter (size 1-3).
-- MEASURE IN METRES / LEDS, NOT PER STRIP. A pattern stretched over a strip looks different on a 1 m and
-  a 5 m strip. Use axis "s" (metres along the strip; count / repeat / scale / wavelength then mean
-  "per metre") for chases, waves and gradients along strips, and hits.size in LEDs.
-- USE THE ROOM. Room axes x, y, z (normalised to the room) and azimuth / elevation (as seen by the
-  viewer) span all strips, so effects travel from strip to strip: "sweep" (a band from floor to
-  ceiling, axis "z", or left to right, axis "azimuth", once per bar / kick / ...), "wave", "gradient".
-- VARIETY. Do not give every strip the same effect: give groups roles (e.g. ceiling = room colour,
-  wall strips = rhythm, desk = accents) and change something every phrase (4-8 bars). Sections with the
-  same label sound alike - give them related looks, and make the loudest sections (chorus / drop) the
-  brightest and busiest, breaks and intros nearly dark. Build up before drops (sweeps, rising density).
-- COLOUR. Pick 2-3 colours per section that belong together (one palette + one accent); white is an
-  accent. Avoid full rainbows everywhere.
+  Put detail (hits, notes, chases, sweeps along a strip) on direct LEDs. Use indirect LEDs for the colour
+  of the room in loud parts and for flashes on drops, crashes and big hits. A long strip (hundreds of
+  LEDs) lights up the whole room even at 0.1 - keep washes on it rare and dim.
+- SMALL, LOCAL ACCENTS. Hits light a few segments of 4-30 LEDs instead of whole strips: kick = bigger,
+  warmer; snare = sharper, other colour; hihat = tiny glitter (size 1-3).
+- MEASURE IN METRES / LEDS, NOT PER STRIP. Use axis "s" (metres along the strip) for chases, waves and
+  gradients along strips, hits.size in LEDs.
+- USE THE ROOM. Room axes x, y, z and azimuth / elevation span all strips, so sweeps, rises and waves
+  travel from strip to strip.
+- VARIETY. Different strips, different roles; something changes every few bars; sections with the same
+  label sound alike - give them related looks. Pick 2-3 colours per section that belong together;
+  white is an accent. Avoid full rainbows everywhere.
 
 Brightness is PERCEIVED brightness (like sRGB): 0.5 looks half as bright as 1.0, the app converts it to
 LED PWM with the calibrated curve. Values below ~0.03 fall into the lowest PWM steps and look identical
-or switch off. Contrast reads in perceived terms: 0.1 -> 0.5 is a strong change, 0.9 -> 1.0 is not.
-Power: if get_overview shows budgets, check analyze_power - the limiter dims a whole controller.
+or switch off. Power: if get_overview shows budgets, check analyze_power - the limiter dims a whole
+controller.
 
 Conventions: metres, z is up, floor at z = 0. Azimuth 0 = straight ahead, negative = left; elevation
-positive = up. Times are seconds of the song; align clip boundaries with bars and sections.
+positive = up. Times are seconds of the song.
 Write custom effects as Python/numpy shaders with write_shader when the library is not enough.
 """
 
@@ -98,13 +109,22 @@ Target (which LEDs): {"fixtures": [ids], "tags": [tags], "view": "direct" | "ind
   field of view, "indirect" = behind / beside the viewer. Where-fields: x, y, z, distance, s (metres;
   s = along the strip from its first LED), nx, ny, nz, u (0..1), azimuth, elevation (degrees), view (0..1).
 
+Show fields: "master" (0..1 overall), "dynamics" (0..1: how much quiet passages of the song darken the
+whole show; 0.5-0.8 recommended).
+
 Parameter values can be animated (number params; keyframes also for colours and points):
   audio binding: {"audio": "low", "min": 0.1, "max": 1.0, "pow": 1.0}
-     sources: rms, low, mid, high, onset, beat_phase, bar_phase, beat_decay, bar_decay, onset_decay, section_energy
+     sources: rms, low, mid, high, onset, beat_phase, bar_phase, beat_decay, bar_decay, onset_decay, section_energy,
+              drums, bass, vocals, other (loudness of each instrument), density (drum hits per second, relative),
+              tension (rises through a build-up), loudness (smoothed loudness of the song)
   keyframes:     {"keys": [[0, "#ff0000"], [8, "#0000ff"]], "ease": "linear|smooth|step"}  (seconds from clip start)
   lfo:           {"lfo": "sine|triangle|saw|square", "beats": 2, "min": 0, "max": 1, "phase": 0}  (or "seconds": 3)
 
-Triggers (pulse, hits, sweep, ripple): beat, bar, onset, kick, snare, hihat (+ half_beat, two_beats for pulse).
+Triggers (pulse, hits, sweep, ripple; notes takes a "track"): beat, bar, onset, the instrument tracks kick, snare,
+hihat, crash, bass, vocal, phrase, lead, fill, build, drop, no_drums - and "once" = one time at the clip start
+(a cue: the clip's start and length are the moment; sweep "once" crosses the room over the whole clip).
+"velocity" scales the flash with how loud the hit / note was; "sustain" keeps it lit while the note or passage
+lasts. Instrument tracks need an analysis with instruments (get_song_analysis: "instruments").
 
 Brightness is perceived (0.5 = looks half as bright). Base levels 0.03-0.15, accents 0.6-1.0, nothing
 below 0.03. Long strips: dimmer.
@@ -124,6 +144,55 @@ Tempo locking: most moving effects take "beats" (> 0 = one cycle per N beats) in
 
 def _err(exc: Exception) -> dict[str, Any]:
     return {"ok": False, "error": str(exc)}
+
+
+MOMENT_TRACKS = ("drop", "build", "fill", "crash", "phrase", "no_drums")
+
+
+def instrument_summary(a, feats: AudioFeatures, start: float, end: float) -> dict[str, Any]:
+    """What the instruments do per section, plus the single moments (drops, build-ups, fills ...)."""
+    if not a.tracks:
+        return {
+            "available": False,
+            "note": "analysed without instruments: only kick / snare / hihat (approximate). Ask the user to analyse the "
+            "song again for instrument tracks.",
+        }
+
+    def mean(name: str, s0: float, s1: float) -> float:
+        c = feats.curves[name]
+        i, j = int(s0 * feats.frame_rate), max(int(s0 * feats.frame_rate) + 1, int(s1 * feats.frame_rate))
+        return round(float(np.mean(c[i:j])), 2) if len(c) > 1 else 0.0
+
+    sections = []
+    for s in a.sections:
+        if s.end <= start or s.start >= end:
+            continue
+        loud = {k: mean(k, s.start, s.end) for k in ("drums", "bass", "vocals", "other")}
+        counts = {
+            k: sum(s.start <= e[0] < s.end for e in a.tracks.get(k, [])) for k in ("kick", "snare", "bass", "vocal", "lead")
+        }
+        sections.append(
+            {
+                "start": s.start,
+                "end": s.end,
+                "name": s.name,
+                "loudness": mean("loudness", s.start, s.end),
+                "instrument_loudness": loud,
+                "leading": max(loud, key=loud.get) if max(loud.values()) > 0.2 else None,
+                "events": counts,
+            }
+        )
+    moments = {k: [e for e in a.tracks.get(k, []) if start <= e[0] < end] for k in MOMENT_TRACKS}
+    return {
+        "available": True,
+        "separation": a.stems,
+        "meter": f"{a.beats_per_bar}/4",
+        "sections": sections,
+        "moments": moments,
+        "moments_format": "[time, strength, duration, pitch]; drop = the music comes in hard, build = build-up leading "
+        "into a drop (ends at the drop), fill = drum fill / roll, phrase = sung passage, no_drums = passage without drums",
+        "tracks": {k: len(v) for k, v in a.tracks.items()},
+    }
 
 
 def create_mcp(st: AppState) -> MCPServer:
@@ -298,9 +367,11 @@ def create_mcp(st: AppState) -> MCPServer:
     def get_song_analysis(
         song_id: str, start: float = 0.0, end: float | None = None, resolution_hz: float = 4.0, include_onsets: bool = False
     ) -> dict[str, Any]:
-        """Music analysis: bpm, beats, downbeats (bar starts), sections (intro/verse/chorus/bridge/break/outro with
-        similarity labels and energy) and loudness curves (rms, low, mid, high, onset; 0..1) resampled to
-        resolution_hz inside [start, end]. Request long songs in windows."""
+        """Music analysis: bpm, beats, downbeats (bar starts), sections (intro/verse/chorus/bridge/break/build/drop/outro
+        with similarity labels and energy), instruments (which instrument leads each section; drops, build-ups, fills,
+        crashes, sung phrases), drum hits and curves (rms, low, mid, high, onset, loudness, drums, bass, vocals, other,
+        tension; 0..1) resampled to resolution_hz inside [start, end]. Request long songs in windows. Notes and hits of
+        each instrument: get_song_events."""
         try:
             song = st.songs.get(song_id)
         except KeyError:
@@ -331,6 +402,7 @@ def create_mcp(st: AppState) -> MCPServer:
         ]
         out = {
             "song": {"id": song.id, "title": song.title, "artist": song.artist, "duration": a.duration},
+            "instruments": instrument_summary(a, feats, start, end),
             "drums": drums,
             "drum_density": density,
             "bpm": a.bpm,
@@ -341,12 +413,46 @@ def create_mcp(st: AppState) -> MCPServer:
             "downbeats": in_win(a.downbeats),
             "curves": {
                 "times": np.round(times, 3).tolist(),
-                **{name: [round(f.level(name, float(t)), 2) for t in times] for name in ("rms", "low", "mid", "high", "onset")},
+                **{
+                    name: [round(f.level(name, float(t)), 2) for t in times]
+                    for name in ("rms", "low", "mid", "high", "onset", "loudness", "drums", "bass", "vocals", "other", "tension")
+                },
             },
         }
         if include_onsets:
             out["onsets"] = in_win(a.onsets)
         return out
+
+    @mcp.tool()
+    def get_song_events(
+        song_id: str, tracks: list[str] | None = None, start: float = 0.0, end: float | None = None, min_strength: float = 0.0
+    ) -> dict[str, Any]:
+        """Individual events of instrument tracks in [start, end]: each [time s, strength 0..1, duration s, pitch MIDI
+        (0 = none)]. Tracks: kick, snare, hihat, crash, bass, vocal, phrase, lead, fill, build, drop, no_drums (default:
+        all). Request dense tracks (hihat, vocal, lead) in windows of ~30 s."""
+        try:
+            st.songs.get(song_id)
+        except KeyError:
+            return _err(KeyError(f"unknown song {song_id!r}"))
+        a = st.songs.analysis(song_id)
+        if a is None:
+            return _err(ValueError("the song has not been analysed yet"))
+        if not a.tracks:
+            return {
+                "ok": False,
+                "error": "this analysis has no instrument tracks yet - ask the user to analyse the song again "
+                "(Songs page, right click -> Neu analysieren); kick / snare / hihat are in get_song_analysis",
+            }
+        end = a.duration if end is None else end
+        names = tracks or list(a.tracks)
+        unknown = [n for n in names if n not in a.tracks]
+        if unknown:
+            return _err(KeyError(f"unknown track(s) {unknown}; available: {sorted(a.tracks)}"))
+        return {
+            "window": [start, end],
+            "format": "[time, strength, duration, pitch]",
+            "tracks": {n: [e for e in a.tracks[n] if start <= e[0] < end and e[1] >= min_strength] for n in names},
+        }
 
     @mcp.tool()
     def list_effects() -> dict[str, Any]:

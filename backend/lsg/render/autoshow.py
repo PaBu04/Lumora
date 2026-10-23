@@ -1,21 +1,22 @@
 """Rule-based starter show from the song analysis and the room (no AI needed).
 
 Design rules (the same ones the AI gets in its instructions):
-  * dark by default: most of the time most LEDs are off or very dim, light is an accent;
-    long strips light up the whole room even when dim, so their levels are scaled down
-  * the viewer sees only some strips directly: those carry rhythm and detail (segment hits,
-    chases), strips behind / beside the viewer only colour the room and flash on big hits
-  * variety: every direct strip gets its own effect and the assignment rotates every phrase
-    (8 bars); sections that sound alike (same label) look alike
-  * drums drive the accents: kick / snare / hi-hat hits light short segments, sweeps travel
-    through the room at the start of loud sections
-  * patterns are measured in metres / LEDs (axis "s", hits.size), not stretched per strip
+  * follow the instruments, not a grid: drums light small segments on their hits (with their
+    velocity), melody and bass show up as notes (position = pitch), single moments - drops,
+    crashes, drum fills - get one-shot cues, build-ups rise until the drop
+  * dark by default and dark where the music is quiet: passages without drums keep only the
+    melody glowing, the show's dynamics setting darkens quiet parts further; long strips light
+    up the whole room even when dim, so their levels are scaled down
+  * the viewer sees only some strips directly: each gets an instrument (drums, melody, bass,
+    accents); strips behind / beside the viewer only colour the room and flash on big hits
+  * sections that sound alike (same label) look alike
 """
 
 import zlib
 
 import numpy as np
 
+from lsg.audio.features import AudioFeatures
 from lsg.model.project import Project
 from lsg.model.show import Clip, Layer, Show, Target
 from lsg.model.song import Analysis
@@ -29,7 +30,6 @@ LOOKS = [
     (["#100030", "#3000a0", "#7040ff"], "#a080ff", "#ff60c0"),
     (["#202020", "#404858", "#8090b0"], "#ffffff", "#40c0ff"),
 ]
-PHRASE_BARS = 8
 LONG_STRIP = 120  # LEDs; longer strips get dimmer washes
 
 
@@ -107,13 +107,6 @@ def _fallback(name: str, song_id: str | None, duration: float | None) -> Show:
     )
 
 
-def _phrases(start: float, end: float, downbeats: np.ndarray) -> list[tuple[float, float]]:
-    """Split a section into phrases of PHRASE_BARS bars (the last one takes the remainder)."""
-    bars = downbeats[(downbeats >= start - 0.05) & (downbeats < end - 0.05)]
-    cuts = [start] + [float(b) for b in bars[PHRASE_BARS::PHRASE_BARS] if end - b > 2.0] + [end]
-    return [(cuts[i], cuts[i + 1]) for i in range(len(cuts) - 1)]
-
-
 def _fixture_info(project: Project | None, table) -> list[dict]:
     """Strips as parts the viewer sees directly or not. A strip that runs both in front of and
     behind the viewer (e.g. around the ceiling) becomes two parts with a view target."""
@@ -145,123 +138,345 @@ def _dim(base: float, leds: int) -> float:
     return round(max(0.03, base * min(1.0, (LONG_STRIP / max(leds, 1)) ** 0.5)), 3)
 
 
-def _detail_clip(scene: str, t0: float, t1: float, fid: str, look, level: float) -> Clip:
-    """One rhythm/detail effect on one directly visible strip."""
+ROLES = ("drums", "melody", "bass", "accent")
+
+
+def _roles(direct: list[dict]) -> dict[str, list[dict]]:
+    """Give every strip in view an instrument to show: the longest strip the drums (small hits
+    spread over many LEDs), then melody (vocal / lead notes), bass notes and accents. With fewer
+    strips, strips take several roles; with more, roles repeat."""
+    parts = sorted(direct, key=lambda f: -f["leds"])
+    out: dict[str, list[dict]] = {r: [] for r in ROLES}
+    for i, f in enumerate(parts):
+        out[ROLES[i % len(ROLES)]].append(f)
+    for i, r in enumerate(ROLES):
+        if not out[r]:
+            out[r] = [parts[i % len(parts)]]
+    return out
+
+
+def _mean(features: AudioFeatures, name: str, a: float, b: float) -> float:
+    c = features.curves.get(name)
+    if c is None or len(c) < 2:
+        return 0.0
+    i, j = int(a * features.frame_rate), max(int(a * features.frame_rate) + 1, int(b * features.frame_rate))
+    return float(np.mean(c[i:j])) if i < len(c) else 0.0
+
+
+def _mood(s, features: AudioFeatures, q_hi: float) -> str:
+    """dark (quiet, no drums), calm, full (loudest parts) or build."""
+    if s.name == "build":
+        return "build"
+    loud = _mean(features, "loudness", s.start, s.end)
+    drums = _mean(features, "drums", s.start, s.end) if features.has_instruments else _mean(features, "density", s.start, s.end)
+    if s.name in ("intro", "outro", "break") and loud < 0.75:
+        return "dark"
+    if drums < 0.12:  # no beat: let the melody glow, keep the room dark
+        return "dark" if loud < 0.85 else "calm"
+    if s.name == "drop" or s.energy >= q_hi:
+        return "full"
+    return "calm"
+
+
+def _clip(start, end, effect, target, blend="max", **params) -> Clip:
+    return Clip(start=start, end=end, effect=effect, target=target, blend=blend, params=params)
+
+
+def _section_clips(s, mood: str, roles: dict, indirect: list[dict], look, f: AudioFeatures) -> dict:
+    """Long clips driven by instrument tracks for one section, per layer name."""
     pal, acc, acc2 = look
-    target = Target(fixtures=[fid])
-    match scene:
-        case "glow":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="noise",
-                target=target,
-                params={"palette": pal, "speed": 0.15, "brightness": 0.1 + 0.1 * level},
+    a, b = s.start, s.end
+    out: dict[str, list[Clip]] = {"Raum": [], "Drums": [], "Melodie": []}
+    tracks = f.tracks if f.has_instruments else {}
+    singing = [e for e in zip(*tracks["phrase"], strict=True) if e[0] < b and e[0] + e[2] > a] if "phrase" in tracks else []
+    bass_on = "bass" in tracks and _mean(f, "bass", a, b) > 0.15
+
+    # drums: small segments on the biggest strip(s)
+    for p in roles["drums"]:
+        tgt = _target(p)
+        if mood in ("calm", "full"):
+            big = mood == "full"
+            out["Drums"].append(
+                _clip(
+                    a,
+                    b,
+                    "hits",
+                    tgt,
+                    palette=[acc, "#ffffff"],
+                    trigger="kick",
+                    count=2 if big else 1,
+                    size=12 if big else 8,
+                    decay=0.18,
+                    brightness=0.9 if big else 0.7,
+                )
             )
-        case "drift":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="wave",
-                target=target,
-                params={
-                    "color": acc,
-                    "axis": "s",
-                    "wavelength": 1.2,
-                    "sharpness": 3,
-                    "beats": 8,
-                    "brightness": 0.15 + 0.15 * level,
-                },
+            out["Drums"].append(
+                _clip(
+                    a,
+                    b,
+                    "hits",
+                    tgt,
+                    palette=[acc2],
+                    trigger="snare",
+                    count=2 if big else 1,
+                    size=8 if big else 5,
+                    decay=0.15,
+                    brightness=0.85 if big else 0.6,
+                )
             )
-        case "onset_hits":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="hits",
-                blend="max",
-                target=target,
-                params={
-                    "palette": [acc, acc2],
-                    "trigger": "onset",
-                    "count": 1,
-                    "size": 8,
-                    "decay": 0.5,
-                    "brightness": 0.35 + 0.2 * level,
-                },
+            if big:
+                out["Drums"].append(
+                    _clip(a, b, "hits", tgt, palette=["#ffffff"], trigger="hihat", count=2, size=2, decay=0.07, brightness=0.35)
+                )
+        elif mood == "build":  # the rise itself is a cue over all strips in view
+            out["Drums"].append(
+                _clip(a, b, "hits", tgt, palette=["#ffffff", acc2], trigger="snare", count=1, size=6, decay=0.1, brightness=0.8)
             )
-        case "kick_hits":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="hits",
-                blend="max",
-                target=target,
-                params={
-                    "palette": [acc, "#ffffff"],
-                    "trigger": "kick",
-                    "count": 2 + round(2 * level),
-                    "size": 10 + round(8 * level),
-                    "decay": 0.22,
-                    "brightness": 0.6 + 0.35 * level,
-                },
+
+    # melody: sung notes while singing, the lead instrument (keys, synths, guitars) in between
+    for p in roles["melody"]:
+        tgt = _target(p)
+        level = {"dark": 0.4, "calm": 0.6, "full": 0.85, "build": 0.5}[mood]
+        free, cursor = [], a
+        for t0, _, d, _ in singing:
+            c0, c1 = max(a, t0), min(b, t0 + d + 0.6)
+            if c1 - c0 > 0.3:
+                out["Melodie"].append(
+                    _clip(
+                        c0,
+                        c1,
+                        "notes",
+                        tgt,
+                        track="vocal",
+                        palette=[pal[-1], acc],
+                        axis="u",
+                        width=0.1,
+                        decay=0.35,
+                        max_hold=1.0,
+                        brightness=level,
+                    )
+                )
+            free.append((cursor, c0))
+            cursor = max(cursor, c1)
+        free.append((cursor, b))
+        for c0, c1 in free:
+            if c1 - c0 < 2.0:
+                continue
+            if "lead" in tracks and mood != "build":
+                out["Melodie"].append(
+                    _clip(
+                        c0,
+                        c1,
+                        "notes",
+                        tgt,
+                        track="lead",
+                        palette=[pal[1], acc],
+                        axis="u",
+                        width=0.06,
+                        decay=0.25,
+                        max_hold=0.5,
+                        brightness=round(level * 0.8, 2),
+                    )
+                )
+            elif not tracks and mood != "dark":
+                out["Melodie"].append(
+                    _clip(c0, c1, "hits", tgt, palette=[acc, acc2], trigger="onset", count=1, size=8, decay=0.4, brightness=level)
+                )
+
+    # bass notes, low on the strip = low note
+    if bass_on and mood in ("calm", "full"):
+        for p in roles["bass"]:
+            out["Melodie"].append(
+                _clip(
+                    a,
+                    b,
+                    "notes",
+                    _target(p),
+                    track="bass",
+                    palette=[pal[0], pal[-1]],
+                    axis="u",
+                    width=0.25,
+                    decay=0.2,
+                    max_hold=0.6,
+                    brightness=0.75 if mood == "full" else 0.5,
+                )
             )
-        case "snare_hits":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="hits",
-                blend="max",
-                target=target,
-                params={
-                    "palette": [acc2, acc],
-                    "trigger": "snare",
-                    "count": 2 + round(2 * level),
-                    "size": 6 + round(6 * level),
-                    "decay": 0.18,
-                    "brightness": 0.6 + 0.35 * level,
-                },
+
+    # accents: snare / clap flashes on the small strips, a soft glow while singing in quiet parts
+    for p in roles["accent"]:
+        tgt = _target(p)
+        if mood in ("calm", "full"):
+            out["Drums"].append(
+                _clip(
+                    a,
+                    b,
+                    "pulse",
+                    tgt,
+                    color=acc2,
+                    trigger="snare",
+                    decay=0.12,
+                    velocity=0.8,
+                    brightness=0.8 if mood == "full" else 0.55,
+                )
             )
-        case "hat_glitter":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="hits",
-                blend="max",
-                target=target,
-                params={
-                    "palette": ["#ffffff", acc],
-                    "trigger": "hihat",
-                    "count": 3,
-                    "size": 2,
-                    "decay": 0.1,
-                    "brightness": 0.5 + 0.3 * level,
-                },
+        elif mood == "dark" and singing:
+            out["Melodie"].append(
+                _clip(a, b, "pulse", tgt, color=pal[-1], trigger="phrase", sustain=True, decay=1.2, velocity=0.3, brightness=0.2)
             )
-        case "chase":
-            return Clip(
-                start=t0,
-                end=t1,
-                effect="chase",
-                blend="max",
-                target=target,
-                params={
-                    "color": acc,
-                    "axis": "s",
-                    "count": 0.5 + 0.5 * level,
-                    "width": 0.25,
-                    "tail": 0.9,
-                    "beats": 4 if level < 0.7 else 2,
-                    "brightness": 0.45 + 0.4 * level,
-                },
+
+    # room colour behind / beside the viewer: dim, follows the bass, flashes on kicks when full
+    for p in indirect:
+        tgt = _target(p)
+        if mood == "full":
+            out["Raum"].append(
+                _clip(
+                    a,
+                    b,
+                    "noise",
+                    tgt,
+                    blend="normal",
+                    palette=pal,
+                    speed=0.15,
+                    scale=0.6,
+                    brightness={"audio": "bass" if bass_on else "loudness", "min": 0.03, "max": _dim(0.14, p["leds"])},
+                )
             )
-    raise ValueError(scene)
+            out["Raum"].append(
+                _clip(
+                    a,
+                    b,
+                    "pulse",
+                    tgt,
+                    blend="add",
+                    color=acc,
+                    trigger="kick",
+                    decay=0.12,
+                    velocity=0.7,
+                    brightness=_dim(0.5, p["leds"]),
+                )
+            )
+        elif mood == "calm":
+            out["Raum"].append(
+                _clip(a, b, "noise", tgt, blend="normal", palette=pal, speed=0.1, scale=0.6, brightness=_dim(0.06, p["leds"]))
+            )
+        elif mood == "build":
+            out["Raum"].append(
+                _clip(
+                    a,
+                    b,
+                    "pulse",
+                    tgt,
+                    blend="add",
+                    color=acc,
+                    trigger="snare",
+                    decay=0.1,
+                    velocity=0.5,
+                    brightness={"audio": "tension", "min": 0.03, "max": _dim(0.5, p["leds"])},
+                )
+            )
+    return out
 
 
-SCENES = {
-    "low": ["glow", "drift", "onset_hits"],
-    "mid": ["kick_hits", "chase", "snare_hits", "drift"],
-    "high": ["kick_hits", "snare_hits", "chase", "hat_glitter"],
-}
+def _cues(
+    f: AudioFeatures, everything: Target, direct: Target, indirect: Target | None, looks_at, beat: float, rise_axis: str
+) -> list[Clip]:
+    """One-shot clips at single moments: drops, crashes, drum fills."""
+    tracks = f.tracks if f.has_instruments else {}
+    out: list[Clip] = []
+    drops = [(t, v) for t, v, _, _ in zip(*tracks["drop"], strict=True)] if "drop" in tracks else []
+    for t, v in drops:
+        if v < 0.4:
+            continue
+        _, acc, acc2 = looks_at(t)
+        out.append(
+            _clip(
+                t,
+                t + 2.0,
+                "pulse",
+                indirect or everything,
+                blend="add",
+                color="#ffffff",
+                trigger="once",
+                decay=0.35 + 0.6 * v,
+                brightness=round(0.5 + 0.5 * v, 2),
+            )
+        )
+        out.append(
+            _clip(
+                t,
+                t + 2.5,
+                "ripple",
+                everything,
+                blend="add",
+                color=acc,
+                trigger="once",
+                center="viewer",
+                speed=5.0,
+                width=0.6,
+                decay=2.0,
+                brightness=round(0.5 + 0.4 * v, 2),
+            )
+        )
+    near_drop = [t for t, _ in drops]
+    if "crash" in tracks:
+        for t, v in zip(tracks["crash"].times, tracks["crash"].strength, strict=True):
+            if all(abs(t - d) > 1.0 for d in near_drop):
+                _, acc, _ = looks_at(t)
+                out.append(
+                    _clip(
+                        float(t),
+                        float(t) + 1.5,
+                        "pulse",
+                        indirect or everything,
+                        blend="add",
+                        color=acc,
+                        trigger="once",
+                        decay=0.45,
+                        brightness=round(0.35 + 0.35 * float(v), 2),
+                    )
+                )
+    builds = list(zip(tracks["build"].times, tracks["build"].duration, strict=True)) if "build" in tracks else []
+    for b0, bd in builds:
+        _, acc, _ = looks_at(float(b0))
+        out.append(
+            _clip(
+                float(b0),
+                float(b0 + bd),
+                "rise",
+                direct,
+                blend="add",
+                color=acc,
+                axis=rise_axis,
+                flicker=0.7,
+                floor=0.03,
+                curve=2.0,
+                brightness=0.7,
+            )
+        )
+    last_fill = -1e9
+    if "fill" in tracks:
+        for i, (t, v, d) in enumerate(zip(tracks["fill"].times, tracks["fill"].strength, tracks["fill"].duration, strict=True)):
+            if any(b0 <= t < b0 + bd for b0, bd in builds) or t - last_fill < 6.0:
+                continue
+            last_fill = float(t)
+            _, _, acc2 = looks_at(t)
+            dur = float(max(d, beat))
+            out.append(
+                _clip(
+                    float(t),
+                    float(t) + dur,
+                    "sweep",
+                    direct,
+                    blend="add",
+                    color=acc2,
+                    trigger="once",
+                    axis="azimuth" if i % 2 == 0 else "-azimuth",
+                    width=0.15,
+                    tail=0.4,
+                    brightness=round(0.5 + 0.4 * float(v), 2),
+                )
+            )
+    return out
 
 
 def starter_show(
@@ -274,105 +489,52 @@ def starter_show(
 ) -> Show:
     if analysis is None or not analysis.sections:
         return _fallback(name, song_id, duration)
+    f = AudioFeatures(analysis)
     fixtures = _fixture_info(project, table)
-    direct = [f for f in fixtures if f["view"] >= 0.5]
-    indirect = [f for f in fixtures if f["view"] < 0.5]
+    direct = [x for x in fixtures if x["view"] >= 0.5]
+    indirect = [x for x in fixtures if x["view"] < 0.5]
     if fixtures and not direct:  # nothing in view: the most visible strips carry the details
-        direct = sorted(fixtures, key=lambda f: -f["view"])[: max(1, len(fixtures) // 2)]
-        indirect = [f for f in fixtures if f not in direct]
+        direct = sorted(fixtures, key=lambda x: -x["view"])[: max(1, len(fixtures) // 2)]
+        indirect = [x for x in fixtures if x not in direct]
     if not fixtures:  # no room information: one group for everything
         direct = [{"id": None, "leds": 300, "view": 1.0}]
+    roles = _roles(direct)
+    z = table.pos[:, 2] if table is not None and table.count else np.zeros(1)
+    rise_axis = "z" if float(np.ptp(z)) > 0.5 else "u"
 
-    room, rhythm, accent = Layer(name="Raum"), Layer(name="Rhythmus"), Layer(name="Akzente")
     energies = sorted(s.energy for s in analysis.sections)
-    q_lo = energies[int(len(energies) * 0.35)]
     q_hi = energies[int(len(energies) * 0.7)]
     labels = sorted({s.label for s in analysis.sections})
     seed = zlib.crc32((song_id or name).encode())
-    downbeats = np.asarray(analysis.downbeats, dtype=float)
 
-    for si, s in enumerate(analysis.sections):
-        k = labels.index(s.label)
-        look = LOOKS[(k + seed) % len(LOOKS)]
-        quiet = s.name in ("intro", "outro", "break")
-        kind = "low" if quiet or s.energy <= q_lo else "high" if s.energy >= q_hi else "mid"
-        level = {"low": 0.2, "mid": 0.55, "high": 0.9}[kind]
-        fade = min(1.5, (s.end - s.start) / 4)
+    def look_of(s) -> tuple:
+        return LOOKS[(labels.index(s.label) + seed) % len(LOOKS)]
 
-        # room colour on the strips behind the viewer: dim wash, flashes only when it is loud
-        for f in indirect or ([] if fixtures else direct):
-            tgt = _target(f)
-            room.clips.append(
-                Clip(
-                    start=s.start,
-                    end=s.end,
-                    effect="noise",
-                    target=tgt,
-                    fade_in=fade,
-                    fade_out=fade if quiet else 0.0,
-                    params={"palette": look[0], "speed": 0.15, "scale": 0.6, "brightness": _dim(0.06 + 0.1 * level, f["leds"])},
-                )
-            )
-            if kind == "high":
-                room.clips.append(
-                    Clip(
-                        start=s.start,
-                        end=s.end,
-                        effect="pulse",
-                        blend="add",
-                        target=tgt,
-                        params={"color": look[1], "trigger": "kick", "decay": 0.12, "brightness": _dim(0.55, f["leds"])},
-                    )
-                )
+    def looks_at(t: float) -> tuple:
+        sec = f.section_at(t) or analysis.sections[-1]
+        return look_of(sec)
 
-        # details on the strips in view, a different effect per strip, rotating every phrase
-        for pi, (t0, t1) in enumerate(_phrases(s.start, s.end, downbeats)):
-            pool = SCENES[kind]
-            for fi, f in enumerate(direct):
-                scene = pool[(pi + 2 * fi + k) % len(pool)]
-                clip = _detail_clip(scene, t0, t1, f["id"], look, level)
-                clip.target = _target(f)
-                if clip.effect in ("noise", "wave"):  # washes: mind long strips
-                    clip.params["brightness"] = _dim(clip.params["brightness"], f["leds"])
-                rhythm.clips.append(clip)
-            # a sweep through the whole room opens every loud phrase
-            if kind == "high":
-                bar = 4 * 60.0 / analysis.bpm if analysis.bpm else 2.0
-                axis = ["z", "azimuth", "-z", "-azimuth"][(pi + si) % 4]
-                accent.clips.append(
-                    Clip(
-                        start=t0,
-                        end=min(t1, t0 + 2 * bar),
-                        effect="sweep",
-                        blend="add",
-                        params={
-                            "color": look[2],
-                            "axis": axis,
-                            "trigger": "bar",
-                            "beats": 3,
-                            "width": 0.12,
-                            "tail": 0.25,
-                            "brightness": 0.7,
-                        },
-                    )
-                )
+    layers = {n: Layer(name=n) for n in ("Raum", "Drums", "Melodie", "Cues")}
+    for s in analysis.sections:
+        mood = _mood(s, f, q_hi)
+        for layer, clips in _section_clips(s, mood, roles, indirect, look_of(s), f).items():
+            layers[layer].clips.extend(clips)
 
-        # a quiet glimmer keeps breaks alive without lighting the room
-        if quiet and direct and direct[0]["id"] is not None:
-            accent.clips.append(
-                Clip(
-                    start=s.start,
-                    end=s.end,
-                    effect="hits",
-                    blend="max",
-                    target=Target(fixtures=sorted({f["id"] for f in direct})),
-                    params={"palette": [look[1]], "trigger": "hihat", "count": 1, "size": 3, "decay": 0.3, "brightness": 0.3},
-                )
-            )
+    def group(parts: list[dict]) -> Target:
+        ids = sorted({p["id"] for p in parts if p["id"] is not None})
+        return Target(fixtures=ids) if ids else Target()
+
+    whole_parts = {p["id"]: p.get("part") for p in direct}
+    direct_t = Target(view="direct") if any(v for v in whole_parts.values()) or indirect else group(direct)
+    indirect_t = Target(view="indirect") if indirect else None
+    beat = 60.0 / analysis.bpm if analysis.bpm else 0.5
+    layers["Cues"].clips.extend(_cues(f, Target(), direct_t, indirect_t, looks_at, beat, rise_axis))
 
     return Show(
         name=name,
         song_id=song_id,
-        description="Starter show from the song structure and the room (dark base, drum hits, varied per strip)",
-        layers=[room, rhythm, accent],
+        description="Starter show from the instruments and the room: drums as small hits, melody and bass as notes, "
+        "cues on drops, crashes and fills; dark where the music is quiet",
+        dynamics=0.6,
+        layers=[layers[n] for n in ("Raum", "Drums", "Melodie", "Cues") if layers[n].clips],
     )

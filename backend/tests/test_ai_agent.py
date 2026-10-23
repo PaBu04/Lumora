@@ -37,8 +37,10 @@ def test_parse_stream_json():
 def test_prompt_mentions_task_and_brightness():
     song = {"id": "s1", "title": "Demo", "duration": 80.0}
     p = build_prompt("raum", song, "Ruhig und blau", "Blau", None)
-    assert 'create_show an (name "Blau", song_id "s1")' in p and "0.03-0.15" in p and "Ruhig und blau" in p
+    assert 'create_show an (name "Blau", song_id "s1")' in p and "Ruhig und blau" in p
     assert "hits" in p and "analyze_light" in p and "direkt" in p
+    # instruments, cues and dark quiet passages
+    assert "notes" in p and '"once"' in p and "dynamics" in p and "get_song_events" in p
     assert "show_id abc" in build_prompt("raum", song, "mehr Strobe", "x", "abc")
 
 
@@ -69,7 +71,8 @@ def test_run_through_api_with_fake_cli(tmp_path, monkeypatch):
         ]
     args = json.loads(args_file.read_text())
     assert args[0] == "-p" and "--strict-mcp-config" in args and "--bare" not in args
-    assert args[args.index("--allowedTools") + 1] == "mcp__lightshow"
+    # only the app's tools and the web search, no shell / files
+    assert args[args.index("--allowedTools") + 1] == "mcp__lightshow,WebSearch"
     assert args[args.index("--permission-mode") + 1] == "dontAsk"
     cfg_path = args[args.index("--mcp-config") + 1]
     assert not Path(cfg_path).exists()  # temporary MCP config removed afterwards

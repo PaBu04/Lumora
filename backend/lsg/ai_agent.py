@@ -20,6 +20,9 @@ from pathlib import Path
 TOOL_LABELS = {
     "get_overview": "Projekt und Raum gelesen",
     "get_song_analysis": "Songanalyse gelesen",
+    "get_song_events": "Noten und Schläge gelesen",
+    "analyze_light": "Helligkeit und Kontrast geprüft",
+    "WebSearch": "Im Internet recherchiert",
     "get_led_positions": "LED-Positionen gelesen",
     "list_effects": "Effekte nachgeschlagen",
     "get_show_format": "Show-Format nachgeschlagen",
@@ -105,15 +108,21 @@ Wunsch des Nutzers:
 
 Vorgehen:
 1. get_overview (Raum, Strips mit Länge und Sichtbarkeit, Betrachter, Helligkeit, Strombudget) und
-   get_song_analysis (Beats, Takte, Abschnitte, Trommeltreffer kick/snare/hihat und ihre Dichte pro Abschnitt).
-2. Erst planen: welche Strips sieht der Betrachter direkt (Details, Rhythmus), welche liegen hinter/neben ihm
-   (nur Raumfarbe, Blitze bei großen Schlägen)? Welche Rolle bekommt jede Strip-Gruppe? Welche Farben pro Abschnitt?
-3. Show nach Abschnitten und Phrasen (4-8 Takte) aufbauen, Clip-Grenzen auf Takte. Halte dich an die Regeln aus
-   den Server-Anweisungen: dunkle Grundstimmung (0.03-0.15), Licht als Akzent; "hits" auf kick/snare/hihat statt
-   ganzer Strips; Muster in Metern (Achse "s"); Effekte durch den Raum ("sweep", Achsen z/x/azimuth); jeder
-   Strip-Gruppe eigene Effekte und alle paar Takte etwas Neues; lange Strips nur sparsam und gedimmt fluten.
-4. validate und analyze_light aufrufen: Fehler beheben; room_light soll etwa 0.01-0.04 sein, keine langen
-   Stellen ohne Bewegung; bei Strombudgets analyze_power beachten.
+   get_song_analysis (Abschnitte, welche Instrumente wann tragen, Drops, Build-ups, Fills, Crashes,
+   Gesangsphrasen). Bei Bedarf get_song_events für einzelne Noten und Schläge eines Instruments.
+   Wenn du den Song nicht kennst, darfst du ihn kurz im Internet recherchieren (WebSearch: Stimmung,
+   Instrumente, bekannte Stellen) - höchstens 2 Suchen.
+2. Erst planen: Was trägt das Stück in jedem Abschnitt (Gesang, Lead-Synth, Bass, Drums)? Welcher Strip zeigt
+   welches Instrument? Welche Strips sieht der Betrachter direkt (Details), welche liegen hinter/neben ihm
+   (Raumfarbe, Blitze bei Drops)? Welche Farben pro Abschnitt? Wo sind die großen Momente?
+3. Show aufbauen - halte dich an die Regeln aus den Server-Anweisungen: Folge den Instrumenten statt einem
+   starren Raster ("hits" auf kick/snare, "notes" auf vocal/lead/bass, Trigger auf Instrumentenspuren);
+   setze einmalige Cues (trigger "once") auf Drops, Build-ups ("rise" bis zum Drop), Fills ("sweep" über
+   den Fill) und Crashes; leise Stellen fast dunkel, laute Stellen mit hellen Akzenten, "dynamics" der
+   Show auf 0.5-0.8; Muster in Metern (Achse "s"); lange Strips nur sparsam und gedimmt fluten.
+4. validate und analyze_light aufrufen: Fehler beheben; room_light etwa 0.002-0.03, leise Passagen unter
+   0.008, deutlicher Kontrast zwischen dunklen und hellen Stellen, keine langen Stellen ohne Bewegung;
+   bei Strombudgets analyze_power beachten.
 5. Mit render_timeline (ganzer Song oder Abschnitte) prüfen, ob Rhythmus, Abwechslung und Übergänge passen;
    ggf. nachbessern.
 6. Zum Schluss preview mit der show_id starten.
@@ -247,7 +256,7 @@ class AgentManager:
             str(cfg),
             "--strict-mcp-config",
             "--allowedTools",
-            "mcp__lightshow",
+            "mcp__lightshow,WebSearch",
             "--permission-mode",
             "dontAsk",
             "--no-session-persistence",

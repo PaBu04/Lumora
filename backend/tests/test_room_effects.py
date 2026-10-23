@@ -113,21 +113,47 @@ def test_light_report_flags_a_bright_flat_show(project):
     assert rep["room_light"] < 0.03 and not light_issues(rep, dark)
 
 
-def test_starter_show_is_dark_varied_and_uses_drums(project, demo_analysis):
+def test_starter_show_follows_the_instruments(project, demo_analysis):
     _, a = demo_analysis
     project.fixtures.append(
         Fixture(id="back", name="Back", geometry=PolylineGeometry(points=[(0.5, 0.05, 2.0), (4.5, 0.05, 2.0)]))
     )
     t = build_led_table(project)
     show = starter_show("S", "x", a, None, project, t)
+    assert show.dynamics > 0
     clips = [c for _, c in show.clips()]
     effects = {c.effect for c in clips}
-    assert "hits" in effects and len(effects) >= 3
+    assert {"hits", "notes"} <= effects
+    triggers = {c.params.get("trigger") or c.params.get("track") for c in clips}
+    assert {"kick", "snare", "bass"} <= triggers
     # the strip behind the viewer only gets room colour / flashes
     back = [c for c in clips if c.target.fixtures == ["back"]]
     assert back and {c.effect for c in back} <= {"noise", "pulse"}
-    # different strips get different effects in the same phrase
+    # different strips show different instruments in the chorus
     chorus = [c for c in clips if c.start >= a.sections[-1].start - 0.01 and c.target.fixtures and len(c.target.fixtures) == 1]
-    assert len({c.effect for c in chorus}) >= 2
+    assert len({(c.effect, c.params.get("trigger"), c.params.get("track")) for c in chorus}) >= 3
     rep = light_report(Renderer(project, t, show, AudioFeatures(a)))
-    assert rep["room_light"] < 0.06
+    assert rep["room_light"] < 0.04
+    # the quiet intro stays darker than the chorus
+    intro, chorus_rep = rep["sections"][0], rep["sections"][-1]
+    assert intro["room_light"] < chorus_rep["room_light"]
+
+
+def test_starter_show_cues_on_drops_and_builds(project):
+    from tests.test_instruments import _analysis_with
+
+    a = _analysis_with(
+        {
+            "drop": [[12.0, 1.0, 0, 0]],
+            "build": [[8.0, 0.9, 4.0, 0]],
+            "kick": [[float(x), 1.0, 0, 0] for x in np.arange(12, 20, 0.5)],
+            "fill": [[6.0, 0.5, 1.0, 0]],
+        }
+    )
+    t = build_led_table(project)
+    show = starter_show("S", "x", a, None, project, t)
+    cues = next(l for l in show.layers if l.name == "Cues").clips
+    rise = [c for c in cues if c.effect == "rise"]
+    assert rise and rise[0].start == 8.0 and rise[0].end == 12.0
+    assert any(c.effect == "pulse" and c.params["trigger"] == "once" and c.start == 12.0 for c in cues)
+    assert any(c.effect == "sweep" and c.start == 6.0 for c in cues)

@@ -105,8 +105,10 @@ def validate_show(
 # --- light and variety ---------------------------------------------------------------------
 # LEDs in a dark room: what matters for the feel of a show is how much light the whole room
 # gets (long strips light the walls even when dim) and how much changes.
-ROOM_LIGHT_WARN = 0.06  # mean linear light over the whole show (1 = every LED full white)
-ROOM_LIGHT_PEAK = 0.15  # mean linear light over an 8 s stretch
+ROOM_LIGHT_WARN = 0.04  # mean linear light over the whole show (1 = every LED full white)
+ROOM_LIGHT_PEAK = 0.12  # mean linear light over an 8 s stretch
+QUIET_LIGHT = 0.008  # quiet passages of the song should stay below this
+QUIET_LOUDNESS = 0.55  # a section this quiet (smoothed loudness 0..1) counts as quiet
 LIT_SHARE_WARN = 0.85  # share of LEDs lit above 5 % ...
 LIT_TIME_WARN = 0.6  # ... for this share of the show
 STILL_SECONDS = 20.0  # longer than this without visible change = monotonous
@@ -116,18 +118,22 @@ def light_report(renderer: Renderer, fps: float = 2.0) -> dict:
     """Room light, lit share and motion over time and per section."""
     duration = renderer.duration or 0.0
     times = np.arange(0.0, max(duration, 1e-3), 1.0 / fps)
-    room, lit, motion = [], [], []
+    room, lit, motion, changed = [], [], [], []
     prev = None
     for t in times:
         f = renderer.render(float(t))
         lin = np.power(np.clip(f, 0, 1), 2.2)
         room.append(float((lin @ np.array([0.2126, 0.7152, 0.0722], np.float32)).mean()) if len(f) else 0.0)
         lit.append(float((f.max(axis=1) > 0.05).mean()) if len(f) else 0.0)
-        motion.append(float(np.abs(f - prev).mean()) if prev is not None and len(f) else 0.0)
+        diff = np.abs(f - prev).max(axis=1) if prev is not None and len(f) else np.zeros(0)
+        motion.append(float(diff.mean()) if len(diff) else 0.0)
+        changed.append(int((diff > 0.04).sum()))  # LEDs that visibly change
         prev = f
     room_a, lit_a, motion_a = np.asarray(room), np.asarray(lit), np.asarray(motion)
+    feats = renderer.features
+    loud = np.array([feats.level("loudness", float(t)) for t in times]) if len(times) else np.zeros(0)
     sections = []
-    for s in renderer.features.sections:
+    for s in feats.sections:
         sel = (times >= s.start) & (times < s.end)
         if sel.any():
             sections.append(
@@ -135,6 +141,7 @@ def light_report(renderer: Renderer, fps: float = 2.0) -> dict:
                     "name": s.name,
                     "start": round(s.start, 2),
                     "end": round(s.end, 2),
+                    "loudness": round(float(loud[sel].mean()), 2),
                     "room_light": round(float(room_a[sel].mean()), 4),
                     "lit_share": round(float(lit_a[sel].mean()), 3),
                     "motion": round(float(motion_a[sel].mean()), 4),
@@ -145,8 +152,8 @@ def light_report(renderer: Renderer, fps: float = 2.0) -> dict:
         float(np.convolve(room_a, np.ones(win) / win, mode="valid").max()) if len(room_a) >= win else float(room_a.max(initial=0))
     )
     still, longest, start_still = 0.0, (0.0, 0.0, 0.0), 0.0
-    for i, m in enumerate(motion_a):
-        if m < 0.002:
+    for i, c in enumerate(changed):
+        if c < 3:  # dark is fine, frozen is not: a few LEDs moving keep it alive
             if still == 0:
                 start_still = times[i]
             still += 1.0 / fps
@@ -164,9 +171,16 @@ def light_report(renderer: Renderer, fps: float = 2.0) -> dict:
             "from": round(float(longest[1]), 1),
             "to": round(float(longest[2]), 1),
         },
+        # light in the darkest and brightest tenth of the show, and how much the song itself varies
+        "contrast": {
+            "dark_p10": round(float(np.percentile(room_a, 10)) if len(room_a) else 0.0, 4),
+            "bright_p90": round(float(np.percentile(room_a, 90)) if len(room_a) else 0.0, 4),
+            "song_loudness_p10_p90": [round(float(np.percentile(loud, q)), 2) for q in (10, 90)] if len(loud) else [0, 0],
+        },
         "sections": sections,
         "scale": "room_light: mean linear light of all LEDs, 1 = all full white; a dark, punchy show stays around "
-        f"0.01-0.04, above {ROOM_LIGHT_WARN} it feels bright. motion: mean change between frames 0.5 s apart.",
+        f"0.002-0.03, above {ROOM_LIGHT_WARN} it feels bright; quiet passages below {QUIET_LIGHT}. motion: mean change "
+        "between frames 0.5 s apart.",
     }
 
 
@@ -178,7 +192,7 @@ def light_issues(report: dict, show: Show) -> list[dict]:
 
     if report["room_light"] > ROOM_LIGHT_WARN:
         warn(
-            f"the show is bright overall (room light {report['room_light']:.3f}, aim for 0.01-0.04): darker base levels, "
+            f"the show is bright overall (room light {report['room_light']:.3f}, aim for 0.002-0.03): darker base levels, "
             "fewer LEDs lit at once, light as accents. Long strips light the whole room even when dim."
         )
     elif report["room_light_peak_8s"] > ROOM_LIGHT_PEAK:
@@ -188,6 +202,25 @@ def light_issues(report: dict, show: Show) -> list[dict]:
             f"more than {LIT_SHARE_WARN:.0%} of all LEDs are lit {report['time_mostly_lit']:.0%} of the time: leave strips or "
             "segments dark, use hits / chases on parts of the strips instead of whole-strip effects"
         )
+    quiet = [
+        s
+        for s in report["sections"]
+        if s["loudness"] < QUIET_LOUDNESS and s["room_light"] > QUIET_LIGHT and s["end"] - s["start"] > 4
+    ]
+    if quiet:
+        where = ", ".join(f"{s['start']:.0f}-{s['end']:.0f}s" for s in quiet[:4])
+        warn(
+            f"quiet passages are lit ({where}): keep the room nearly dark where the music is quiet - only small accents, "
+            "or raise the show's dynamics"
+        )
+    c = report.get("contrast")
+    if c:
+        lo, hi = c["song_loudness_p10_p90"]
+        if hi - lo > 0.3 and c["bright_p90"] < 2.5 * c["dark_p10"] + 0.002:
+            warn(
+                "little contrast: the show is about as bright in the quiet parts as in the loud ones. Make quiet parts "
+                "darker and give loud parts / drops brighter accents (or raise the show's dynamics)"
+            )
     still = report["longest_still"]
     if still["seconds"] > STILL_SECONDS:
         warn(f"nothing visibly changes from {still['from']}s to {still['to']}s ({still['seconds']}s): add movement or accents")

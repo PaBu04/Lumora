@@ -232,6 +232,14 @@ def test_mcp_tools(server):
                 await asyncio.sleep(0.5)
             assert a["bpm"] == pytest.approx(120, abs=1) and len(a["curves"]["times"]) == 64
             assert len(a["drums"]["hihat"]) > 10 and "kick_per_bar" in a["drum_density"][0]  # intro: hats only
+            inst = a["instruments"]
+            assert inst["available"] and inst["sections"] and "drop" in inst["moments"]
+            ev = (
+                await c.call_tool("get_song_events", {"song_id": song["id"], "tracks": ["kick", "bass"], "end": 16})
+            ).structured_content
+            assert ev["tracks"]["kick"] and all(len(e) == 4 and e[0] < 16 for e in ev["tracks"]["bass"])
+            bad = (await c.call_tool("get_song_events", {"song_id": song["id"], "tracks": ["kazoo"]})).structured_content
+            assert not bad["ok"] and "available" in bad["error"]
             fx = ov["fixtures"][0]
             assert 0 <= fx["direct_view_share"] <= 1 and fx["role"] and fx["leds_per_m"] == pytest.approx(30, abs=1)
 
