@@ -30,7 +30,7 @@ const LANES: {
   { name: "drums", label: "Schlagzeug", color: "#f87171", curve: "drums", active: ["kick", "snare", "hihat", "crash"] },
   { name: "bass", label: "Bass", color: "#a78bfa", curve: "bass", active: ["bass"] },
   { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals", active: ["vocal"] },
-  { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["lead"] },
+  { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["keys", "lead"] },
   { name: "moments", label: "Momente", color: "#fbbf24", active: ["fill", "drop", "build"] },
 ];
 const LANE_H = 30;
@@ -178,8 +178,18 @@ export function InstrumentLanes({
           g.fillStyle = MOMENT_COLORS.phrase + "38";
           for (const [t, , d] of visible("phrase")) g.fillRect(x(t), y0 + 2, len(d), LANE_H - 4);
           notes("vocal", lane.color, ...pitchRange("vocal"));
-        } else if (lane.name === "bass" || lane.name === "lead") {
+        } else if (lane.name === "bass") {
           notes(lane.name, lane.color, ...pitchRange(lane.name));
+        } else if (lane.name === "lead") {
+          // every note (chords stack up) faint, the melody on top bright
+          const range = pitchRange(tracks.keys?.length ? "keys" : "lead");
+          if (tracks.keys?.length && tracks.keys !== tracks.lead) {
+            g.save();
+            g.globalAlpha = 0.45;
+            notes("keys", "#3b6fb8", ...range);
+            g.restore();
+          }
+          notes("lead", "#93c5fd", ...range);
         } else if (lane.name === "moments") {
           for (const [t, v, d] of visible("build")) {
             const grd = g.createLinearGradient(x(t), 0, x(t + d), 0);

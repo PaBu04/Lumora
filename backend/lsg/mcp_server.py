@@ -40,8 +40,9 @@ Workflow:
 HOW A GOOD SHOW LOOKS - follow these rules:
 - FOLLOW THE SOUND, NOT THE GRID. Music is more than 4/4 beats: light what the instruments actually do.
   Every effect with a trigger can follow an instrument track: kick, snare, hihat, crash (drum hits with
-  velocity - fills and rolls come out as played, faster in transitions), bass, vocal, lead (notes with
-  pitch and length), phrase (sung passages), fill, build, drop, no_drums. "hits" on kick / snare for the
+  velocity - fills and rolls come out as played, faster in transitions), bass, vocal, keys (every note of
+  keys / synths / guitars, polyphonic: a chord is several notes at once), lead (their melody = top voice),
+  all notes with pitch and length, phrase (sung passages), fill, build, drop, no_drums. "hits" on kick / snare for the
   beat, "notes" for melodies and bass lines (position = pitch, stays lit while the note sounds),
   "pulse" with sustain on phrase for a glow while someone sings. Loud hits are brighter (velocity).
   Give the instrument that carries a passage the most visible strip in it (e.g. vocals in the verse,
@@ -121,7 +122,7 @@ Parameter values can be animated (number params; keyframes also for colours and 
   lfo:           {"lfo": "sine|triangle|saw|square", "beats": 2, "min": 0, "max": 1, "phase": 0}  (or "seconds": 3)
 
 Triggers (pulse, hits, sweep, ripple; notes takes a "track"): beat, bar, onset, the instrument tracks kick, snare,
-hihat, crash, bass, vocal, phrase, lead, fill, build, drop, no_drums - and "once" = one time at the clip start
+hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums - and "once" = one time at the clip start
 (a cue: the clip's start and length are the moment; sweep "once" crosses the room over the whole clip).
 "velocity" scales the flash with how loud the hit / note was; "sustain" keeps it lit while the note or passage
 lasts. Instrument tracks need an analysis with instruments (get_song_analysis: "instruments").
@@ -168,9 +169,8 @@ def instrument_summary(a, feats: AudioFeatures, start: float, end: float) -> dic
         if s.end <= start or s.start >= end:
             continue
         loud = {k: mean(k, s.start, s.end) for k in ("drums", "bass", "vocals", "other")}
-        counts = {
-            k: sum(s.start <= e[0] < s.end for e in a.tracks.get(k, [])) for k in ("kick", "snare", "bass", "vocal", "lead")
-        }
+        counted = ("kick", "snare", "bass", "vocal", "keys", "lead")
+        counts = {k: sum(s.start <= e[0] < s.end for e in a.tracks.get(k, [])) for k in counted}
         sections.append(
             {
                 "start": s.start,
@@ -428,8 +428,8 @@ def create_mcp(st: AppState) -> MCPServer:
         song_id: str, tracks: list[str] | None = None, start: float = 0.0, end: float | None = None, min_strength: float = 0.0
     ) -> dict[str, Any]:
         """Individual events of instrument tracks in [start, end]: each [time s, strength 0..1, duration s, pitch MIDI
-        (0 = none)]. Tracks: kick, snare, hihat, crash, bass, vocal, phrase, lead, fill, build, drop, no_drums (default:
-        all). Request dense tracks (hihat, vocal, lead) in windows of ~30 s."""
+        (0 = none)]. Tracks: kick, snare, hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums
+        (default: all). Request dense tracks (hihat, vocal, keys, lead) in windows of ~30 s."""
         try:
             st.songs.get(song_id)
         except KeyError:

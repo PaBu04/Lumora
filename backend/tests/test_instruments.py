@@ -172,3 +172,34 @@ def test_demucs_separates_the_demo(demo_analysis):
     assert set(out) == {"drums", "bass", "vocals", "other"}
     rms = {k: float(np.sqrt(np.mean(v**2))) for k, v in out.items()}
     assert rms["drums"] > rms["vocals"] and rms["bass"] > rms["vocals"]
+
+
+def _tone(midi: float, seconds: float, sr: int = 22050) -> np.ndarray:
+    """A piano-ish note: a few harmonics with a decaying envelope."""
+    t = np.arange(int(seconds * sr)) / sr
+    f = 440.0 * 2 ** ((midi - 69) / 12)
+    y = sum(np.sin(2 * np.pi * f * h * t) / h for h in (1, 2, 3, 4))
+    return (y * np.exp(-t * 1.5) * np.minimum(1, t / 0.005)).astype(np.float32)
+
+
+def test_transcription_hears_chords_and_melody():
+    from lsg.audio import transcribe
+    from lsg.audio.instruments import _melody, _note_events
+
+    if not transcribe.installed():
+        pytest.skip("onnxruntime not installed")
+    sr = 22050
+    y = np.zeros(sr * 5, np.float32)
+    y[sr // 2 : sr * 2] += _tone(60, 1.5) + _tone(64, 1.5) + _tone(67, 1.5)  # C major chord
+    for k, m in enumerate((72, 74, 76)):  # then a short melody
+        a = int((2.5 + 0.6 * k) * sr)
+        y[a : a + int(0.5 * sr)] += _tone(m, 0.5)
+    notes = transcribe.notes(y / 4, sr)
+    first = {int(n[2]) for n in notes if n[0] < 0.8}
+    assert {60, 64, 67} <= first, notes
+    later = [int(n[2]) for n in notes if n[0] > 2.3 and n[2] >= 70]
+    assert later[:3] == [72, 74, 76], notes
+    # the melody is the top voice; the chord below the middle of the range is accompaniment
+    keys = _note_events(notes, np.ones(1000, np.float32), 200.0, 0.0)
+    melody = _melody(keys)
+    assert [int(p) for p in melody[:, 3]] == [72, 74, 76]

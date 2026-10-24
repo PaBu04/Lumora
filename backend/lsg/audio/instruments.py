@@ -6,7 +6,10 @@ Computed from the separated stems (lsg.audio.stems). Event tracks:
   bass                        bass notes: onset, velocity, length, pitch
   vocal                       sung notes / syllables with pitch
   phrase                      sung passages (start, length)
-  lead                        notes and stabs of the rest (keys, synths, guitars ...) with pitch
+  keys                        every note of the rest (keys, synths, guitars ...), polyphonic: a chord is
+                              several events at once (Basic Pitch transcription, lsg.audio.transcribe)
+  lead                        the melody of the rest: its top voice (without the transcription model:
+                              the strongest note per onset)
   fill                        drum fills and rolls: clearly more drum hits than usual
   build                       build-ups that lead into a drop (rising energy / drum density)
   drop                        moments where the music comes back in hard
@@ -18,11 +21,17 @@ Curves (0..1 at the analysis frame rate): drums, bass, vocals, other (stem loudn
 build-ups, back to 0 at the drop) and loudness (smoothed loudness of the whole mix).
 """
 
+import logging
+
 import numpy as np
 
 from lsg.audio.drums import _flux, pick_peaks
 
-TRACKS = ("kick", "snare", "hihat", "crash", "bass", "vocal", "phrase", "lead", "fill", "build", "drop", "no_drums")
+log = logging.getLogger(__name__)
+
+TRACKS = (
+    "kick", "snare", "hihat", "crash", "bass", "vocal", "phrase", "keys", "lead", "fill", "build", "drop", "no_drums",
+)  # fmt: skip
 CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness")
 STEM_RANGE_DB = 30.0  # a stem this far below its loudest part counts as silent
 
@@ -282,6 +291,77 @@ def _build(drop: float, loud: np.ndarray, density: np.ndarray, high: np.ndarray,
     return None
 
 
+def _transcribe(y: np.ndarray, sr: int, lo: str, hi: str) -> np.ndarray | None:
+    """Polyphonic notes of a stem (rows start, end, pitch, amplitude), or None without the model."""
+    import librosa
+
+    from lsg.audio import transcribe
+
+    if not transcribe.installed():
+        return None
+    try:
+        return transcribe.notes(y, sr, min_pitch=int(librosa.note_to_midi(lo)), max_pitch=int(librosa.note_to_midi(hi)))
+    except Exception:
+        log.exception("note transcription failed")
+        return None
+
+
+def _note_events(notes: np.ndarray, env: np.ndarray, rate: float, min_strength: float) -> np.ndarray:
+    """Transcribed notes -> rows [time, strength, duration, pitch]. Strength mixes how loud the stem
+    is at the note (quiet passages stay quiet) with how clearly the model heard the note."""
+    if len(notes) == 0:
+        return np.zeros((0, 4))
+    n = len(env)
+    i = np.clip(np.round(notes[:, 0] * rate).astype(int), 0, n - 1)
+    peak = np.maximum.reduce([env[np.clip(i + k, 0, n - 1)] for k in range(0, 5)])
+    amp = notes[:, 3] / (np.percentile(notes[:, 3], 95) + 1e-9)
+    strength = np.clip(peak * (0.55 + 0.45 * np.clip(amp, 0, 1)), 0, 1)
+    rows = np.column_stack([notes[:, 0], strength, notes[:, 1] - notes[:, 0], notes[:, 2]])
+    return rows[strength >= min_strength]
+
+
+def _melody(keys: np.ndarray, together: float = 0.05) -> np.ndarray:
+    """Top voice: the highest note of every group of notes struck together, cut where the next one
+    starts. Groups that stay below the middle of the instrument's range are accompaniment."""
+    if len(keys) == 0:
+        return keys
+    mid = float(np.median(keys[:, 3]))
+    out: list[np.ndarray] = []
+    i = 0
+    while i < len(keys):
+        j = i
+        while j + 1 < len(keys) and keys[j + 1, 0] - keys[i, 0] <= together:
+            j += 1
+        group = keys[i : j + 1]
+        top = group[np.argmax(group[:, 3])].copy()
+        if top[3] >= mid:
+            if out and out[-1][0] + out[-1][2] > top[0]:
+                out[-1][2] = max(0.03, top[0] - out[-1][0])
+            out.append(top)
+        i = j + 1
+    return np.asarray(out)
+
+
+def _repitch(t: np.ndarray, p: np.ndarray, notes: np.ndarray | None, keep_octave: bool = False) -> np.ndarray:
+    """Take the pitch of each onset from the transcription where it heard a note there. `keep_octave`:
+    ignore answers that only move the note by octaves (the CQT finds a bass fundamental more reliably)."""
+    if notes is None or len(notes) == 0 or len(t) == 0:
+        return p
+    out = p.copy()
+    starts = notes[:, 0]
+    for k, tk in enumerate(t):
+        a, b = np.searchsorted(starts, [tk - 0.08, tk + 0.12])
+        near = notes[a:b]
+        if len(near) == 0:  # a note struck before and still sounding
+            sounding = notes[max(0, a - 16) : a]
+            near = sounding[sounding[:, 1] > tk + 0.03]
+        if len(near):
+            pitch = near[np.argmax(near[:, 3]), 2]
+            if not (keep_octave and abs(pitch - p[k]) % 12 < 0.5):
+                out[k] = pitch
+    return out
+
+
 def _no_drums(drums: np.ndarray, rate: float) -> list[tuple[float, float]]:
     return _regions(_smooth(drums, rate, 0.5) < 0.25, rate, 2.0, 0.5)
 
@@ -326,6 +406,7 @@ def analyse_stems(
 
     # pitched instruments
     bt, bs, bd, bp = _pitched_notes(stems["bass"], sr, hop, env["bass"], librosa.note_to_hz("E1"), 0.25, 0.08)
+    bp = _repitch(bt, bp, _transcribe(stems["bass"], sr, "E1", "G4"), keep_octave=True)
     tracks["bass"] = _events(bt, bs, bd, bp)
     phrases = _phrases(env["vocals"], rate) if "vocals" in stems else []
     tracks["phrase"] = _events([a for a, _, _ in phrases], [s for _, _, s in phrases], [b - a for a, b, _ in phrases])
@@ -334,11 +415,19 @@ def analyse_stems(
         for a, b, _ in phrases:
             sung[round(a * rate) : round(b * rate)] = True
         vt, vs, vd, vp = _pitched_notes(stems["vocals"], sr, hop, env["vocals"], librosa.note_to_hz("E2"), 0.3, 0.1, active=sung)
+        vp = _repitch(vt, vp, _transcribe(stems["vocals"], sr, "E2", "C6"))
         tracks["vocal"] = _events(vt, vs, vd, vp)
     else:
         tracks["vocal"] = []
-    lt, ls, ld, lp = _pitched_notes(stems["other"], sr, hop, env["other"], librosa.note_to_hz("C3"), 0.3, 0.08)
-    tracks["lead"] = _events(lt, ls, ld, lp)
+    other = _transcribe(stems["other"], sr, "C2", "C8")
+    if other is not None:
+        keys = _note_events(other, env["other"], rate, 0.2)
+        tracks["keys"] = _events(*keys.T)
+        tracks["lead"] = _events(*_melody(keys).T) if len(keys) else []
+    else:
+        lt, ls, ld, lp = _pitched_notes(stems["other"], sr, hop, env["other"], librosa.note_to_hz("C3"), 0.3, 0.08)
+        tracks["lead"] = _events(lt, ls, ld, lp)
+        tracks["keys"] = tracks["lead"]
 
     # structure from the instruments
     kick_rate = _hit_rate([times("kick")], [1.0], n, rate)
