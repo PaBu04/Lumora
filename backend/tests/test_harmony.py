@@ -49,3 +49,24 @@ def test_character_stabs_pads_arpeggios():
     assert len(ch["stab"]) == 4 and ch["stab"][0][3] == 67
     assert len(ch["pad"]) == 1 and abs(ch["pad"][0][0] - 3.0) < 0.3 and ch["pad"][0][2] > 3
     assert len(ch["arp"]) == 1 and abs(ch["arp"][0][0] - 8.0) < 0.01
+
+
+def test_recurring_riff_becomes_a_motif():
+    from lsg.audio.motifs import motifs
+
+    rng = np.random.default_rng(1)
+    downbeats = np.arange(0, 32.0, 2.0)  # 16 bars
+    riff = [(0.0, 72), (0.5, 76), (0.75, 79), (1.5, 76)]
+    lead = []
+    for bar, t0 in enumerate(downbeats):
+        if bar % 4 == 1:  # the riff in bars 1, 5, 9, 13
+            lead += [[t0 + dt, 0.8, 0.2, p] for dt, p in riff]
+        else:  # something different every time
+            pitches = rng.integers(60, 84, 4)
+            lead += [[t0 + dt, 0.6, 0.2, float(p)] for dt, p in zip((0.25, 0.75, 1.25, 1.75), pitches, strict=True)]
+    lead = np.array(lead)
+    events, summary = motifs(lead, lead[:0], downbeats, 32.0)
+    riffs = [m for m in summary if m["count"] == 4]
+    assert len(riffs) == 1 and riffs[0]["times"] == [2.0, 10.0, 18.0, 26.0]
+    number = riffs[0]["id"]
+    assert [e[0] for e in events if e[3] == number] == [2.0, 10.0, 18.0, 26.0]

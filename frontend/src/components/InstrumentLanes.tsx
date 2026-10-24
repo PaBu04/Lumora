@@ -11,6 +11,9 @@ export const MOMENT_COLORS: Record<string, string> = {
   phrase: "#2dd4bf",
 };
 
+/** Colour of riff number n (track "motif"). */
+export const motifColor = (n: number) => ["#34d399", "#f472b6", "#38bdf8", "#facc15"][(Math.round(n) - 1) % 4];
+
 export const MOMENT_LABELS: Record<string, string> = {
   drop: "Drop",
   build: "Build-up",
@@ -32,6 +35,7 @@ const LANES: {
   { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals", active: ["vocal"] },
   { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["keys", "lead"] },
   { name: "chords", label: "Akkorde", color: "#e879f9", active: ["chord"] },
+  { name: "motifs", label: "Motive", color: "#34d399", active: ["motif"] },
   { name: "moments", label: "Momente", color: "#fbbf24", active: ["fill", "drop", "build"] },
 ];
 const LANE_H = 30;
@@ -208,6 +212,21 @@ export function InstrumentLanes({
             g.fillRect(x(t), y0 + 1, tick, 5);
           }
           g.globalAlpha = 1;
+        } else if (lane.name === "motifs") {
+          // recurring riffs: one block per occurrence, colour and row per riff
+          for (const [t, v, d, n] of visible("motif")) {
+            const row = (Math.round(n) - 1) % 4;
+            g.fillStyle = motifColor(n);
+            g.globalAlpha = 0.45 + 0.45 * v;
+            g.fillRect(x(t) + 0.5, y0 + 3 + row * 6, Math.max(2, len(d) - 1), 5);
+            g.globalAlpha = 1;
+            if (len(d) > 22) {
+              g.fillStyle = "#0b0e14";
+              g.font = "9px system-ui";
+              g.fillText(`M${Math.round(n)}`, x(t) + 3, y0 + 7.5 + row * 6);
+              g.font = "11px system-ui";
+            }
+          }
         } else if (lane.name === "chords") {
           // chord blocks: hue = root, minor chords darker, the name where there is room
           for (const [t, d, name, degree, v] of analysis.harmony?.chords ?? []) {

@@ -378,13 +378,14 @@ def analyse_signal(
 
     tracks: dict[str, list[list[float]]] = {}
     curves: dict[str, np.ndarray] = {}
-    harmony = None
+    harmony, riffs = None, []
     if stems is not None:
         from lsg.audio.instruments import analyse_stems
 
-        tracks, curves, harmony = analyse_stems(
+        tracks, curves, extra = analyse_stems(
             stems, y, SR, HOP, np.asarray(beats), np.asarray(downbeats), bands["low"], bands["high"]
         )
+        harmony, riffs = extra["harmony"], extra["motifs"]
         drum_hits = {k: np.asarray([e[0] for e in tracks.get(k, [])]) for k in ("kick", "snare", "hihat")}
         downbeats = _rephase_downbeats(np.asarray(beats), np.asarray(downbeats), tracks, beats_per_bar)
     else:
@@ -438,6 +439,7 @@ def analyse_signal(
         tracks=tracks,
         harmony=harmony,
         phrases=phrases,
+        motifs=riffs,
     )
 
 

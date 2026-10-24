@@ -168,6 +168,8 @@ export interface Analysis {
   /** instrument tracks: name -> [time, strength, duration, pitch] */
   tracks?: Record<string, [number, number, number, number][]>;
   /** key and chords: chords are [start, duration, name, degree, strength] */
+  /** riffs that come back; track "motif" has them as events (pitch = id) */
+  motifs?: { id: number; bars: number; count: number; times: number[]; pitch: number }[];
   /** phrases of the song form: [start s, bars] */
   phrases?: [number, number][];
   harmony?: {

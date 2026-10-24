@@ -55,7 +55,9 @@ HOW A GOOD SHOW LOOKS - follow these rules:
   own theme (colours, effects, which strip leads) and repeat it when the label comes back, a bit bigger on
   the repeat. Change looks on phrase starts (get_song_analysis "phrases", every 4 or 8 bars), not mid-phrase.
   The harmony (key, chords) helps with colour: minor keys suit cooler palettes, major warmer ones; chord
-  changes (track "chord") are good moments for colour changes.
+  changes (track "chord") are good moments for colour changes. Riffs that come back are motifs (track
+  "motif", pitch = motif number; get_song_analysis instruments.motifs): give each motif its own light
+  gesture and repeat it every time the riff plays - that makes the music visible.
 - CUES FOR SINGLE MOMENTS. Not everything is a looping pattern: put one-shot clips (trigger "once", the
   clip is the cue) on single moments from the analysis: a drop -> a bright flash on the room ("pulse"
   once on indirect LEDs) + a "ripple" once from the viewer; a build-up -> "rise" from the build start
@@ -204,6 +206,11 @@ def instrument_summary(a, feats: AudioFeatures, start: float, end: float) -> dic
         "into a drop (ends at the drop), fill = drum fill / roll, phrase = sung passage, no_drums = passage without drums",
         "tracks": {k: len(v) for k, v in a.tracks.items()},
         "harmony": _harmony_summary(a.harmony, start, end),
+        "motifs": [
+            {**m, "times": [t for t in m["times"] if start <= t < end]}
+            for m in a.motifs
+            if any(start <= t < end for t in m["times"])
+        ],
     }
 
 

@@ -17,6 +17,7 @@ Computed from the separated stems (lsg.audio.stems). Event tracks:
   chord                       chord changes (pitch = root, octave 4); names and degrees in the harmony info
   stab / pad / arp            how the keys / synths play: chords struck short, held chords, arpeggios
                               (regions: start, strength, length, mean pitch) - see lsg.audio.harmony
+  motif                       a riff that comes back (lsg.audio.motifs): pitch = motif number 1, 2 ...
 Every event is [time s, strength 0..1, duration s (0 = a hit), pitch (MIDI note, 0 = none)].
 
 Curves (0..1 at the analysis frame rate): drums, bass, vocals, other (stem loudness), density
@@ -35,7 +36,7 @@ log = logging.getLogger(__name__)
 
 TRACKS = (
     "kick", "snare", "hihat", "crash", "bass", "vocal", "phrase", "keys", "lead", "fill", "build", "drop", "no_drums",
-    "chord", "stab", "pad", "arp",
+    "chord", "stab", "pad", "arp", "motif",
 )  # fmt: skip
 CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness")
 STEM_RANGE_DB = 30.0  # a stem this far below its loudest part counts as silent
@@ -381,11 +382,12 @@ def analyse_stems(
     low: np.ndarray,
     high: np.ndarray,
 ) -> tuple[dict[str, list[list[float]]], dict[str, np.ndarray], dict]:
-    """Event tracks, curves (see module doc) and the harmony (key and chords, lsg.audio.harmony.harmony).
-    `low` / `high`: the mix band curves (0..1)."""
+    """Event tracks, curves (see module doc) and more: {"harmony": key and chords (lsg.audio.harmony),
+    "motifs": the recurring riffs (lsg.audio.motifs)}. `low` / `high`: the mix band curves (0..1)."""
     import librosa
 
     from lsg.audio import harmony as harm
+    from lsg.audio.motifs import motifs
 
     rate = sr / hop
     mix_rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
@@ -475,9 +477,11 @@ def analyse_stems(
     tracks["chord"] = harm.chord_events(h)
     beat = float(np.median(np.diff(beats))) if len(beats) > 2 else 0.5
     tracks.update(harm.character(keys_arr, beat))
+    lead_arr = np.asarray(tracks["lead"], float).reshape(-1, 4)
+    tracks["motif"], riffs = motifs(lead_arr, keys_arr, downbeats, duration)
     centroid = fit(librosa.feature.spectral_centroid(y=stems["other"], sr=sr, hop_length=hop)[0])
     bright = np.clip((np.log2(np.maximum(centroid, 1)) - np.log2(400)) / (np.log2(6000) - np.log2(400)), 0, 1)
     bright = (_smooth(bright, rate, 0.4) * (env["other"] > 0.15)).astype(np.float32)
 
     curves = {**env, "density": density, "tension": tension, "loudness": loud, "brightness": bright}
-    return tracks, curves, h
+    return tracks, curves, {"harmony": h, "motifs": riffs}

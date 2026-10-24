@@ -57,3 +57,5 @@ class Analysis(BaseModel):
     harmony: dict | None = None
     # phrases of the song form (lsg.audio.structure): [start s, bars], 4 or 8 bars each
     phrases: list[list[float]] = Field(default_factory=list)
+    # recurring riffs (lsg.audio.motifs): {"id", "bars", "count", "times", "pitch"}; track "motif" has them as events
+    motifs: list[dict] = Field(default_factory=list)

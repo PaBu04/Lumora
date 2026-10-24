@@ -82,6 +82,7 @@ const NOW: { track: string; label: string; color: string }[] = [
   { track: "fill", label: "Fill", color: MOMENT_COLORS.fill },
   { track: "build", label: "Build-up", color: MOMENT_COLORS.build },
   { track: "drop", label: "Drop", color: MOMENT_COLORS.drop },
+  { track: "motif", label: "Motiv", color: "#34d399" },
 ];
 const ZOOMS: { value: number; label: string }[] = [
   { value: 0, label: "ganzer Song" },
