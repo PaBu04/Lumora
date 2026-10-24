@@ -9,6 +9,7 @@ import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
 import { Inspector } from "../editor/Inspector";
 import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
+import { VideoRecorder } from "../components/VideoRecorder";
 import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
@@ -460,7 +461,7 @@ function LiveInputCard() {
   );
 }
 
-function ExportCard({ slug, showId }: { slug: string; showId: string }) {
+function ExportCard({ slug, showId, show, duration }: { slug: string; showId: string; show: Show; duration: number }) {
   const [fps, setFps] = useState(40);
   const project = useStore((s) => s.project);
   const ready = (project?.controllers.length ?? 0) > 0;
@@ -486,6 +487,8 @@ function ExportCard({ slug, showId }: { slug: string; showId: string }) {
           <span className="unit">erst Controller anlegen</span>
         )}
       </div>
+      <strong style={{ display: "block", marginTop: 12 }}>Video der Vorschau</strong>
+      <VideoRecorder songId={show.song_id} duration={duration} name={show.name} />
     </div>
   );
 }
@@ -684,7 +687,7 @@ export function ShowsView() {
         )}
         {creating && <NewShowForm onCreated={open} onClose={() => setCreating(false)} />}
         <LiveInputCard />
-        {show && <ExportCard slug={slug} showId={show.id} />}
+        {show && <ExportCard slug={slug} showId={show.id} show={show} duration={duration} />}
         <h3>Deine Shows</h3>
         <div className="list" style={{ marginBottom: 8 }}>
           {shows.length === 0 &&
