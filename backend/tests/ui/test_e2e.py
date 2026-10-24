@@ -95,6 +95,10 @@ def test_full_workflow(env):
     page = env["page"]
     page.goto(env["base"])
 
+    # the photosensitivity warning comes first and is confirmed once
+    page.get_by_role("button", name="Verstanden").click()
+    assert api(env, "/api/settings")["safety_ack"] is True
+
     # project
     page.fill(".welcome input", "E2E Raum")
     page.click("text=Projekt anlegen")

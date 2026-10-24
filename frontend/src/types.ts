@@ -219,6 +219,11 @@ export interface Version {
 export interface AppSettings {
   beat_tracker: "auto" | "librosa" | "beat_this";
   shader_isolation: boolean;
+  /** large flashes per second at most (0 = off) */
+  flash_limit: number;
+  /** the photosensitivity warning was confirmed */
+  safety_ack: boolean;
+  ai_model?: string;
   beat_this: { installed: boolean; loaded: boolean; error: string | null };
 }
 

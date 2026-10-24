@@ -772,6 +772,8 @@ async def ai_cancel(request: Request):
 
 class SettingsBody(BaseModel):
     beat_tracker: str | None = None
+    flash_limit: float | None = Field(default=None, ge=0, le=10)  # large flashes per second, 0 = off
+    safety_ack: bool | None = None
     ai_model: str | None = None
     shader_isolation: bool | None = None
 
@@ -791,6 +793,14 @@ async def put_settings(request: Request, body: SettingsBody):
         if body.beat_tracker not in ("librosa", "beat_this", "auto"):
             raise HTTPException(422, "beat_tracker must be librosa, beat_this or auto")
         st.settings["beat_tracker"] = body.beat_tracker
+    if body.flash_limit is not None:
+        from lsg.render import safety
+
+        st.settings["flash_limit"] = safety.LIMIT_HZ = body.flash_limit
+        if st.session.loaded and st.session.loaded.renderer:
+            st.session.loaded.renderer.limiter.reset()
+    if body.safety_ack is not None:
+        st.settings["safety_ack"] = body.safety_ack
     if body.ai_model is not None:
         from lsg.ai_agent import AI_MODELS
 

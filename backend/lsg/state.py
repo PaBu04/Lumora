@@ -22,7 +22,13 @@ class AppState:
     def __init__(self, data_dir: Path, audio_backend: str, fps: float):
         self.data_dir = Path(data_dir)
         self.projects = ProjectStore(self.data_dir / "projects")
-        self.settings: dict = {"beat_tracker": "auto", "shader_isolation": True, "ai_model": DEFAULT_MODEL}
+        self.settings: dict = {
+            "beat_tracker": "auto",
+            "shader_isolation": True,
+            "ai_model": DEFAULT_MODEL,
+            "flash_limit": 3.0,  # large flashes per second at most (0 = off), see lsg.render.safety
+            "safety_ack": False,  # the photosensitivity warning was confirmed
+        }
         self.songs = SongLibrary(
             self.data_dir / "songs",
             lambda: self.settings.get("beat_tracker", "auto"),
@@ -46,6 +52,12 @@ class AppState:
             from lsg.render import shader_host
 
             self.settings["shader_isolation"] = shader_host.ENABLED = data["shader_isolation"]
+        if isinstance(data.get("flash_limit"), (int, float)) and 0 <= data["flash_limit"] <= 10:
+            from lsg.render import safety
+
+            self.settings["flash_limit"] = safety.LIMIT_HZ = float(data["flash_limit"])
+        if isinstance(data.get("safety_ack"), bool):
+            self.settings["safety_ack"] = data["safety_ack"]
         if data.get("ai_model") in AI_MODELS:
             self.settings["ai_model"] = data["ai_model"]
         if data.get("beat_tracker") in ("librosa", "beat_this", "auto"):

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { api } from "../api";
 import { levelForPwm, pwmOf, SERIES } from "../calibration";
 import { LineChart } from "../components/LineChart";
+import { SafetyCard } from "../components/Safety";
 import { useStore } from "../store";
 import type { LedCalibration, LedType } from "../types";
 import { Field, Icon, NumberInput } from "../ui";
@@ -418,6 +419,8 @@ export function CalibrationView() {
         </Step>
 
         <SyncCard />
+
+        <SafetyCard />
 
         <div className="card">
           <strong>Stromaufnahme {TYPE_LABEL[ledType]}</strong>

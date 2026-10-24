@@ -200,7 +200,16 @@ class Strobe(Effect):
     )
 
     def render(self, ctx, p):
-        phase = (ctx.audio.beat * p["division"]) % 1.0 if p["division"] > 0 else (ctx.lt * p["rate"]) % 1.0
+        from lsg.render.safety import max_flash_rate
+
+        limit = max_flash_rate()  # photosensitivity: never faster than the safety limit
+        if p["division"] > 0:
+            bps = max(ctx.features.bpm / 60.0, 1e-3) if ctx.features else 2.0
+            allowed = [d for d in (16, 8, 4, 2, 1, 0.5, 0.25) if d <= p["division"] and d * bps <= limit]
+            division = p["division"] if p["division"] * bps <= limit else (allowed[0] if allowed else 0.25)
+            phase = (ctx.audio.beat * division) % 1.0
+        else:
+            phase = (ctx.lt * min(p["rate"], limit)) % 1.0
         on = 1.0 if phase < p["duty"] else 0.0
         return _fill(p["color"] * p["brightness"], ctx.leds.n), np.full(ctx.leds.n, on, np.float32)
 

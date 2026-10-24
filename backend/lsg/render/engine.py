@@ -18,6 +18,7 @@ from lsg.model.show import Clip, Show, Target
 from lsg.render.context import LedView, RenderContext, Spatial
 from lsg.render.effects import EFFECTS
 from lsg.render.params import Param, ParamError, compile_param, compile_params
+from lsg.render.safety import FlashLimiter
 from lsg.render.shaders import Shader, ShaderError
 
 SHADER_PREFIX = "shader:"
@@ -97,6 +98,7 @@ class Renderer:
         self.spatial = Spatial(self.table, ((b0[0] + b1[0]) / 2, (b0[1] + b1[1]) / 2))
         self.viewer_pos = np.asarray(self.project.viewer.position, dtype=np.float32)
         self.errors: dict[str, str] = {}
+        self.limiter = FlashLimiter()  # photosensitivity: no rapid large flashes
         self.clips: list[CompiledClip] = []
         for layer in self.show.layers:
             if not layer.enabled:
@@ -164,7 +166,7 @@ class Renderer:
             gain *= dynamics_gain(self.features.level("loudness", t), self.show.dynamics)
         if gain < 1:
             frame *= gain
-        return frame
+        return self.limiter.apply(t, frame)
 
 
 def dynamics_gain(loudness: float, amount: float) -> float:

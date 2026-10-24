@@ -127,7 +127,8 @@ export const api = {
   aiUpdate: () => post<{ ok: boolean; output: string; installed: boolean; version: string | null }>("/api/ai/update"),
   aiCancel: () => post<AiRun | null>("/api/ai/cancel"),
   settings: () => get<AppSettings>("/api/settings"),
-  saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker" | "shader_isolation">>) => put<AppSettings>("/api/settings", s),
+  saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker" | "shader_isolation" | "flash_limit" | "safety_ack">>) =>
+    put<AppSettings>("/api/settings", s),
   effects: () => get<{ effects: EffectInfo[]; palettes: Record<string, string[]>; shader_api: string }>("/api/effects"),
 
   playback: () => get<PlaybackState>("/api/playback"),

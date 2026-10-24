@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "./api";
+import { SafetyNotice } from "./components/Safety";
 import { useStore, type Tab } from "./store";
 import { Field, Icon, Modal } from "./ui";
 // views are loaded on demand so the first paint does not wait for three.js
@@ -306,6 +307,7 @@ export function App() {
           </Suspense>
         )}
       </main>
+      {ready && <SafetyNotice />}
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`} onClick={() => dismiss(t.id)}>
