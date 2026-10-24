@@ -307,12 +307,8 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="logo">
-          <span className="dots">
-            <i style={{ background: "#ff7a90" }} />
-            <i style={{ background: "#6ec6ff" }} />
-            <i style={{ background: "#ffd36e" }} />
-          </span>
-          Light Show Generator
+          <img src="/lumora.svg" alt="" width={24} height={24} />
+          Lumora
         </div>
         <ProjectSwitcher />
         {project && <UndoButtons />}

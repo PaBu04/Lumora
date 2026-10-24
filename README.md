@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/lumora.png" width="128" alt="Lumora"></p>
+
 # Lumora
 
 Musiksynchrone Lichtshows für adressierbare LEDs (WS2812B, SK6812 RGB/RGBW) an WLED-Controllern –

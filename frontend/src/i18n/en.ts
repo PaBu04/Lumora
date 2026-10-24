@@ -5,7 +5,6 @@
  */
 export const EN: Record<string, string> = {
   // app frame
-  "Light Show Generator": "Light Show Generator",
   Raum: "Room",
   "LED-Strips": "LED strips",
   Controller: "Controllers",

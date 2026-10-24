@@ -34,8 +34,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--line); background: var(--bg-2);
 }
 .logo { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: 0.2px; white-space: nowrap; }
-.logo .dots { display: flex; gap: 3px; }
-.logo .dots i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+.logo img { display: block; border-radius: 6px; }
 .topbar .spacer { flex: 1; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
 .status-pill.live { color: var(--err); }
