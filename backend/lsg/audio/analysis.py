@@ -268,7 +268,8 @@ def analyse_file(
     result = analyse_signal(y, beats=beats, downbeats=downbeats, beat_source=source, stems=separated)
     update: dict = {"stems": stem_mode}
     if keep:
-        update |= {"bpm": keep_tempo.bpm, "beats_edited": keep_tempo.beats_edited, "beats_per_bar": keep_tempo.beats_per_bar}
+        # a kept grid stays kept the next time too
+        update |= {"bpm": keep_tempo.bpm, "beats_edited": True, "beats_per_bar": keep_tempo.beats_per_bar}
     if notes:
         update["beat_note"] = "; ".join(notes)
     return result.model_copy(update=update)

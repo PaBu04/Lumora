@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 from typing import BinaryIO
 
+import numpy as np
 import soundfile as sf
 
 from lsg.audio.analysis import analyse_file
@@ -21,6 +22,16 @@ def _title_from_filename(name: str) -> tuple[str, str]:
         artist, title = stem.split(" - ", 1)
         return title.strip(), artist.strip()
     return stem or "Untitled", ""
+
+
+def hand_set(a: Analysis) -> bool:
+    """Was the beat grid set by hand? Older analyses lack the flag: a whole-number BPM on a perfectly
+    even grid (what setting the tempo produces) counts as set by hand."""
+    if a.beats_edited:
+        return True
+    beats = np.asarray(a.beats)
+    even = len(beats) > 8 and float(np.std(np.diff(beats))) < 0.002
+    return float(a.bpm).is_integer() and (a.version < 2 or even)
 
 
 class SongLibrary:
@@ -99,10 +110,10 @@ class SongLibrary:
 
     def analyse(self, song_id: str, keep_tempo: bool = True, on_progress=None) -> Song:
         """Run the analysis synchronously (call from a worker thread). keep_tempo: a tempo the user
-        corrected by hand stays (older analyses: a whole-number BPM counts as corrected)."""
+        corrected by hand stays."""
         song = self.get(song_id)
         previous = self.analysis(song_id) if keep_tempo else None
-        if previous is not None and not (previous.beats_edited or (previous.version < 2 and float(previous.bpm).is_integer())):
+        if previous is not None and not hand_set(previous):
             previous = None
         song.status, song.error, song.stage, song.progress = "running", None, "Warten", 0.0
         self.save(song)
