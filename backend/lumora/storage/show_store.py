@@ -1,5 +1,7 @@
 """Shows (<project>/shows/<id>.json) and shaders (<project>/shaders/<name>.py)."""
 
+from __future__ import annotations
+
 import json
 import re
 import shutil

@@ -6,6 +6,8 @@ version so the list stays readable; AI edits always create their own version, so
 AI change can be rolled back individually.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import time

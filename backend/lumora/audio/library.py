@@ -1,5 +1,7 @@
 """Global song library: <data>/songs/<id>/{song.json, audio.<ext>, analysis.json}."""
 
+from __future__ import annotations
+
 import contextlib
 import re
 import shutil

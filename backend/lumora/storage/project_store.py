@@ -1,5 +1,7 @@
 """Projects live in folders: <root>/<slug>/project.json plus songs/, shows/, shaders/."""
 
+from __future__ import annotations
+
 import json
 import os
 import re
