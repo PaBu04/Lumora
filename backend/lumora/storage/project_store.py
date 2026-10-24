@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 from lumora.model.project import Project
@@ -23,7 +24,14 @@ def atomic_write_text(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(text)
-        os.replace(tmp, path)
+        for attempt in range(20):  # Windows: a reader may hold the target open for a moment
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.02)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise

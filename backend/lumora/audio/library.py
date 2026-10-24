@@ -26,6 +26,18 @@ def _title_from_filename(name: str) -> tuple[str, str]:
     return stem or "Untitled", ""
 
 
+def _read(path: Path) -> str:
+    """Read a file the analysis may be replacing right now (Windows locks it for a moment)."""
+    for attempt in range(20):
+        try:
+            return path.read_text(encoding="utf-8")
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.02)
+    return ""
+
+
 def hand_set(a: Analysis) -> bool:
     """Was the beat grid set by hand? Older analyses lack the flag: a whole-number BPM on a perfectly
     even grid (what setting the tempo produces) counts as set by hand."""
@@ -56,14 +68,14 @@ class SongLibrary:
         for d in self.root.iterdir():
             meta = d / "song.json"
             if meta.is_file():
-                songs.append(self._with_date(Song.model_validate_json(meta.read_text(encoding="utf-8")), d))
+                songs.append(self._with_date(Song.model_validate_json(_read(meta)), d))
         return sorted(songs, key=lambda s: (s.artist.lower(), s.title.lower()))
 
     def get(self, song_id: str) -> Song:
         meta = self._dir(song_id) / "song.json"
         if not meta.is_file():
             raise KeyError(song_id)
-        return self._with_date(Song.model_validate_json(meta.read_text(encoding="utf-8")), meta.parent)
+        return self._with_date(Song.model_validate_json(_read(meta)), meta.parent)
 
     @staticmethod
     def _with_date(song: Song, d: Path) -> Song:
@@ -184,6 +196,6 @@ class SongLibrary:
         path = self._dir(song_id) / "analysis.json"
         if not path.is_file():
             return None
-        analysis = Analysis.model_validate_json(path.read_text(encoding="utf-8"))
+        analysis = Analysis.model_validate_json(_read(path))
         self._analysis_cache[song_id] = analysis
         return analysis
