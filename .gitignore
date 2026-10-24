@@ -22,5 +22,5 @@ Thumbs.db
 # UI test screenshots
 backend/tests/ui/artifacts/
 
-# generated app icon
-backend/lsg/static/
+# generated app icon (Windows shortcut)
+backend/lsg/static/app.ico

@@ -1,0 +1,53 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Light Show – Fernbedienung</title>
+<style>
+:root{--bg:#0b0d12;--card:#151924;--line:#262c3d;--text:#e9ecf4;--muted:#9aa3b8;--accent:#7b8cff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,sans-serif;
+padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 24px max(14px,env(safe-area-inset-left))}
+h1{font-size:17px;margin:0 0 2px}.muted{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{font:inherit;color:var(--text);background:#1f2433;border:1px solid var(--line);border-radius:12px;padding:14px 8px;touch-action:manipulation}
+button:active{background:var(--accent)}button.big{font-size:22px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+select,input[type=range]{width:100%}select{font:inherit;color:var(--text);background:#1f2433;border:1px solid var(--line);border-radius:10px;padding:10px}
+.bar{height:6px;background:#262c3d;border-radius:3px;overflow:hidden;margin-top:8px}.bar>div{height:100%;background:var(--accent);width:0}
+.err{color:#ff8a9b}
+</style></head><body>
+<h1 id="name">Light Show</h1><div class="muted" id="time">–</div><div class="bar"><div id="prog"></div></div>
+<div class="card"><div class="row">
+<button class="big" data-a="seek" data-v="-10">−10 s</button><button class="big" id="pp" data-a="toggle">▶</button><button class="big" data-a="seek" data-v="10">+10 s</button>
+</div></div>
+<div class="card"><div class="muted">Cues</div><div class="grid" style="margin-top:8px">
+<button data-cue="flash">Blitz</button><button data-cue="room">Raumblitz</button><button data-cue="ring">Ring</button>
+<button data-cue="up">Wisch ↑</button><button data-cue="across">Wisch →</button><button data-cue="sparkle">Funkeln</button>
+</div><div class="row" style="margin-top:8px;align-items:center"><span class="muted" style="flex:0 0 auto">Farbe</span>
+<input type="color" id="color" value="#ffffff" style="height:40px;border:none;background:none"></div></div>
+<div class="card"><div class="muted">Helligkeit</div><input type="range" id="bri" min="0" max="1" step="0.05"></div>
+<div class="card"><div class="muted">Show</div><select id="shows"></select></div>
+<div class="muted err" id="err"></div>
+<script>
+const K="__KEY__";
+const EN=!(navigator.language||"").toLowerCase().startsWith("de");
+const L=EN?{none:"No show loaded",on:" · LEDs on",prev:" · preview only"}:{none:"Keine Show geladen",on:" · LEDs an",prev:" · nur Vorschau"};
+if(EN){document.documentElement.lang="en";document.title="Light Show – Remote";
+const words={"Blitz":"Flash","Raumblitz":"Room flash","Ring":"Ring","Wisch ↑":"Wipe ↑","Wisch →":"Wipe →","Funkeln":"Sparkle","Farbe":"Colour","Helligkeit":"Brightness","Show":"Show","Cues":"Cues"};
+document.querySelectorAll("button,.muted,span").forEach(el=>{if(el.children.length===0&&words[el.textContent.trim()])el.textContent=words[el.textContent.trim()]})}
+const fmt=s=>{s=Math.max(0,s||0);return Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0")};
+function show(st){document.getElementById("name").textContent=st.show_name||L.none;
+document.getElementById("time").textContent=fmt(st.position)+" / "+fmt(st.duration)+(st.mode==="live"?L.on:L.prev);
+document.getElementById("prog").style.width=(st.duration?100*st.position/st.duration:0)+"%";
+document.getElementById("pp").textContent=st.playing?"❚❚":"▶";
+const b=document.getElementById("bri");if(document.activeElement!==b)b.value=st.brightness;
+const sel=document.getElementById("shows");if(sel.options.length!==st.shows.length){sel.innerHTML="";for(const s of st.shows){const o=document.createElement("option");o.value=s.id;o.textContent=s.name;sel.appendChild(o)}}
+if(document.activeElement!==sel)sel.value=st.show||"";document.getElementById("err").textContent=""}
+async function call(body){try{const r=await fetch("action?k="+encodeURIComponent(K),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+if(!r.ok)throw new Error((await r.json()).detail);show(await r.json())}catch(e){document.getElementById("err").textContent=e.message}}
+async function poll(){try{const r=await fetch("state?k="+encodeURIComponent(K));if(r.ok)show(await r.json())}catch(e){}setTimeout(poll,1000)}
+document.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>call({action:b.dataset.a,value:b.dataset.v?+b.dataset.v:null}));
+document.querySelectorAll("[data-cue]").forEach(b=>b.onclick=()=>call({action:"cue",kind:b.dataset.cue,color:document.getElementById("color").value}));
+document.getElementById("bri").onchange=e=>call({action:"brightness",value:+e.target.value});
+document.getElementById("shows").onchange=e=>call({action:"show",show:e.target.value});
+poll();
+</script></body></html>
