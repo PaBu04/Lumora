@@ -91,6 +91,7 @@ class Show(BaseModel):
     # 0..1: how much quiet passages of the song darken the whole show (1 = quiet parts nearly dark)
     dynamics: float = Field(default=0.0, ge=0, le=1)
     style: StarterStyle | None = None  # set when the show was generated as a starter show
+    created: float | None = None  # unix time the show was created
     layers: list[Layer] = Field(default_factory=list)
 
     def clips(self):

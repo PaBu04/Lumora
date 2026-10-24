@@ -95,8 +95,6 @@ class PlaybackSession:
         self.render_ms = 0.0
         self.power: FrameStats = FrameStats()
         self.sync: dict | None = None  # {"bpm": .., "previous": show id}
-        self.live_input = None  # LiveInput / FileInput while the live input mode runs
-        self._live_previous: str | None = None
         self.controller_status: dict[str, dict] = {}
         self._monitor_task: asyncio.Task | None = None
         self._power_peak: dict[str, float] = {}
@@ -124,9 +122,6 @@ class PlaybackSession:
         self._monitor_task = asyncio.create_task(self._monitor_loop())
 
     async def stop_loop(self) -> None:
-        if self.live_input is not None:
-            self.live_input.close()
-            self.live_input = None
         if self._monitor_task:
             self._monitor_task.cancel()
         if self._task:
@@ -195,15 +190,6 @@ class PlaybackSession:
         """Hot reload after edits (UI or MCP) without interrupting playback."""
         if not self.loaded or self.loaded.project_slug != slug:
             return
-        if self.live_input is not None:
-            lo = self.loaded
-            if show_id is None:
-                await self.load_project(slug)
-            show_id = show_id or (lo.show.id if lo.show else None)
-            if show_id and self.loaded.show and self.loaded.show.id == show_id:
-                await self._build_live_renderer(self.app.show_store(slug).get(show_id))
-            self._dirty = True
-            return
         if self.sync is not None:
             if show_id is None:  # latencies or LEDs changed while syncing: keep the click going
                 playing, pos = self.player.playing, self.player.time()
@@ -239,60 +225,6 @@ class PlaybackSession:
                     self.player.load(path, None if path else self.loaded.renderer.duration)
         self._dirty = True
         await self.broadcast_state()
-
-    # live input (microphone, no pre-analysis)
-    async def _build_live_renderer(self, show: Show) -> None:
-        lo = self.loaded
-        shaders, _ = self.app.show_store(lo.project_slug).load_shaders()
-        lo.renderer = await asyncio.to_thread(Renderer, lo.project, lo.table, show, self.live_input.features, shaders)
-        lo.show = show
-
-    async def start_live_input(self, show_id: str | None, device=None, file=None) -> None:
-        from lsg.audio.live import FileInput, open_input
-        from lsg.render.autoshow import live_show
-
-        lo = self.loaded
-        if lo is None:
-            raise ValueError("no project loaded")
-        await self.stop_live_input(restore=False)
-        if self.sync is not None:
-            await self.stop_sync()
-        self._live_previous = lo.show.id if lo.show else None
-        store = self.app.show_store(lo.project_slug)
-        if show_id is None:
-            existing = next((s for s in store.list() if s.name == "Live (Mikrofon)"), None)
-            show = existing or live_show()
-            if existing is None:
-                store.save(show, "system")
-        else:
-            show = store.get(show_id)
-        self.player.stop()
-        self.test = None
-        self.live_input = await asyncio.to_thread(FileInput, file) if file else await asyncio.to_thread(open_input, device)
-        await self._build_live_renderer(show)
-        self._dirty = True
-        await self.broadcast_state()
-
-    async def stop_live_input(self, restore: bool = True) -> None:
-        if self.live_input is None:
-            return
-        self.live_input.close()
-        self.live_input = None
-        if restore and self.loaded:
-            await self.load_show(self.loaded.project_slug, self._live_previous)
-        self._dirty = True
-
-    def live_state(self) -> dict | None:
-        li = self.live_input
-        if li is None:
-            return None
-        f = li.features
-        return {
-            "device": li.device_name,
-            "bpm": round(f.bpm, 1),
-            "levels": {k: round(v, 3) for k, v in f.levels.items()},
-            "time": round(f.t, 2),
-        }
 
     # sync test (latency calibration)
     async def _build_sync_renderer(self) -> None:
@@ -363,10 +295,6 @@ class PlaybackSession:
         self._dirty = True
 
     def show_time(self) -> float:
-        if self.live_input is not None:
-            r = self.loaded.renderer if self.loaded else None
-            loop = r.duration if r and r.duration > 0 else 240.0
-            return self.live_input.time() % loop
         return max(0.0, self.player.time() - self.output.audio_latency_ms / 1000.0)
 
     # state
@@ -401,7 +329,6 @@ class PlaybackSession:
             "speed_testing": sorted(self.speed_testing),
             "controller_status": self.controller_status,
             "sync": self.sync,
-            "live_input": self.live_state(),
         }
 
     async def broadcast_state(self) -> None:
@@ -619,7 +546,7 @@ class PlaybackSession:
         if self.sync is not None and self.player.finished:  # loop the click track
             self.player.seek(0)
             self.player.play()
-        active = self.player.playing or self.test is not None or self.live_input is not None
+        active = self.player.playing or self.test is not None
         dirty, gen = self._dirty, self._dirty_gen
         changing = active or dirty
         live = self.mode == "live" and bool(lo.pipeline.plans)

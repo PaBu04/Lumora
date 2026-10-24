@@ -153,6 +153,10 @@ class AppState:
 
         self._analysis_pool.submit(job)
 
+    def stop_analyses(self) -> None:
+        """On shutdown: drop queued analyses (a running one finishes in the background)."""
+        self._analysis_pool.shutdown(wait=False, cancel_futures=True)
+
     def resume_pending_analyses(self) -> None:
         for song in self.songs.list():
             if song.status in ("pending", "running"):

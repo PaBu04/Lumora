@@ -58,8 +58,6 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
   leuchten auf, sobald Kick, Snare, Bass, Gesang, Melodie, Stab, Fill oder Drop erkannt sind.
 - Genauere Beat- und Takterkennung mit dem neuronalen Modell *beat_this*; beide Modelle kommen mit
   `pip install -e ".[ml]"` (PyTorch, ca. 1 GB; Modelldaten werden beim ersten Mal geladen).
-- **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –
-  wahlweise auf den Ton, den der PC gerade abspielt (Browser, Spotify …; Windows-Loopback), oder auf ein Mikrofon.
 
 **Shows**
 - Grafischer Timeline-Editor: Clips ziehen, kürzen, an Beats/Takte einrasten, Mehrfachauswahl, Kopieren/Einfügen,
@@ -215,10 +213,10 @@ backend/lsg/
   model/      Raum, Fixtures, Controller, Kalibrierung, Betrachter, Songs, Shows
   geometry/   Fixture → LED-Positionen, betrachterbezogene Koordinaten
   audio/      Analyse (librosa, beat_this), Instrumententrennung (Demucs) und -spuren, Notenerkennung (Basic
-              Pitch), Harmonie, Songform, Motive, Live-Analyse, Bibliothek, Player, Demo-Songs
+              Pitch), Harmonie, Songform, Motive, Bibliothek, Player, Demo-Songs
   render/     Effekte, Parameter, Shader (+ Worker-Prozess), Looks, Engine, Validierung, Snapshots
   output/     Kalibrierkurve, Ausgabe-Pipeline mit Strombegrenzung, DDP, WLED-API/mDNS, FSEQ-Export
-  playback/   Takt-Schleife, Testmuster, Sync-Test, Live-Eingang
+  playback/   Takt-Schleife, Testmuster, Sync-Test
   storage/    Projekte, Shows, Looks, Versionsverlauf, Export/Import
   ai_agent    Claude-Code-Anbindung      mcp_server   MCP-Werkzeuge      desktop   App-Fenster
   remote      Handy-Fernbedienung        diagnostics  Diagnosepaket

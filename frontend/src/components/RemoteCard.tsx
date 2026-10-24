@@ -26,9 +26,9 @@ export function RemoteCard() {
   };
   return (
     <div className="card">
-      <div className="row between">
+      <div className="row between" style={{ flexWrap: "nowrap" }}>
         <strong>{t("Handy als Fernbedienung")}</strong>
-        <label className="row" style={{ gap: 6 }}>
+        <label className="row" style={{ gap: 6, flexWrap: "nowrap", flex: "none" }}>
           <input type="checkbox" checked={info.enabled} disabled={busy} onChange={(e) => void set({ enabled: e.target.checked })} />
           {t("an")}
         </label>

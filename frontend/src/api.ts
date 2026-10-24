@@ -161,9 +161,6 @@ export const api = {
   test: (enabled: boolean, fixture_id: string | null, kind = "identify", params: Record<string, unknown> = {}) =>
     post<PlaybackState>("/api/playback/test", { enabled, fixture_id, kind, params }),
 
-  liveDevices: () => get<{ index: number | string; name: string; channels: number; default: boolean; kind: "desktop" | "input" }[]>("/api/live/devices"),
-  liveInput: (enabled: boolean, show_id: string | null = null, device: number | string | null = null) =>
-    post<PlaybackState>("/api/playback/live-input", { enabled, show_id, device }),
   sync: (enabled: boolean, bpm = 100) => post<PlaybackState>("/api/playback/sync", { enabled, bpm }),
   speedTest: (controller_id: string) => post<SpeedTestResult>("/api/playback/speedtest", { controller_id }),
   discover: (seconds = 3) => get<WledInfo[]>(`/api/devices/discover?seconds=${seconds}`),

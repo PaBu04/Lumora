@@ -132,6 +132,8 @@ export interface Song {
   error: string | null;
   stage?: string | null;
   progress?: number | null;
+  /** unix time the song was uploaded */
+  added?: number | null;
 }
 
 export interface Section {
@@ -270,6 +272,7 @@ export interface Show {
   dynamics?: number;
   /** set on generated starter shows */
   style?: StarterStyle | null;
+  created?: number | null;
   layers: Layer[];
 }
 
@@ -290,6 +293,8 @@ export interface ShowSummary {
   clips: number;
   layers: number;
   style?: StarterStyle | null;
+  /** unix time the show was created */
+  created?: number | null;
 }
 
 export interface Issue {
@@ -327,7 +332,6 @@ export interface PlaybackState {
   links?: Record<string, { rate: number; sent_fps: number }>;
   speed_testing?: string[];
   sync: { bpm: number; previous: string | null } | null;
-  live_input: { device: string; bpm: number; levels: Record<string, number>; time: number } | null;
 }
 
 export interface ControllerStatus {

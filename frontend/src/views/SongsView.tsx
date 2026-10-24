@@ -5,7 +5,7 @@ import { activity, InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../comp
 import { SECTION_COLORS, sectionName, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
-import { EmptyState, Expert, Field, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
+import { EmptyState, Expert, Field, formatDate, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
 import { Help } from "../components/Help";
 import { friendly } from "../errors";
 
@@ -294,6 +294,7 @@ function SongDetail({ song }: { song: Song }) {
       <div className="row" style={{ margin: "6px 0 14px" }}>
         <StatusBadge song={song} />
         <span className="badge">{formatTime(song.duration)}</span>
+        {song.added ? <span className="badge" title="hochgeladen">{formatDate(song.added)}</span> : null}
         {analysis && <span className="badge">{analysis.beats.length} Beats</span>}
         {analysis && <span className="badge">{analysis.downbeats.length} Takte</span>}
         {analysis && <span className="badge">{analysis.sections.length} Abschnitte</span>}
@@ -623,6 +624,7 @@ export function SongsView() {
                 <div>{s.title}</div>
                 <div className="meta">
                   {s.artist || "—"} · {formatTime(s.duration)}
+                  {s.added ? <span title="hochgeladen"> · {formatDate(s.added)}</span> : null}
                 </div>
               </div>
               <StatusBadge song={s} />

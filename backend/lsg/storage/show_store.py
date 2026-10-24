@@ -3,6 +3,7 @@
 import json
 import re
 import shutil
+import time
 from pathlib import Path
 
 from lsg.model.show import Show
@@ -66,15 +67,27 @@ class ShowStore:
 
     def save(self, show: Show, source: str = "ui") -> str:
         """Write the show and record a version; returns the version id."""
+        is_new = not self._show_path(show.id).is_file()
+        if show.created is None:  # keep the date of an existing show (edits may not send it)
+            show.created = self.created(self.get(show.id)) if not is_new else round(time.time(), 3)
         content = show.model_dump_json(indent=2)
         history = self.history(show.id)
         previous = history.latest_content()
         summary = show_summary(json.loads(previous) if previous else None, json.loads(content))
-        is_new = not self._show_path(show.id).is_file()
         atomic_write_text(self._show_path(show.id), content)
         if is_new and self._order_path().is_file():  # new shows go to the end of a custom order
             atomic_write_text(self._order_path(), json.dumps([*self.order(), show.id]))
         return history.record(content, source, summary)
+
+    def created(self, show: Show) -> float | None:
+        """When the show was created: stored with it, else its oldest version, else the file date."""
+        if show.created is not None:
+            return show.created
+        first = self.history(show.id).first_time()
+        if first is not None:
+            return round(first, 3)
+        path = self._show_path(show.id)
+        return round(path.stat().st_mtime, 3) if path.is_file() else None
 
     def restore(self, show_id: str, version_id: str) -> Show:
         show = Show.model_validate_json(self.history(show_id).get(version_id))

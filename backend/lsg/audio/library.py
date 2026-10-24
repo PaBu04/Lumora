@@ -1,8 +1,10 @@
 """Global song library: <data>/songs/<id>/{song.json, audio.<ext>, analysis.json}."""
 
+import contextlib
 import re
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import BinaryIO
 
@@ -54,14 +56,23 @@ class SongLibrary:
         for d in self.root.iterdir():
             meta = d / "song.json"
             if meta.is_file():
-                songs.append(Song.model_validate_json(meta.read_text(encoding="utf-8")))
+                songs.append(self._with_date(Song.model_validate_json(meta.read_text(encoding="utf-8")), d))
         return sorted(songs, key=lambda s: (s.artist.lower(), s.title.lower()))
 
     def get(self, song_id: str) -> Song:
         meta = self._dir(song_id) / "song.json"
         if not meta.is_file():
             raise KeyError(song_id)
-        return Song.model_validate_json(meta.read_text(encoding="utf-8"))
+        return self._with_date(Song.model_validate_json(meta.read_text(encoding="utf-8")), meta.parent)
+
+    @staticmethod
+    def _with_date(song: Song, d: Path) -> Song:
+        """Songs uploaded before the date was stored: the date of their audio file."""
+        if song.added is None:
+            audio = d / song.filename
+            with contextlib.suppress(OSError):
+                song.added = round((audio if audio.is_file() else d).stat().st_ctime, 3)
+        return song
 
     def save(self, song: Song) -> None:
         with self._lock:
@@ -75,7 +86,12 @@ class SongLibrary:
         if ext not in AUDIO_EXTENSIONS:
             raise ValueError(f"unsupported audio format {ext!r}")
         guessed_title, guessed_artist = _title_from_filename(filename)
-        song = Song(title=title or guessed_title, artist=artist if artist is not None else guessed_artist, filename=f"audio{ext}")
+        song = Song(
+            title=title or guessed_title,
+            artist=artist if artist is not None else guessed_artist,
+            filename=f"audio{ext}",
+            added=round(time.time(), 3),
+        )
         d = self._dir(song.id)
         d.mkdir(parents=True)
         try:

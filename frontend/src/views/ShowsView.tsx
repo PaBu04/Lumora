@@ -15,7 +15,7 @@ import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show, StarterStyle } from "../types";
-import { EmptyState, Field, formatTime, Icon, Modal, useContextMenu } from "../ui";
+import { EmptyState, Field, formatDate, formatTime, Icon, Modal, useContextMenu } from "../ui";
 import { moveItem } from "../geometry";
 import { AiGenerator } from "./AiView";
 import { Help } from "../components/Help";
@@ -151,7 +151,7 @@ function Transport({ duration, analysis }: { duration: number; analysis: Analysi
         <Icon name="stop" />
       </button>
       <span className="time">
-        {pb.live_input ? `Live · ${pb.live_input.bpm.toFixed(0)} BPM` : `${formatTime(t)} / ${formatTime(duration)}`}
+        {`${formatTime(t)} / ${formatTime(duration)}`}
       </span>
       <div className="seekbar">
         <Waveform analysis={analysis} duration={duration} position={t} onSeek={async (s) => setPlayback(await api.seek(s))} />
@@ -371,97 +371,6 @@ function ShaderPanel({ slug }: { slug: string }) {
 }
 
 let clipboard: { clip: Clip; li: number }[] = [];
-
-function LiveInputCard() {
-  const pb = useStore((s) => s.playback);
-  const setPlayback = useStore((s) => s.setPlayback);
-  const notify = useStore((s) => s.notify);
-  const [devices, setDevices] = useState<{ index: number | string; name: string; default: boolean; kind: string }[] | null>(null);
-  const [device, setDevice] = useState<string>("");
-  const [starting, setStarting] = useState(false);
-  const live = pb?.live_input;
-  useEffect(() => {
-    api
-      .liveDevices()
-      .then((d) => {
-        setDevices(d);
-        const desktop = d.find((x) => x.kind === "desktop");
-        if (desktop) setDevice(String(desktop.index)); // what the PC plays is the usual source
-      })
-      .catch(() => setDevices([]));
-  }, []);
-  const desktop = devices?.filter((d) => d.kind === "desktop") ?? [];
-  const inputs = devices?.filter((d) => d.kind !== "desktop") ?? [];
-  return (
-    <div className={`card${live ? " selected" : ""}`}>
-      <div className="row between">
-        <strong>
-          Live-Eingang <Help id="liveinput" />
-        </strong>
-        {live && <span className="badge ok">{live.bpm.toFixed(0)} BPM</span>}
-      </div>
-      <p className="hint">Reagiert in Echtzeit auf Musik vom PC (Browser, Spotify …) oder ein Mikrofon.</p>
-      {live ? (
-        <>
-          <div className="unit" title={live.device} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>
-            {live.device}
-          </div>
-          {(["low", "mid", "high"] as const).map((k) => (
-            <div key={k} className="row" style={{ flexWrap: "nowrap", marginBottom: 3 }}>
-              <span className="unit" style={{ width: 48 }}>{k === "low" ? "Bass" : k === "mid" ? "Mitten" : "Höhen"}</span>
-              <div className="meter">
-                <div style={{ width: `${Math.round((live.levels[k] ?? 0) * 100)}%` }} />
-              </div>
-            </div>
-          ))}
-          <button className="btn small" style={{ marginTop: 6 }} onClick={async () => setPlayback(await api.liveInput(false))}>
-            Beenden
-          </button>
-        </>
-      ) : devices && devices.length === 0 ? (
-        <span className="unit">Keine Audioquelle gefunden.</span>
-      ) : (
-        <div className="row" style={{ flexWrap: "nowrap" }}>
-          <select value={device} onChange={(e) => setDevice(e.target.value)} title="Audioquelle">
-            {desktop.length > 0 && (
-              <optgroup label="Was der PC abspielt">
-                {desktop.map((d) => (
-                  <option key={d.index} value={String(d.index)}>
-                    {d.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label="Mikrofon / Line-In">
-              <option value="">Standard-Eingang</option>
-              {inputs.map((d) => (
-                <option key={d.index} value={String(d.index)}>
-                  {d.name}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <button
-            className="btn small"
-            disabled={starting}
-            onClick={async () => {
-              setStarting(true);
-              try {
-                setPlayback(await api.liveInput(true, null, device === "" ? null : /^\d+$/.test(device) ? +device : device));
-              } catch (e) {
-                notify((e as Error).message, "error");
-              } finally {
-                setStarting(false);
-              }
-            }}
-          >
-            {starting ? "…" : "Starten"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ExportCard({ slug, showId, show, duration }: { slug: string; showId: string; show: Show; duration: number }) {
   const [fps, setFps] = useState(40);
@@ -688,7 +597,6 @@ export function ShowsView() {
           </Modal>
         )}
         {creating && <NewShowForm onCreated={open} onClose={() => setCreating(false)} />}
-        <LiveInputCard />
         <RemoteCard />
         {show && <ExportCard slug={slug} showId={show.id} show={show} duration={duration} />}
         <h3>Deine Shows</h3>
@@ -776,6 +684,7 @@ export function ShowsView() {
                   <div>{s.name}</div>
                   <div className="meta">
                     {sg ? sg.title : "ohne Song"} · {s.clips} Clips
+                    {s.created ? <span title="erstellt"> · {formatDate(s.created)}</span> : null}
                   </div>
                 </div>
               </div>

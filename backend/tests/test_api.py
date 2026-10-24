@@ -205,3 +205,17 @@ def test_export_and_import_project(client, tmp_path):
         bad = c2.post("/api/projects/import", files={"file": ("e.zip", evil.getvalue(), "application/zip")})
         assert bad.status_code == 422 and "unerwartete" in bad.json()["detail"]
         assert c2.post("/api/projects/import", files={"file": ("x.zip", b"nope", "application/zip")}).status_code == 422
+
+
+def test_creation_and_upload_dates(client, tmp_path):
+    slug = make_project(client)
+    before = time.time() - 1
+    show = client.post(f"/api/projects/{slug}/shows", json={"name": "Datum", "template": "empty"}).json()
+    listed = client.get(f"/api/projects/{slug}/shows").json()[0]
+    assert before <= listed["created"] <= time.time() + 1 and show["created"] == listed["created"]
+    # editing keeps the creation date
+    client.put(f"/api/projects/{slug}/shows/{show['id']}", json={**show, "name": "Umbenannt", "created": None})
+    assert client.get(f"/api/projects/{slug}/shows").json()[0]["created"] == listed["created"]
+    song = client.post("/api/songs/demo", params={"bpm": 120}).json()
+    assert before <= song["added"] <= time.time() + 1
+    assert client.get("/api/songs").json()[0]["added"] == song["added"]

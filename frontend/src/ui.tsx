@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Vec3 } from "./types";
 import { useStore } from "./store";
+import { lang } from "./i18n";
 
 export function NumberInput({
   value,
@@ -201,6 +202,18 @@ export function useContextMenu() {
     </div>
   );
   return { open, menu };
+}
+
+/** Date and time of a unix timestamp, e.g. "24.10.2026, 13:05" (English: "24/10/2026, 13:05"). */
+export function formatDate(ts: number | null | undefined): string {
+  if (!ts) return "";
+  return new Date(ts * 1000).toLocaleString(lang === "en" ? "en-GB" : "de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function formatTime(t: number): string {

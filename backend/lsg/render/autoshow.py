@@ -73,68 +73,6 @@ STYLES: dict[str, dict] = {
 LONG_STRIP = 120  # LEDs; longer strips get dimmer washes
 
 
-def live_show(name: str = "Live (Mikrofon)", duration: float = 240.0) -> Show:
-    """Endless, purely audio-driven show for the live input mode (loops after `duration`)."""
-    return Show(
-        name=name,
-        description="Reagiert live auf die Musik - frei bearbeitbar, läuft in Schleife",
-        duration=duration,
-        layers=[
-            Layer(
-                name="Basis",
-                clips=[
-                    Clip(
-                        start=0,
-                        end=duration,
-                        effect="noise",
-                        params={"palette": LOOKS[0][0], "speed": 0.2, "brightness": {"audio": "rms", "min": 0.04, "max": 0.18}},
-                    ),
-                ],
-            ),
-            Layer(
-                name="Treffer",
-                clips=[
-                    Clip(
-                        start=0,
-                        end=duration,
-                        effect="hits",
-                        blend="max",
-                        params={"palette": ["#40c0ff", "#ffffff"], "trigger": "kick", "count": 3, "size": 14, "decay": 0.22},
-                    ),
-                    Clip(
-                        start=0,
-                        end=duration,
-                        effect="hits",
-                        blend="max",
-                        params={
-                            "palette": ["#ff4080"],
-                            "trigger": "snare",
-                            "count": 2,
-                            "size": 8,
-                            "decay": 0.18,
-                            "brightness": 0.8,
-                        },
-                    ),
-                    Clip(
-                        start=0,
-                        end=duration,
-                        effect="hits",
-                        blend="add",
-                        params={
-                            "palette": ["#ffffff"],
-                            "trigger": "hihat",
-                            "count": 2,
-                            "size": 2,
-                            "decay": 0.08,
-                            "brightness": 0.4,
-                        },
-                    ),
-                ],
-            ),
-        ],
-    )
-
-
 def _fallback(name: str, song_id: str | None, duration: float | None) -> Show:
     end = duration or 60.0
     return Show(

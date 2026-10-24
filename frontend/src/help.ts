@@ -287,14 +287,6 @@ Right-click a show → "Roll a new variant" creates another version in the same 
       en: "The export creates an FSEQ file with audio and a channel map for xLights or the Falcon Player – the show then runs without a PC, on a player in the network.",
     },
   },
-  liveinput: {
-    chapter: "shows",
-    title: { de: "Live-Eingang", en: "Live input" },
-    body: {
-      de: "Ohne vorbereiteten Song reagiert eine Show live auf das, was der PC gerade abspielt (Browser, Spotify …) oder auf ein Mikrofon – Tempo, Bass und Höhen in Echtzeit.",
-      en: "Without a prepared song, a show reacts live to what the PC is playing (browser, Spotify …) or to a microphone – tempo, bass and treble in real time.",
-    },
-  },
   ai: {
     chapter: "ai",
     title: { de: "Shows mit KI", en: "Shows with AI" },

@@ -347,6 +347,7 @@ def _features(st: AppState, show: Show) -> AudioFeatures:
 def list_shows(request: Request, slug: str):
     st = state(request)
     _project(st, slug)
+    store = st.show_store(slug)
     return [
         {
             "id": s.id,
@@ -356,8 +357,9 @@ def list_shows(request: Request, slug: str):
             "clips": sum(len(l.clips) for l in s.layers),
             "layers": len(s.layers),
             "style": s.style.model_dump() if s.style else None,
+            "created": store.created(s),
         }
-        for s in st.show_store(slug).list()
+        for s in store.list()
     ]
 
 
@@ -888,7 +890,6 @@ LICENSED = {  # package -> what the app uses it for
     "librosa": "Audioanalyse",
     "soundfile": "Audiodateien lesen",
     "sounddevice": "Wiedergabe",
-    "soundcard": "Live-Eingang vom PC-Sound",
     "fastapi": "Web-Server",
     "starlette": "Web-Server",
     "uvicorn": "Web-Server",
@@ -1160,38 +1161,6 @@ async def playback_sync(request: Request, body: SyncBody):
             await s.stop_sync()
     except ValueError as exc:
         raise HTTPException(409, str(exc))
-    return s.state()
-
-
-class LiveBody(BaseModel):
-    enabled: bool
-    show_id: str | None = None
-    device: int | str | None = None  # sound card index or "desktop[:speaker]"
-    file_song_id: str | None = None  # feed a song file instead of the microphone (demo / tests)
-
-
-@router.get("/live/devices")
-def live_devices():
-    from lsg.audio.live import input_devices
-
-    return input_devices()
-
-
-@router.post("/playback/live-input")
-async def playback_live_input(request: Request, body: LiveBody):
-    """Live input mode: the show reacts to the microphone in real time (no pre-analysis)."""
-    st = state(request)
-    s = st.session
-    try:
-        if body.enabled:
-            file = st.songs.audio_path(body.file_song_id) if body.file_song_id else None
-            await s.start_live_input(body.show_id, body.device, file)
-        else:
-            await s.stop_live_input()
-    except KeyError as exc:
-        raise _404(str(exc))
-    except Exception as exc:  # no input device, PortAudio errors ...
-        raise HTTPException(422, f"Live-Eingang nicht möglich: {exc}")
     return s.state()
 
 

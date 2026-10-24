@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from lsg.audio.analysis import analyse_file
@@ -17,7 +19,11 @@ def _no_separation_model(request, monkeypatch):
         from lsg.audio import stems
 
         monkeypatch.setattr(stems, "installed", lambda: False)
+        monkeypatch.setattr(stems, "six_installed", lambda: False)  # also skips importing torch
 
+
+# analyses that a test started in the background may outlive its monkeypatch: never let them load the models
+os.environ["LSG_STEMS"] = "approx"
 
 SHORT_STRUCTURE = [
     ("intro", 2, {"hat", "pad"}),

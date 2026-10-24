@@ -53,6 +53,11 @@ class History:
             p.unlink(missing_ok=True)
         return vid
 
+    def first_time(self) -> float | None:
+        """Unix time of the oldest version."""
+        entries = self._entries()
+        return entries[0][0] / 1000 if entries else None
+
     def list(self) -> list[dict]:
         out = []
         for ts, src, p in reversed(self._entries()):

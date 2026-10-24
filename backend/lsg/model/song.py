@@ -17,6 +17,7 @@ class Song(BaseModel):
     error: str | None = None
     stage: str | None = None  # what the running analysis is doing
     progress: float | None = None  # 0..1 while running
+    added: float | None = None  # unix time the song was uploaded
 
 
 class Section(BaseModel):
