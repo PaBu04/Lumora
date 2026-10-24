@@ -155,3 +155,19 @@ def test_neural_beat_tracker_falls_back(demo_analysis, monkeypatch):
     monkeypatch.setattr(ml_beats, "installed", lambda: False)
     assert "not installed" in analyse_file(path, "beat_this").beat_note
     assert analyse_file(path, "librosa").beat_note is None
+
+
+def test_hand_set_tempo_is_recognised():
+    from lsg.audio.library import hand_set
+    from lsg.model.song import Analysis
+
+    def make(bpm, beats, **kw):
+        return Analysis(duration=60, bpm=bpm, beats=beats, downbeats=beats[::4], onsets=[], sections=[],
+                        frame_rate=10, features={}, waveform=[], **kw)  # fmt: skip
+
+    even = [round(i * 60 / 128, 4) for i in range(100)]
+    tracked = [b + (0.01 if i % 3 == 0 else 0.0) for i, b in enumerate(even)]
+    assert hand_set(make(128.0, even, version=2))  # whole BPM on an even grid: set with the tempo tool
+    assert not hand_set(make(128.0, tracked, version=2))
+    assert hand_set(make(128.0, tracked, version=1))  # old analyses: a whole BPM is enough
+    assert hand_set(make(129.3, tracked, version=2, beats_edited=True))
