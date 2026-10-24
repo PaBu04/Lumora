@@ -76,6 +76,9 @@ const NOW: { track: string; label: string; color: string }[] = [
   { track: "vocal", label: "Gesang", color: "#2dd4bf" },
   { track: "keys", label: "Keys / Synth", color: "#60a5fa" },
   { track: "lead", label: "Melodie", color: "#93c5fd" },
+  { track: "stab", label: "Stab", color: "#f0abfc" },
+  { track: "pad", label: "Pad", color: "#c4b5fd" },
+  { track: "arp", label: "Arpeggio", color: "#67e8f9" },
   { track: "fill", label: "Fill", color: MOMENT_COLORS.fill },
   { track: "build", label: "Build-up", color: MOMENT_COLORS.build },
   { track: "drop", label: "Drop", color: MOMENT_COLORS.drop },
@@ -155,6 +158,7 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
   const from = zoom && duration > zoom ? Math.max(0, Math.min(duration - zoom, t - zoom * 0.25)) : 0;
   const range: [number, number] | undefined = zoom && duration > zoom ? [from, from + zoom] : undefined;
   const section = analysis?.sections.find((s) => t >= s.start && t < s.end);
+  const chord = analysis?.harmony?.chords.find(([s, d]) => t >= s && t < s + d);
 
   return (
     <>
@@ -180,6 +184,11 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
         {section && (
           <span className="row unit" style={{ gap: 4 }}>
             <span className="swatch" style={{ background: SECTION_COLORS[section.name] ?? "#64748b" }} /> {section.name} {section.label}
+          </span>
+        )}
+        {chord && (
+          <span className="unit" title="Akkord und Stufe in der Tonart">
+            Akkord <strong style={{ color: "var(--text)" }}>{chord[2]}</strong> {chord[3]}
           </span>
         )}
         <span className="grow" />
@@ -287,6 +296,11 @@ function SongDetail({ song }: { song: Song }) {
           </span>
         )}
         {analysis && <span className="badge">{analysis.beats_per_bar ?? 4}/4-Takt</span>}
+        {analysis?.harmony?.key && (
+          <span className="badge" title={`Aus den erkannten Noten; Sicherheit ${Math.round(analysis.harmony.confidence * 100)} %`}>
+            Tonart: {analysis.harmony.key}
+          </span>
+        )}
         {analysis?.stems && (
           <span
             className={`badge ${analysis.stems === "demucs" ? "info" : ""}`}

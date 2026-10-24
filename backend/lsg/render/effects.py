@@ -25,7 +25,7 @@ EVENTS = (*EVENT_KINDS, "once")
 TRIGGERS = (*EVENTS, "half_beat", "two_beats")
 TRIGGER_HELP = (
     "beat / bar / onset, an instrument track (kick, snare, hihat, crash, bass, vocal, phrase, keys, lead, fill, build, "
-    "drop, no_drums) or once (= one time at the clip start)"
+    "drop, no_drums, chord, stab, pad, arp) or once (= one time at the clip start)"
 )
 VELOCITY = Param("velocity", "number", 0.6, "how much a quiet hit is dimmer than a loud one (0 = all equal)", 0.0, 1.0)
 SUSTAIN = Param("sustain", "bool", False, "stay lit while the note / passage lasts, then fade", dynamic=False)

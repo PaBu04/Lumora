@@ -160,6 +160,14 @@ export interface Analysis {
   stems?: string | null;
   /** instrument tracks: name -> [time, strength, duration, pitch] */
   tracks?: Record<string, [number, number, number, number][]>;
+  /** key and chords: chords are [start, duration, name, degree, strength] */
+  harmony?: {
+    key: string | null;
+    tonic: number | null;
+    mode: "major" | "minor" | null;
+    confidence: number;
+    chords: [number, number, string, string, number][];
+  } | null;
 }
 
 export type InstrumentCurve = "drums" | "bass" | "vocals" | "other" | "density" | "tension" | "loudness";

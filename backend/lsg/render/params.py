@@ -33,6 +33,7 @@ AUDIO_SOURCES = (
     "density",
     "tension",
     "loudness",
+    "brightness",
 )
 LFO_SHAPES = ("sine", "triangle", "saw", "square")
 EASES = ("linear", "smooth", "step")

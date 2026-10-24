@@ -48,3 +48,6 @@ class Analysis(BaseModel):
     stems: str | None = None  # how instruments were separated: "demucs", "approx" (no vocals) or None
     # instrument tracks (see lsg.audio.instruments): name -> events [time, strength, duration, pitch]
     tracks: dict[str, list[list[float]]] = Field(default_factory=dict)
+    # key and chords (lsg.audio.harmony): {"key": "F♯ Moll", "tonic": 6, "mode": "minor", "confidence",
+    # "chords": [[start, duration, name, degree, strength]]}
+    harmony: dict | None = None

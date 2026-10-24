@@ -25,7 +25,7 @@ const AXIS_LABEL: Record<string, string> = {
 };
 const AUDIO = [
   "rms", "low", "mid", "high", "onset", "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy",
-  "drums", "bass", "vocals", "other", "density", "tension", "loudness",
+  "drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness",
 ];
 const AUDIO_LABEL: Record<string, string> = {
   rms: "Lautstärke",
@@ -46,6 +46,7 @@ const AUDIO_LABEL: Record<string, string> = {
   density: "Trommel-Dichte",
   tension: "Spannung (Build-up)",
   loudness: "Lautstärke geglättet",
+  brightness: "Klanghelligkeit Keys / Synths",
 };
 const NAMED: Record<string, string> = {
   black: "#000000", white: "#ffffff", warmwhite: "#ffb46b", red: "#ff0000", orange: "#ff6000", amber: "#ffa000",

@@ -14,11 +14,15 @@ Computed from the separated stems (lsg.audio.stems). Event tracks:
   build                       build-ups that lead into a drop (rising energy / drum density)
   drop                        moments where the music comes back in hard
   no_drums                    passages without drums
+  chord                       chord changes (pitch = root, octave 4); names and degrees in the harmony info
+  stab / pad / arp            how the keys / synths play: chords struck short, held chords, arpeggios
+                              (regions: start, strength, length, mean pitch) - see lsg.audio.harmony
 Every event is [time s, strength 0..1, duration s (0 = a hit), pitch (MIDI note, 0 = none)].
 
 Curves (0..1 at the analysis frame rate): drums, bass, vocals, other (stem loudness), density
 (drum hits per second relative to the busiest part of the song), tension (rises through
-build-ups, back to 0 at the drop) and loudness (smoothed loudness of the whole mix).
+build-ups, back to 0 at the drop), loudness (smoothed loudness of the whole mix) and brightness
+(how bright the keys / synths sound: dull 0 .. brilliant 1, 0 while they are silent).
 """
 
 import logging
@@ -31,8 +35,9 @@ log = logging.getLogger(__name__)
 
 TRACKS = (
     "kick", "snare", "hihat", "crash", "bass", "vocal", "phrase", "keys", "lead", "fill", "build", "drop", "no_drums",
+    "chord", "stab", "pad", "arp",
 )  # fmt: skip
-CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness")
+CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness")
 STEM_RANGE_DB = 30.0  # a stem this far below its loudest part counts as silent
 
 
@@ -375,9 +380,12 @@ def analyse_stems(
     downbeats: np.ndarray,
     low: np.ndarray,
     high: np.ndarray,
-) -> tuple[dict[str, list[list[float]]], dict[str, np.ndarray]]:
-    """Event tracks and curves (see module doc). `low` / `high`: the mix band curves (0..1)."""
+) -> tuple[dict[str, list[list[float]]], dict[str, np.ndarray], dict]:
+    """Event tracks, curves (see module doc) and the harmony (key and chords, lsg.audio.harmony.harmony).
+    `low` / `high`: the mix band curves (0..1)."""
     import librosa
+
+    from lsg.audio import harmony as harm
 
     rate = sr / hop
     mix_rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
@@ -459,5 +467,17 @@ def analyse_stems(
     nd = _no_drums(env["drums"], rate)
     tracks["no_drums"] = _events([a for a, _ in nd], [1.0] * len(nd), [b - a for a, b in nd])
 
-    curves = {**env, "density": density, "tension": tension, "loudness": loud}
-    return tracks, curves
+    # harmony and how the keys play
+    duration = len(y) / sr
+    keys_arr = np.asarray(tracks["keys"], float).reshape(-1, 4)
+    bass_arr = np.asarray(tracks["bass"], float).reshape(-1, 4)
+    h = harm.harmony(keys_arr, bass_arr, beats, downbeats, duration)
+    tracks["chord"] = harm.chord_events(h)
+    beat = float(np.median(np.diff(beats))) if len(beats) > 2 else 0.5
+    tracks.update(harm.character(keys_arr, beat))
+    centroid = fit(librosa.feature.spectral_centroid(y=stems["other"], sr=sr, hop_length=hop)[0])
+    bright = np.clip((np.log2(np.maximum(centroid, 1)) - np.log2(400)) / (np.log2(6000) - np.log2(400)), 0, 1)
+    bright = (_smooth(bright, rate, 0.4) * (env["other"] > 0.15)).astype(np.float32)
+
+    curves = {**env, "density": density, "tension": tension, "loudness": loud, "brightness": bright}
+    return tracks, curves, h

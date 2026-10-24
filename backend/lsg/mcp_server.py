@@ -42,7 +42,8 @@ HOW A GOOD SHOW LOOKS - follow these rules:
   Every effect with a trigger can follow an instrument track: kick, snare, hihat, crash (drum hits with
   velocity - fills and rolls come out as played, faster in transitions), bass, vocal, keys (every note of
   keys / synths / guitars, polyphonic: a chord is several notes at once), lead (their melody = top voice),
-  all notes with pitch and length, phrase (sung passages), fill, build, drop, no_drums. "hits" on kick / snare for the
+  all notes with pitch and length, phrase (sung passages), fill, build, drop, no_drums, chord (chord
+  changes, pitch = root), stab (chords struck short), pad (held chords), arp (arpeggios). "hits" on kick / snare for the
   beat, "notes" for melodies and bass lines (position = pitch, stays lit while the note sounds),
   "pulse" with sustain on phrase for a glow while someone sings. Loud hits are brighter (velocity).
   Give the instrument that carries a passage the most visible strip in it (e.g. vocals in the verse,
@@ -122,7 +123,8 @@ Parameter values can be animated (number params; keyframes also for colours and 
   lfo:           {"lfo": "sine|triangle|saw|square", "beats": 2, "min": 0, "max": 1, "phase": 0}  (or "seconds": 3)
 
 Triggers (pulse, hits, sweep, ripple; notes takes a "track"): beat, bar, onset, the instrument tracks kick, snare,
-hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums - and "once" = one time at the clip start
+hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums, chord, stab, pad, arp - and "once" = one
+time at the clip start
 (a cue: the clip's start and length are the moment; sweep "once" crosses the room over the whole clip).
 "velocity" scales the flash with how loud the hit / note was; "sustain" keeps it lit while the note or passage
 lasts. Instrument tracks need an analysis with instruments (get_song_analysis: "instruments").
@@ -147,6 +149,7 @@ def _err(exc: Exception) -> dict[str, Any]:
     return {"ok": False, "error": str(exc)}
 
 
+CURVES_FOR_AI = ("rms", "low", "mid", "high", "onset", "loudness", "drums", "bass", "vocals", "other", "tension", "brightness")
 MOMENT_TRACKS = ("drop", "build", "fill", "crash", "phrase", "no_drums")
 
 
@@ -192,6 +195,21 @@ def instrument_summary(a, feats: AudioFeatures, start: float, end: float) -> dic
         "moments_format": "[time, strength, duration, pitch]; drop = the music comes in hard, build = build-up leading "
         "into a drop (ends at the drop), fill = drum fill / roll, phrase = sung passage, no_drums = passage without drums",
         "tracks": {k: len(v) for k, v in a.tracks.items()},
+        "harmony": _harmony_summary(a.harmony, start, end),
+    }
+
+
+def _harmony_summary(h: dict | None, start: float, end: float) -> dict | None:
+    """Key and the chords in the window; the mode suggests a palette (major: warmer, minor: cooler)."""
+    if not h or not h.get("key"):
+        return None
+    chords = [c for c in h.get("chords", []) if c[0] + c[1] > start and c[0] < end]
+    return {
+        "key": h["key"],
+        "mode": h["mode"],
+        "confidence": h["confidence"],
+        "chords": chords[:80],
+        "chords_format": "[start, duration, name, degree in the key (I = home, V = tension towards I), strength]",
     }
 
 
@@ -413,10 +431,7 @@ def create_mcp(st: AppState) -> MCPServer:
             "downbeats": in_win(a.downbeats),
             "curves": {
                 "times": np.round(times, 3).tolist(),
-                **{
-                    name: [round(f.level(name, float(t)), 2) for t in times]
-                    for name in ("rms", "low", "mid", "high", "onset", "loudness", "drums", "bass", "vocals", "other", "tension")
-                },
+                **{name: [round(f.level(name, float(t)), 2) for t in times] for name in CURVES_FOR_AI},
             },
         }
         if include_onsets:
@@ -428,8 +443,8 @@ def create_mcp(st: AppState) -> MCPServer:
         song_id: str, tracks: list[str] | None = None, start: float = 0.0, end: float | None = None, min_strength: float = 0.0
     ) -> dict[str, Any]:
         """Individual events of instrument tracks in [start, end]: each [time s, strength 0..1, duration s, pitch MIDI
-        (0 = none)]. Tracks: kick, snare, hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums
-        (default: all). Request dense tracks (hihat, vocal, keys, lead) in windows of ~30 s."""
+        (0 = none)]. Tracks: kick, snare, hihat, crash, bass, vocal, phrase, keys, lead, fill, build, drop, no_drums,
+        chord, stab, pad, arp (default: all). Request dense tracks (hihat, vocal, keys, lead) in windows of ~30 s."""
         try:
             st.songs.get(song_id)
         except KeyError:

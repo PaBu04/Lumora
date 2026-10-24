@@ -31,6 +31,7 @@ const LANES: {
   { name: "bass", label: "Bass", color: "#a78bfa", curve: "bass", active: ["bass"] },
   { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals", active: ["vocal"] },
   { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["keys", "lead"] },
+  { name: "chords", label: "Akkorde", color: "#e879f9", active: ["chord"] },
   { name: "moments", label: "Momente", color: "#fbbf24", active: ["fill", "drop", "build"] },
 ];
 const LANE_H = 30;
@@ -190,6 +191,37 @@ export function InstrumentLanes({
             g.restore();
           }
           notes("lead", "#93c5fd", ...range);
+          // how the keys play: pads (held chords) and arpeggios as bars on top, stabs as ticks
+          g.fillStyle = "#c4b5fd";
+          for (const [t, v, d] of visible("pad")) {
+            g.globalAlpha = 0.25 + 0.4 * v;
+            g.fillRect(x(t), y0 + 1, len(d), 3);
+          }
+          g.fillStyle = "#67e8f9";
+          for (const [t, v, d] of visible("arp")) {
+            g.globalAlpha = 0.4 + 0.5 * v;
+            for (let px = x(t); px < x(t + d); px += 4) g.fillRect(px, y0 + 1, 2, 3);
+          }
+          g.fillStyle = "#f0abfc";
+          for (const [t, v] of visible("stab")) {
+            g.globalAlpha = 0.3 + 0.6 * v;
+            g.fillRect(x(t), y0 + 1, tick, 5);
+          }
+          g.globalAlpha = 1;
+        } else if (lane.name === "chords") {
+          // chord blocks: hue = root, minor chords darker, the name where there is room
+          for (const [t, d, name, degree, v] of analysis.harmony?.chords ?? []) {
+            if (t + d < t0 || t > t1) continue;
+            const root = (tracks.chord ?? []).find((e) => Math.abs(e[0] - t) < 0.01)?.[3] ?? 60;
+            const minor = name.endsWith("m");
+            const hue = ((root - 60) % 12) * 30;
+            g.fillStyle = `hsla(${hue}, ${minor ? 45 : 70}%, ${minor ? 38 : 52}%, ${0.35 + 0.5 * v})`;
+            g.fillRect(x(t) + 0.5, y0 + 3, Math.max(1, len(d) - 1), LANE_H - 6);
+            if (len(d) > 26) {
+              g.fillStyle = "#fff";
+              g.fillText(len(d) > 52 ? `${name} ${degree}` : name, x(t) + 4, y0 + LANE_H / 2 + 4);
+            }
+          }
         } else if (lane.name === "moments") {
           for (const [t, v, d] of visible("build")) {
             const grd = g.createLinearGradient(x(t), 0, x(t + d), 0);
