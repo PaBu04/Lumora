@@ -372,6 +372,9 @@ function loadOrtho(): boolean {
 function OrbitCamera({ ortho, home, target, span }: { ortho: boolean; home: Vec3; target: Vec3; span: number }) {
   const { size } = useThree();
   const pos = lastView.pos ?? home;
+  // narrow, tall areas would cut off the sides: widen the view so it shows as much as a square one
+  const aspect = size.width / Math.max(1, size.height);
+  const fov = aspect >= 1 ? 45 : (2 * Math.atan(Math.tan((22.5 * Math.PI) / 180) / Math.max(0.2, aspect)) * 180) / Math.PI;
   const tgt = lastView.target ?? target;
   // fit the room once when switching to orthographic; the user zooms from there
   const zoom = useMemo(() => Math.min(size.width, size.height) / (span * 1.7), [ortho]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -380,7 +383,7 @@ function OrbitCamera({ ortho, home, target, span }: { ortho: boolean; home: Vec3
       {ortho ? (
         <OrthographicCamera makeDefault position={pos} zoom={zoom} near={-200} far={400} />
       ) : (
-        <PerspectiveCamera makeDefault position={pos} fov={45} near={0.05} far={200} />
+        <PerspectiveCamera makeDefault position={pos} fov={fov} near={0.05} far={200} />
       )}
       <OrbitControls
         key={ortho ? "o" : "p"}
@@ -401,10 +404,13 @@ export function Scene3D({
   editable = false,
   editViewer = false,
   viewerCam = false,
+  highlight = null,
 }: {
   editable?: boolean;
   editViewer?: boolean;
   viewerCam?: boolean;
+  /** strip to mark without editing it (e.g. the mapping row under the mouse) */
+  highlight?: string | null;
 }) {
   const project = useStore((s) => s.project);
   const leds = useStore((s) => s.leds);
@@ -413,7 +419,8 @@ export function Scene3D({
   const [ortho, setOrtho] = useState(loadOrtho);
   if (!project) return null;
   const b = bounds(project.room);
-  const hl = editable && leds ? (leds.fixtures.find((f) => f.id === selected) ?? null) : null;
+  const marked = highlight ?? (editable ? selected : null);
+  const hl = leds && marked ? (leds.fixtures.find((f) => f.id === marked) ?? null) : null;
   const cx = (b.x0 + b.x1) / 2,
     cy = (b.y0 + b.y1) / 2;
   const span = Math.max(b.x1 - b.x0, b.y1 - b.y0, project.room.height);

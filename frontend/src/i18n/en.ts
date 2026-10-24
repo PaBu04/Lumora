@@ -812,6 +812,8 @@ export const EN: Record<string, string> = {
   "Claude Code": "Claude Code",
   Werkzeuge: "Tools",
 
+  "Testmuster: grün = Anfang, rot = Ende des Strips": "Test pattern: green = start, red = end of the strip",
+  "Maus über eine Zuordnung zeigt den Strip im Raum": "Hover over a mapping to see the strip in the room",
   // Claude Code setup guide
   "Anleitung: App mit Claude verbinden": "Guide: connect the app with Claude",
   "So verbindest du die App mit Claude": "How to connect the app with Claude",

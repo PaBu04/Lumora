@@ -1,4 +1,5 @@
 import { Panes } from "../components/Panes";
+import { Scene3D } from "../three/Scene3D";
 import { useState } from "react";
 import { api } from "../api";
 import { uid } from "../geometry";
@@ -135,7 +136,7 @@ function OutputSettings() {
   );
 }
 
-function ControllerCard({ c }: { c: Controller }) {
+function ControllerCard({ c, onHover }: { c: Controller; onHover: (fixture: string | null) => void }) {
   const project = useStore((s) => s.project)!;
   const leds = useStore((s) => s.leds);
   const update = useStore((s) => s.updateProject);
@@ -313,7 +314,7 @@ function ControllerCard({ c }: { c: Controller }) {
         </thead>
         <tbody>
           {c.mappings.map((m, i) => (
-            <tr key={i}>
+            <tr key={i} onMouseEnter={() => onHover(m.fixture_id)} onMouseLeave={() => onHover(null)}>
               <td>
                 <select value={m.fixture_id} onChange={(e) => set((x) => (x.mappings[i].fixture_id = e.target.value))}>
                   {project.fixtures.map((f) => (
@@ -415,6 +416,7 @@ export function DevicesView() {
   const [found, setFound] = useState<WledInfo[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [host, setHost] = useState("");
+  const [hover, setHover] = useState<string | null>(null);
   if (!project) return null;
 
   const addController = (info: WledInfo) => {
@@ -431,7 +433,7 @@ export function DevicesView() {
   const known = new Set(project.controllers.map((c) => c.host.split(":")[0]));
 
   return (
-    <Panes id="devices" sizes={[null, 360]} className="view">
+    <Panes id="devices" sizes={[560, null, 340]} className="view">
       <div className="pane">
         <div className="row between">
           <h2>
@@ -464,8 +466,16 @@ export function DevicesView() {
           </EmptyState>
         )}
         {project.controllers.map((c) => (
-          <ControllerCard key={c.id} c={c} />
+          <ControllerCard key={c.id} c={c} onHover={setHover} />
         ))}
+      </div>
+      <div className="pane flush">
+        <div className="canvas-wrap">
+          <Scene3D highlight={hover ?? pb?.test?.fixture ?? null} />
+        </div>
+        <div className="overlay">
+          <span className="badge">{pb?.test ? "Testmuster: grün = Anfang, rot = Ende des Strips" : "Maus über eine Zuordnung zeigt den Strip im Raum"}</span>
+        </div>
       </div>
       <div className="pane">
         <OutputSettings />
