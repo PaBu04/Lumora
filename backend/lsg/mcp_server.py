@@ -48,6 +48,14 @@ HOW A GOOD SHOW LOOKS - follow these rules:
   "pulse" with sustain on phrase for a glow while someone sings. Loud hits are brighter (velocity).
   Give the instrument that carries a passage the most visible strip in it (e.g. vocals in the verse,
   the lead synth in the drop, the drums in a fill).
+- PLAN THE ARC OF THE WHOLE SONG. Sections come with the song form: name (intro, verse, prechorus, chorus,
+  break, build, drop, bridge, outro), label (same letter = same music), repeat (2 = second time), bars and
+  intensity 1-5 relative to the song; one section is the peak. Scale the light with intensity and keep the
+  brightest, widest look for the peak - do not spend everything on the first chorus. Give each label its
+  own theme (colours, effects, which strip leads) and repeat it when the label comes back, a bit bigger on
+  the repeat. Change looks on phrase starts (get_song_analysis "phrases", every 4 or 8 bars), not mid-phrase.
+  The harmony (key, chords) helps with colour: minor keys suit cooler palettes, major warmer ones; chord
+  changes (track "chord") are good moments for colour changes.
 - CUES FOR SINGLE MOMENTS. Not everything is a looping pattern: put one-shot clips (trigger "once", the
   clip is the cue) on single moments from the analysis: a drop -> a bright flash on the room ("pulse"
   once on indirect LEDs) + a "ripple" once from the viewer; a build-up -> "rise" from the build start
@@ -429,6 +437,7 @@ def create_mcp(st: AppState) -> MCPServer:
             "sections": [s.model_dump() for s in a.sections],
             "beats": in_win(a.beats),
             "downbeats": in_win(a.downbeats),
+            "phrases": [p for p in a.phrases if start <= p[0] < end],
             "curves": {
                 "times": np.round(times, 3).tolist(),
                 **{name: [round(f.level(name, float(t)), 2) for t in times] for name in CURVES_FOR_AI},

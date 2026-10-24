@@ -398,9 +398,15 @@ def analyse_signal(
     n = min(chroma.shape[1], spec.shape[1])
     mfcc = librosa.feature.mfcc(S=librosa.power_to_db(librosa.feature.melspectrogram(S=spec**2, sr=SR)), n_mfcc=13)
     energy = np.vstack([rms, bands["low"], bands["mid"], bands["high"]])[:, :n]
-    sections = _sections(downbeats, duration, chroma[:, :n], mfcc[:, :n], energy, rms[:n], frame_times[:n])
+    phrases: list[list[float]] = []
     if tracks:
-        sections = _mark_drops(sections, tracks, round(duration, 3))
+        from lsg.audio.structure import structure
+
+        sections, phrases = structure(np.asarray(downbeats), round(duration, 3), curves, SR / HOP, tracks, harmony)
+    else:
+        from lsg.audio.structure import rate_sections
+
+        sections = rate_sections(_sections(downbeats, duration, chroma[:, :n], mfcc[:, :n], energy, rms[:n], frame_times[:n]))
 
     # peak envelope for the waveform display
     chunks = np.array_split(np.abs(y), min(WAVEFORM_POINTS, max(1, len(y))))
@@ -430,6 +436,7 @@ def analyse_signal(
         beats_per_bar=beats_per_bar,
         tracks=tracks,
         harmony=harmony,
+        phrases=phrases,
     )
 
 

@@ -2,7 +2,7 @@ import { Panes } from "../components/Panes";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { activity, InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
-import { SECTION_COLORS, Waveform } from "../components/Waveform";
+import { SECTION_COLORS, sectionName, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
 import { Field, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
@@ -183,7 +183,7 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
         </span>
         {section && (
           <span className="row unit" style={{ gap: 4 }}>
-            <span className="swatch" style={{ background: SECTION_COLORS[section.name] ?? "#64748b" }} /> {section.name} {section.label}
+            <span className="swatch" style={{ background: SECTION_COLORS[section.name] ?? "#64748b" }} /> {sectionName(section.name)} {section.label}
           </span>
         )}
         {chord && (
@@ -346,7 +346,7 @@ function SongDetail({ song }: { song: Song }) {
           <div className="row" style={{ marginBottom: 12 }}>
             {sectionsUsed.map((n) => (
               <span key={n} className="row unit">
-                <span className="swatch" style={{ background: SECTION_COLORS[n] ?? "#64748b" }} /> {n}
+                <span className="swatch" style={{ background: SECTION_COLORS[n] ?? "#64748b" }} /> {sectionName(n)}
               </span>
             ))}
             <span className="row unit">
@@ -366,8 +366,9 @@ function SongDetail({ song }: { song: Song }) {
                 <th>Start</th>
                 <th>Ende</th>
                 <th>Abschnitt</th>
-                <th>Ähnlichkeit</th>
-                <th>Energie</th>
+                <th title="Gleiche Buchstaben klingen gleich; die Zahl zählt die Wiederholungen">Teil</th>
+                <th>Takte</th>
+                <th title="1 = ruhigster, 5 = intensivster Teil des Songs; ★ = Höhepunkt">Intensität</th>
               </tr>
             </thead>
             <tbody>
@@ -378,14 +379,21 @@ function SongDetail({ song }: { song: Song }) {
                   <td>
                     <span className="row">
                       <span className="swatch" style={{ background: SECTION_COLORS[s.name] ?? "#64748b" }} />
-                      {s.name}
+                      {sectionName(s.name)}
                     </span>
                   </td>
-                  <td>{s.label}</td>
                   <td>
-                    <div style={{ background: "var(--bg-4)", borderRadius: 3, height: 6, width: 120 }}>
-                      <div style={{ width: `${Math.min(100, s.energy * 160)}%`, height: "100%", background: "var(--accent)", borderRadius: 3 }} />
-                    </div>
+                    {s.label}
+                    {(s.repeat ?? 1) > 1 ? <span className="unit"> ×{s.repeat}</span> : null}
+                  </td>
+                  <td>{s.bars || "–"}</td>
+                  <td>
+                    <span className="intensity" title={`Intensität ${s.intensity ?? 3} von 5`}>
+                      {[1, 2, 3, 4, 5].map((k) => (
+                        <span key={k} className={k <= (s.intensity ?? 3) ? "on" : ""} />
+                      ))}
+                      {s.peak && <strong title="Höhepunkt des Songs"> ★</strong>}
+                    </span>
                   </td>
                 </tr>
               ))}

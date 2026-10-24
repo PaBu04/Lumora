@@ -86,7 +86,12 @@ def test_sections_match_the_track_structure(tmp_path):
     found = [s.start for s in a.sections[1:]]
     assert len(found) == len(expected)
     assert np.allclose(found, expected, atol=0.1)
-    assert [s.name for s in a.sections] == ["intro", "verse", "chorus", "break", "chorus", "outro"]
+    # the beat comes back hard after the break: a drop, and the most intense part of the song
+    assert [s.name for s in a.sections] == ["intro", "verse", "chorus", "break", "drop", "outro"]
+    labels = [s.label for s in a.sections]
+    assert labels[1] != labels[2] and labels[2] == labels[4] and labels[3] == labels[5]  # the drop is the chorus again
+    assert a.sections[4].peak and a.sections[4].intensity == 5 and a.sections[0].intensity == 1
+    assert a.phrases and all(p[1] in (2, 4, 8) for p in a.phrases)
     assert a.sections[2].label == a.sections[4].label  # both choruses sound alike
 
 

@@ -22,9 +22,13 @@ class Song(BaseModel):
 class Section(BaseModel):
     start: float
     end: float
-    name: str  # intro / verse / chorus / bridge / break / outro (heuristic)
+    name: str  # intro / verse / prechorus / chorus / bridge / break / build / drop / outro
     label: str  # A, B, C ... sections with the same label sound alike
     energy: float  # mean loudness 0..1
+    bars: int = 0  # length in bars (0 = unknown)
+    repeat: int = 1  # 2 = the second time this label comes
+    intensity: int = 3  # 1 (quietest part of the song) .. 5 (most intense)
+    peak: bool = False  # the song's climax: keep the brightest moment of a show for it
 
 
 class Analysis(BaseModel):
@@ -51,3 +55,5 @@ class Analysis(BaseModel):
     # key and chords (lsg.audio.harmony): {"key": "F♯ Moll", "tonic": 6, "mode": "minor", "confidence",
     # "chords": [[start, duration, name, degree, strength]]}
     harmony: dict | None = None
+    # phrases of the song form (lsg.audio.structure): [start s, bars], 4 or 8 bars each
+    phrases: list[list[float]] = Field(default_factory=list)

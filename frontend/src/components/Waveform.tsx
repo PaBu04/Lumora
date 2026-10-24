@@ -10,7 +10,22 @@ export const SECTION_COLORS: Record<string, string> = {
   outro: "#8b5cf6",
   build: "#fbbf24",
   drop: "#f43f5e",
+  prechorus: "#86efac",
 };
+
+/** Section names as people say them. */
+export const SECTION_NAMES: Record<string, string> = {
+  intro: "Intro",
+  verse: "Strophe",
+  prechorus: "Pre-Chorus",
+  chorus: "Refrain",
+  bridge: "Bridge",
+  break: "Break",
+  build: "Build-up",
+  drop: "Drop",
+  outro: "Outro",
+};
+export const sectionName = (name: string) => SECTION_NAMES[name] ?? name;
 
 /** Waveform with section bands and beat grid; optional playhead and click-to-seek. */
 export function Waveform({
@@ -53,7 +68,7 @@ export function Waveform({
           ctx.fillRect(x(s.start), 0, Math.max(1, x(s.end) - x(s.start) - 1), 3);
           if (x(s.end) - x(s.start) > 40 && h > 30) {
             ctx.font = "10px system-ui";
-            ctx.fillText(`${s.name} ${s.label}`, x(s.start) + 4, 13);
+            ctx.fillText(`${sectionName(s.name)} ${s.label}${s.peak ? " ★" : ""}`, x(s.start) + 4, 13);
           }
         }
         const mid = h / 2;

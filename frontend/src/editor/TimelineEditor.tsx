@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MOMENT_COLORS, MOMENT_LABELS } from "../components/InstrumentLanes";
-import { SECTION_COLORS } from "../components/Waveform";
+import { SECTION_COLORS, sectionName } from "../components/Waveform";
 import type { Analysis, EffectInfo, Look, Show } from "../types";
 import { formatTime } from "../ui";
 import { liveFrame } from "../ws";
@@ -239,7 +239,8 @@ export function TimelineEditor({
                 lineHeight: "12px",
               }}
             >
-              {s.name} {s.label}
+              {sectionName(s.name)} {s.label}
+              {s.peak ? " ★" : ""}
             </div>
           ))}
           {bars.map((b, i) =>

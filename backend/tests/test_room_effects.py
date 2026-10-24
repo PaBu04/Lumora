@@ -129,13 +129,14 @@ def test_starter_show_follows_the_instruments(project, demo_analysis):
     # the strip behind the viewer only gets room colour / flashes
     back = [c for c in clips if c.target.fixtures == ["back"]]
     assert back and {c.effect for c in back} <= {"noise", "pulse"}
-    # different strips show different instruments in the chorus
-    chorus = [c for c in clips if c.start >= a.sections[-1].start - 0.01 and c.target.fixtures and len(c.target.fixtures) == 1]
+    # different strips show different instruments in the most intense part
+    peak = next(s for s in a.sections if s.peak)
+    chorus = [c for c in clips if peak.start - 0.01 <= c.start < peak.end and c.target.fixtures and len(c.target.fixtures) == 1]
     assert len({(c.effect, c.params.get("trigger"), c.params.get("track")) for c in chorus}) >= 3
     rep = light_report(Renderer(project, t, show, AudioFeatures(a)))
     assert rep["room_light"] < 0.04
-    # the quiet intro stays darker than the chorus
-    intro, chorus_rep = rep["sections"][0], rep["sections"][-1]
+    # the quiet intro stays darker than the peak
+    intro, chorus_rep = rep["sections"][0], rep["sections"][a.sections.index(peak)]
     assert intro["room_light"] < chorus_rep["room_light"]
 
 

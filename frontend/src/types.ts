@@ -140,6 +140,13 @@ export interface Section {
   name: string;
   label: string;
   energy: number;
+  bars?: number;
+  /** 2 = the second time this label comes */
+  repeat?: number;
+  /** 1 (quietest part of the song) .. 5 (most intense) */
+  intensity?: number;
+  /** the song's climax */
+  peak?: boolean;
 }
 
 export interface Analysis {
@@ -161,6 +168,8 @@ export interface Analysis {
   /** instrument tracks: name -> [time, strength, duration, pitch] */
   tracks?: Record<string, [number, number, number, number][]>;
   /** key and chords: chords are [start, duration, name, degree, strength] */
+  /** phrases of the song form: [start s, bars] */
+  phrases?: [number, number][];
   harmony?: {
     key: string | null;
     tonic: number | null;

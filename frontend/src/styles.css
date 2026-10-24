@@ -296,3 +296,7 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .cal-step.running .step-no { background: var(--accent-strong); color: #fff; }
 .new-project .list-item { cursor: pointer; }
 .new-project input[type="radio"] { accent-color: var(--accent); flex: none; }
+.intensity { display: inline-flex; align-items: center; gap: 3px; }
+.intensity > span { width: 9px; height: 9px; border-radius: 50%; background: var(--bg-4); }
+.intensity > span.on { background: var(--accent); }
+.intensity strong { color: #fbbf24; margin-left: 4px; }
