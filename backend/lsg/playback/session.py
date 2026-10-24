@@ -137,6 +137,10 @@ class PlaybackSession:
         self.sender.close()
         set_timer_resolution(False)
 
+    def mark_dirty(self) -> None:
+        """Something changed that the next frame must show (also while paused)."""
+        self._dirty = True
+
     # loading
     async def load_project(self, slug: str) -> None:
         """Make a project current (keeps the show if it belongs to the project)."""

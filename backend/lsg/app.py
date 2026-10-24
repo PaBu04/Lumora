@@ -36,8 +36,11 @@ def create_app(
             except Exception:
                 logging.exception("could not load active project")
         st.resume_pending_analyses()
+        if st.settings.get("remote_enabled") and st.settings.get("remote_key"):
+            await st.remote.start()
         async with mcp.session_manager.run():
             yield
+        await st.remote.stop()
         await st.ai.shutdown()
         from lsg.render import shader_host
 

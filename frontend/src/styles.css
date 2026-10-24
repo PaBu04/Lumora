@@ -348,3 +348,6 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .guide-head .btn.icon { width: 22px; height: 22px; padding: 0; flex: none; }
 .guide-head .help-btn { margin-left: 0; }
 .diag-pre { max-height: 300px; overflow: auto; font-size: 11.5px; margin: 6px 0 10px; white-space: pre-wrap; word-break: break-word; }
+.remote-qr { display: grid; place-items: center; margin-top: 8px; }
+.remote-qr svg { width: 168px; height: 168px; border-radius: 8px; }
+.remote-url { display: block; font-size: 11px; word-break: break-all; color: var(--text-2); }

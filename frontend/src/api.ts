@@ -75,6 +75,9 @@ export const api = {
       python: { name: string; version: string; license: string; use: string }[];
       models: { name: string; license: string; use: string; bundled: boolean }[];
     }>("/api/licenses"),
+  remote: () => get<{ enabled: boolean; running: boolean; error: string | null; url: string | null; qr: string | null }>("/api/remote"),
+  setRemote: (body: { enabled?: boolean; new_key?: boolean }) =>
+    put<{ enabled: boolean; running: boolean; error: string | null; url: string | null; qr: string | null }>("/api/remote", body),
   diagnostics: () => get<{ diagnostics: Record<string, unknown>; log: string }>("/api/diagnostics"),
   createExample: (lang: string) => post<{ slug: string; project: Project; song: Song }>(`/api/projects/example?lang=${lang}`),
   createProject: (name: string, copyFrom?: string, copyShows = true) =>

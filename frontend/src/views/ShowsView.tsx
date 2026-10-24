@@ -9,6 +9,7 @@ import { useStore } from "../store";
 import { Scene3D } from "../three/Scene3D";
 import { Inspector } from "../editor/Inspector";
 import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type SnapMode } from "../editor/ops";
+import { RemoteCard } from "../components/RemoteCard";
 import { VideoRecorder } from "../components/VideoRecorder";
 import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
@@ -688,6 +689,7 @@ export function ShowsView() {
         )}
         {creating && <NewShowForm onCreated={open} onClose={() => setCreating(false)} />}
         <LiveInputCard />
+        <RemoteCard />
         {show && <ExportCard slug={slug} showId={show.id} show={show} duration={duration} />}
         <h3>Deine Shows</h3>
         <div className="list" style={{ marginBottom: 8 }}>

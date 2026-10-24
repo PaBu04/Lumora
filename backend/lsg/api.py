@@ -927,6 +927,53 @@ def licenses():
     return {"python": out, "models": MODELS}
 
 
+class RemoteBody(BaseModel):
+    enabled: bool | None = None
+    new_key: bool = False
+
+
+def _remote_info(st: AppState) -> dict:
+    from lsg.remote import REMOTE_PORT, lan_address
+
+    key = st.settings.get("remote_key") or ""
+    url = f"http://{lan_address()}:{REMOTE_PORT}/?k={key}" if key else None
+    qr = None
+    if url:
+        import segno
+
+        qr = segno.make(url, error="m").svg_inline(scale=5, dark="#000000", light="#ffffff", border=2)
+    return {
+        "enabled": bool(st.settings.get("remote_enabled")),
+        "running": st.remote.running,
+        "error": st.remote.error,
+        "url": url if st.settings.get("remote_enabled") else None,
+        "qr": qr if st.settings.get("remote_enabled") else None,
+    }
+
+
+@router.get("/remote")
+def get_remote(request: Request):
+    """Phone remote: on / off, its address and QR code (see lsg.remote)."""
+    return _remote_info(state(request))
+
+
+@router.put("/remote")
+async def put_remote(request: Request, body: RemoteBody):
+    from lsg.remote import new_key
+
+    st = state(request)
+    if body.new_key or not st.settings.get("remote_key"):
+        st.settings["remote_key"] = new_key()
+    if body.enabled is not None:
+        st.settings["remote_enabled"] = body.enabled
+        if body.enabled:
+            await st.remote.start()
+        else:
+            await st.remote.stop()
+    st.save_settings()
+    return _remote_info(st)
+
+
 @router.get("/diagnostics")
 def get_diagnostics(request: Request, download: bool = False):
     """Diagnostics for bug reports, without private data (see lsg.diagnostics). download=true: as a zip."""

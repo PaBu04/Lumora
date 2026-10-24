@@ -28,6 +28,8 @@ class AppState:
             "ai_model": DEFAULT_MODEL,
             "flash_limit": 3.0,  # large flashes per second at most (0 = off), see lsg.render.safety
             "safety_ack": False,  # the photosensitivity warning was confirmed
+            "remote_enabled": False,  # phone remote in the Wi-Fi (lsg.remote)
+            "remote_key": "",
         }
         self.songs = SongLibrary(
             self.data_dir / "songs",
@@ -39,6 +41,9 @@ class AppState:
         self._active_file = self.data_dir / "active_project.txt"
         self._settings_file = self.data_dir / "settings.json"
         self.loop: asyncio.AbstractEventLoop | None = None
+        from lsg.remote import RemoteServer
+
+        self.remote = RemoteServer(self)
         self.ai = AgentManager(self.data_dir, f"http://{config.HOST}:{config.PORT}/mcp", self.session.broadcast_event)
         self.load_settings()
 
@@ -58,6 +63,10 @@ class AppState:
             self.settings["flash_limit"] = safety.LIMIT_HZ = float(data["flash_limit"])
         if isinstance(data.get("safety_ack"), bool):
             self.settings["safety_ack"] = data["safety_ack"]
+        if isinstance(data.get("remote_enabled"), bool):
+            self.settings["remote_enabled"] = data["remote_enabled"]
+        if isinstance(data.get("remote_key"), str):
+            self.settings["remote_key"] = data["remote_key"]
         if data.get("ai_model") in AI_MODELS:
             self.settings["ai_model"] = data["ai_model"]
         if data.get("beat_tracker") in ("librosa", "beat_this", "auto"):

@@ -878,6 +878,13 @@ export const EN: Record<string, string> = {
   "KI-Modell installiert, aber nicht ladbar: {0}": "AI model installed but cannot be loaded: {0}",
   "eigener Look": "custom look",
   "Mein Raum": "My room",
+  "Handy als Fernbedienung": "Phone as remote",
+  an: "on",
+  "Abspielen, Helligkeit, Show wechseln und Cues vom Handy aus – im selben WLAN, geschützt durch einen Code im QR-Code.":
+    "Play, brightness, switch shows and cues from your phone – in the same Wi-Fi, protected by a code in the QR code.",
+  "Mit der Handy-Kamera scannen. Fragt Windows nach der Firewall, „Private Netzwerke“ erlauben.":
+    "Scan with the phone camera. If Windows asks about the firewall, allow “Private networks”.",
+  "Neuen Code erzeugen (alter Link gilt nicht mehr)": "Create a new code (the old link stops working)",
   " (Kopie)": " (copy)",
   "KI-Show": "AI show",
   "Neue Show": "New show",

@@ -100,6 +100,7 @@ class Renderer:
         self.errors: dict[str, str] = {}
         self.limiter = FlashLimiter()  # photosensitivity: no rapid large flashes
         self.clips: list[CompiledClip] = []
+        self.live: list[CompiledClip] = []  # cues laid over the show for a moment (phone remote)
         for layer in self.show.layers:
             if not layer.enabled:
                 continue
@@ -109,6 +110,10 @@ class Renderer:
                 except (ParamError, TargetError, ShaderError, ValueError) as exc:
                     self.errors[clip.id] = str(exc)
         self.duration = self.show.duration or self.features.duration or max((c.end for _, c in self.show.clips()), default=0.0)
+
+    def add_live(self, clip: Clip) -> None:
+        """Play a clip on top of the show without changing it (e.g. a cue from the phone)."""
+        self.live.append(self._compile(clip, 1.0))
 
     def _compile(self, clip: Clip, layer_opacity: float) -> CompiledClip:
         view = LedView(self.table, self.spatial, select_leds(clip.target, self.table, self.project))
@@ -129,7 +134,9 @@ class Renderer:
         if self.table.count == 0:
             return frame
         audio = self.features.frame(t)
-        for cc in self.clips:
+        if self.live:
+            self.live = [cc for cc in self.live if cc.clip.start - 1.0 <= t < cc.clip.end + 1.0]
+        for cc in [*self.clips, *self.live] if self.live else self.clips:
             c = cc.clip
             if cc.disabled or not (c.start <= t < c.end) or cc.view.n == 0:
                 continue

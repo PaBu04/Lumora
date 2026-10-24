@@ -18,6 +18,7 @@ dependencies = [
     "mcp>=2.0,<3",
     "pillow>=10",
     "onnxruntime>=1.20",  # polyphonic note transcription (Basic Pitch model, lsg/audio/models)
+    "segno>=1.6",  # QR code of the phone remote
 ]
 
 [project.optional-dependencies]
