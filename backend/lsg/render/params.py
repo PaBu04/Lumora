@@ -34,6 +34,8 @@ AUDIO_SOURCES = (
     "tension",
     "loudness",
     "brightness",
+    "piano",
+    "guitar",
 )
 LFO_SHAPES = ("sine", "triangle", "saw", "square")
 EASES = ("linear", "smooth", "step")

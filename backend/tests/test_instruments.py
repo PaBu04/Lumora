@@ -203,3 +203,35 @@ def test_transcription_hears_chords_and_melody():
     keys = _note_events(notes, np.ones(1000, np.float32), 200.0, 0.0)
     melody = _melody(keys)
     assert [int(p) for p in melody[:, 3]] == [72, 74, 76]
+
+
+def test_six_stems_give_piano_and_guitar_tracks():
+    from lsg.audio import transcribe
+    from lsg.audio.instruments import analyse_stems
+
+    if not transcribe.installed():
+        pytest.skip("onnxruntime not installed")
+    sr, hop, seconds = 22050, 512, 12
+    n = sr * seconds
+    rng = np.random.default_rng(3)
+    piano = np.zeros(n, np.float32)
+    for k, m in enumerate([60, 64, 67, 72] * 5):
+        a = int((0.5 + 0.5 * k) * sr)
+        piano[a : a + int(0.45 * sr)] += 0.3 * _tone(m, 0.45)
+    stems = {
+        "drums": (rng.standard_normal(n) * 0.001).astype(np.float32),
+        "bass": np.zeros(n, np.float32),
+        "vocals": np.zeros(n, np.float32),
+        "other": np.zeros(n, np.float32),
+        "piano": piano,
+        "guitar": np.zeros(n, np.float32),
+    }
+    mix = sum(stems.values())
+    beats = np.arange(0, seconds, 0.5)
+    rate = sr / hop
+    flat = np.zeros(int(seconds * rate) + 1, np.float32)
+    tracks, curves, _ = analyse_stems(stems, mix, sr, hop, beats, beats[::4], flat, flat)
+    pitches = {int(e[3]) for e in tracks["piano"]}
+    assert {60, 64, 67, 72} <= pitches and tracks["guitar"] == []
+    assert len(tracks["keys"]) >= len(tracks["piano"]) - 2  # the piano is still part of the keys
+    assert curves["piano"].max() > 0.5 and curves["guitar"].max() == 0

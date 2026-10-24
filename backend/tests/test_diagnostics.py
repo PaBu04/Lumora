@@ -46,7 +46,22 @@ def test_package_without_private_data(tmp_path):
         assert set(z.namelist()) == {"diagnostics.json", "log.txt", "LIESMICH.txt"}
         everything = (z.read("diagnostics.json") + z.read("log.txt")).decode()
         assert "could not reach" in everything  # the log is there ...
-        for secret in ("Muster", "Anna", "Arbeitszimmer", "10.0.0", "aa:bb", "Lieblingssong", "Privat", slug, str(tmp_path)):
+        c.app.state.lsg.settings["remote_key"] = "geheimerschluessel"
+        r = c.get("/api/diagnostics", params={"download": True})
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        everything = (z.read("diagnostics.json") + z.read("log.txt")).decode()
+        for secret in (
+            "Muster",
+            "Anna",
+            "Arbeitszimmer",
+            "10.0.0",
+            "aa:bb",
+            "Lieblingssong",
+            "Privat",
+            slug,
+            str(tmp_path),
+            "geheimerschluessel",
+        ):
             assert secret not in everything, secret  # ... but nothing private
 
 

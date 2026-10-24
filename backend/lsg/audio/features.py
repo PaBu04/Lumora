@@ -65,6 +65,8 @@ class AudioFrame:
     tension: float = 0.0  # rises through a build-up, 0 after the drop
     loudness: float = 0.0  # smoothed loudness of the whole song
     brightness: float = 0.0  # how bright the keys / synths sound (0 = dull or silent)
+    piano: float = 0.0  # piano / guitar loudness (6-stem separation only)
+    guitar: float = 0.0
 
 
 def _continuous_index(marks: np.ndarray, t: float, period: float) -> float:

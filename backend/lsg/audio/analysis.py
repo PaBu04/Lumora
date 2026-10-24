@@ -217,7 +217,8 @@ def analyse_file(
     keep_tempo: Analysis | None = None,
 ) -> Analysis:
     """beat_tracker: "librosa" (built in), "beat_this" (neural model, optional extra) or "auto".
-    stems: "auto" (Hybrid Demucs when installed, else an approximation), "demucs", "approx" or "off".
+    stems: "auto" (6 stems when the demucs package is installed, else Hybrid Demucs, else an
+    approximation), "demucs6", "demucs", "approx" or "off".
     keep_tempo: an earlier analysis whose (hand-corrected) beat grid is kept."""
 
     def step(stage: str, f: float = 0.0) -> None:
@@ -253,7 +254,15 @@ def analyse_file(
     if stems != "off":
         from lsg.audio import stems as stem_sep
 
-        if stems in ("auto", "demucs") and stem_sep.installed():
+        six = stems == "demucs6" or (stems == "auto" and stem_sep.six_installed())
+        if six and stem_sep.six_installed():
+            step("Instrumente trennen (6 Spuren)", 0.1)
+            try:
+                separated = stem_sep.separate6(path, SR, lambda f: step("Instrumente trennen (6 Spuren)", 0.1 + 0.7 * f))
+                stem_mode = "demucs6"
+            except Exception as exc:
+                notes.append(f"6-stem separation failed ({type(exc).__name__}: {exc})")
+        if separated is None and stems in ("auto", "demucs", "demucs6") and stem_sep.installed():
             step("Instrumente trennen", 0.1)
             try:
                 separated = stem_sep.separate(path, SR, lambda f: step("Instrumente trennen", 0.1 + 0.7 * f))

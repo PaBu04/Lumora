@@ -879,6 +879,17 @@ export const EN: Record<string, string> = {
   "eigener Look": "custom look",
   "Mein Raum": "My room",
   "Handy als Fernbedienung": "Phone as remote",
+  Klavier: "Piano",
+  Gitarre: "Guitar",
+  "getrennt (6 Spuren)": "separated (6 stems)",
+  "Mit dem KI-Modell Demucs in Schlagzeug, Bass, Gesang, Klavier, Gitarre und Rest getrennt":
+    "Separated into drums, bass, vocals, piano, guitar and the rest with the AI model Demucs",
+  "automatisch (beste verfügbare Trennung)": "automatic (best available separation)",
+  "6 Spuren: mit Klavier und Gitarre": "6 stems: with piano and guitar",
+  "4 Spuren: Schlagzeug, Bass, Gesang, Rest": "4 stems: drums, bass, vocals, rest",
+  "geschätzt (schnell, ohne Gesang)": "estimated (fast, no vocals)",
+  "Instrument: Klavier (6 Spuren)": "Instrument: piano (6 stems)",
+  "Instrument: Gitarre (6 Spuren)": "Instrument: guitar (6 stems)",
   an: "on",
   "Abspielen, Helligkeit, Show wechseln und Cues vom Handy aus – im selben WLAN, geschützt durch einen Code im QR-Code.":
     "Play, brightness, switch shows and cues from your phone – in the same Wi-Fi, protected by a code in the QR code.",

@@ -28,13 +28,14 @@ class AppState:
             "ai_model": DEFAULT_MODEL,
             "flash_limit": 3.0,  # large flashes per second at most (0 = off), see lsg.render.safety
             "safety_ack": False,  # the photosensitivity warning was confirmed
+            "stems": "auto",  # instrument separation: auto | demucs6 | demucs | approx
             "remote_enabled": False,  # phone remote in the Wi-Fi (lsg.remote)
             "remote_key": "",
         }
         self.songs = SongLibrary(
             self.data_dir / "songs",
             lambda: self.settings.get("beat_tracker", "auto"),
-            lambda: os.environ.get("LSG_STEMS", "auto"),
+            lambda: os.environ.get("LSG_STEMS") or self.settings.get("stems", "auto"),
         )
         self.session = PlaybackSession(self, create_player(audio_backend), fps)
         self._analysis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis")
@@ -63,6 +64,8 @@ class AppState:
             self.settings["flash_limit"] = safety.LIMIT_HZ = float(data["flash_limit"])
         if isinstance(data.get("safety_ack"), bool):
             self.settings["safety_ack"] = data["safety_ack"]
+        if data.get("stems") in ("auto", "demucs6", "demucs", "approx"):
+            self.settings["stems"] = data["stems"]
         if isinstance(data.get("remote_enabled"), bool):
             self.settings["remote_enabled"] = data["remote_enabled"]
         if isinstance(data.get("remote_key"), str):

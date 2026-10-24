@@ -177,7 +177,7 @@ def collect(st) -> dict:
             p: _version(p)
             for p in ("numpy", "librosa", "fastapi", "uvicorn", "mcp", "onnxruntime", "torch", "torchaudio", "beat_this")
         },
-        "settings": {k: v for k, v in st.settings.items()},
+        "settings": {k: v for k, v in st.settings.items() if k != "remote_key"},  # the remote's key is a secret
         "output": st.session.output.to_dict(),
         "playback": {
             "mode": pb.get("mode"),

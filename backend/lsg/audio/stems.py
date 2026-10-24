@@ -109,3 +109,63 @@ def approximate(y: np.ndarray, sr: int) -> dict[str, np.ndarray]:
         "bass": librosa.istft(harm * low, hop_length=512, length=n),
         "other": librosa.istft(harm * ~low, hop_length=512, length=n),
     }
+
+
+# six stems: drums, bass, vocals, guitar, piano and the rest (the demucs package, model htdemucs_6s)
+_model6 = None
+
+
+def six_installed() -> bool:
+    try:
+        import demucs.pretrained  # noqa: F401
+    except Exception:
+        return False
+    return installed()
+
+
+def separate6(path: Path | str, sr: int, progress: Callable[[float], None] | None = None) -> dict[str, np.ndarray]:
+    """Like separate(), plus "guitar" and "piano" (~75 s for a 4 minute song on a CPU; the
+    weights are downloaded on first use). Works in blocks of 30 s for the progress."""
+    global _model6, _error
+    import librosa
+    import torch
+    from demucs.apply import apply_model
+
+    with _lock:
+        if _model6 is None:
+            from demucs.pretrained import get_model
+
+            try:
+                _model6 = get_model("htdemucs_6s").eval()
+                _error = None
+            except Exception as exc:
+                _error = f"{type(exc).__name__}: {exc}"
+                raise
+    model = _model6
+    y, _ = librosa.load(path, sr=model.samplerate, mono=False)
+    if y.ndim == 1:
+        y = np.stack([y, y])
+    wav = torch.from_numpy(np.ascontiguousarray(y[:2])).float()
+    n = wav.shape[1]
+    block, ov = int(30 * model.samplerate), int(1.0 * model.samplerate)
+    out = torch.zeros(len(model.sources), n)
+    weight = torch.zeros(n)
+    s = 0
+    with torch.inference_mode():
+        while s < n:
+            e = min(n, s + block)
+            res = apply_model(model, wav[None, :, s:e], device="cpu", split=True, overlap=0.1, progress=False)[0].mean(1)
+            fade = torch.ones(e - s)
+            if s > 0:
+                fade[: min(ov, e - s)] = torch.linspace(0, 1, ov)[: e - s]
+            if e < n:
+                fade[-ov:] = torch.linspace(1, 0, ov)
+            out[:, s:e] += res * fade
+            weight[s:e] += fade
+            if progress:
+                progress(e / n)
+            if e == n:
+                break
+            s = e - ov
+    out = (out / weight.clamp(min=1e-6)).numpy()
+    return {name: librosa.resample(out[i], orig_sr=model.samplerate, target_sr=sr) for i, name in enumerate(model.sources)}

@@ -78,6 +78,8 @@ const NOW: { track: string; label: string; color: string }[] = [
   { track: "vocal", label: "Gesang", color: "#2dd4bf" },
   { track: "keys", label: "Keys / Synth", color: "#60a5fa" },
   { track: "lead", label: "Melodie", color: "#93c5fd" },
+  { track: "piano", label: "Klavier", color: "#fda4af" },
+  { track: "guitar", label: "Gitarre", color: "#fdba74" },
   { track: "stab", label: "Stab", color: "#f0abfc" },
   { track: "pad", label: "Pad", color: "#c4b5fd" },
   { track: "arp", label: "Arpeggio", color: "#67e8f9" },
@@ -238,7 +240,7 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
             Instrumente <Help id="analysis" />
           </h3>
           <div className="now-chips" title="Was die Analyse an der Abspielposition erkannt hat">
-            {NOW.map((n) => {
+            {NOW.filter((n) => (n.track !== "piano" && n.track !== "guitar") || (tracks[n.track]?.length ?? 0) > 0).map((n) => {
               const a = activity(tracks[n.track], t);
               const lit = a > 0.02;
               return (
@@ -311,10 +313,16 @@ function SongDetail({ song }: { song: Song }) {
         )}
         {analysis?.stems && (
           <span
-            className={`badge ${analysis.stems === "demucs" ? "info" : ""}`}
-            title={analysis.stems === "demucs" ? "Mit dem KI-Modell Hybrid Demucs in Schlagzeug, Bass, Gesang und Rest getrennt" : "Ohne Trennmodell geschätzt (kein Gesang)"}
+            className={`badge ${analysis.stems?.startsWith("demucs") ? "info" : ""}`}
+            title={
+              analysis.stems === "demucs6"
+                ? "Mit dem KI-Modell Demucs in Schlagzeug, Bass, Gesang, Klavier, Gitarre und Rest getrennt"
+                : analysis.stems === "demucs"
+                  ? "Mit dem KI-Modell Hybrid Demucs in Schlagzeug, Bass, Gesang und Rest getrennt"
+                  : "Ohne Trennmodell geschätzt (kein Gesang)"
+            }
           >
-            Instrumente: {analysis.stems === "demucs" ? "getrennt" : "geschätzt"}
+            Instrumente: {analysis.stems === "demucs6" ? "getrennt (6 Spuren)" : analysis.stems === "demucs" ? "getrennt" : "geschätzt"}
           </span>
         )}
       </div>
@@ -451,6 +459,7 @@ function TrackerSetting() {
   }, [songs]);
   if (!settings) return null;
   const bt = settings.beat_this;
+  const sep = settings.separation;
   return (
     <div className="card">
       <Field label="Beat-Erkennung">
@@ -460,6 +469,18 @@ function TrackerSetting() {
           <option value="beat_this" disabled={!bt.installed}>
             KI-Modell beat_this{bt.installed ? "" : " (nicht installiert)"}
           </option>
+        </select>
+      </Field>
+      <Field label="Instrumente">
+        <select value={settings.stems ?? "auto"} onChange={async (e) => setSettings(await api.saveSettings({ stems: e.target.value as AppSettings["stems"] }))}>
+          <option value="auto">automatisch (beste verfügbare Trennung)</option>
+          <option value="demucs6" disabled={!sep?.six}>
+            6 Spuren: mit Klavier und Gitarre{sep?.six ? "" : " (nicht installiert)"}
+          </option>
+          <option value="demucs" disabled={!sep?.four}>
+            4 Spuren: Schlagzeug, Bass, Gesang, Rest{sep?.four ? "" : " (nicht installiert)"}
+          </option>
+          <option value="approx">geschätzt (schnell, ohne Gesang)</option>
         </select>
       </Field>
       <p className="hint" style={{ margin: 0 }}>

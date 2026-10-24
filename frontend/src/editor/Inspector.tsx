@@ -26,7 +26,7 @@ const AXIS_LABEL: Record<string, string> = {
 };
 const AUDIO = [
   "rms", "low", "mid", "high", "onset", "beat_phase", "bar_phase", "beat_decay", "bar_decay", "onset_decay", "section_energy",
-  "drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness",
+  "drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness", "piano", "guitar",
 ];
 const AUDIO_LABEL: Record<string, string> = {
   rms: "Lautstärke",
@@ -48,6 +48,8 @@ const AUDIO_LABEL: Record<string, string> = {
   tension: "Spannung (Build-up)",
   loudness: "Lautstärke geglättet",
   brightness: "Klanghelligkeit Keys / Synths",
+  piano: "Instrument: Klavier (6 Spuren)",
+  guitar: "Instrument: Gitarre (6 Spuren)",
 };
 const NAMED: Record<string, string> = {
   black: "#000000", white: "#ffffff", warmwhite: "#ffb46b", red: "#ff0000", orange: "#ff6000", amber: "#ffa000",

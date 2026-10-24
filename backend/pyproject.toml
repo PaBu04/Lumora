@@ -26,6 +26,7 @@ dependencies = [
 ml = [
     "torch>=2.4",
     "torchaudio>=2.4",  # Hybrid Demucs instrument separation
+    "demucs>=4.1",  # 6 stems (with guitar and piano)
     "beat_this @ https://github.com/CPJKU/beat_this/archive/main.zip",
 ]
 dev = [

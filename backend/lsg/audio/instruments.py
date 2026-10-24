@@ -18,6 +18,7 @@ Computed from the separated stems (lsg.audio.stems). Event tracks:
   stab / pad / arp            how the keys / synths play: chords struck short, held chords, arpeggios
                               (regions: start, strength, length, mean pitch) - see lsg.audio.harmony
   motif                       a riff that comes back (lsg.audio.motifs): pitch = motif number 1, 2 ...
+  piano / guitar              notes of piano and guitar (only with the 6-stem separation)
 Every event is [time s, strength 0..1, duration s (0 = a hit), pitch (MIDI note, 0 = none)].
 
 Curves (0..1 at the analysis frame rate): drums, bass, vocals, other (stem loudness), density
@@ -36,9 +37,9 @@ log = logging.getLogger(__name__)
 
 TRACKS = (
     "kick", "snare", "hihat", "crash", "bass", "vocal", "phrase", "keys", "lead", "fill", "build", "drop", "no_drums",
-    "chord", "stab", "pad", "arp", "motif",
+    "chord", "stab", "pad", "arp", "motif", "piano", "guitar",
 )  # fmt: skip
-CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness")
+CURVES = ("drums", "bass", "vocals", "other", "density", "tension", "loudness", "brightness", "piano", "guitar")
 STEM_RANGE_DB = 30.0  # a stem this far below its loudest part counts as silent
 
 
@@ -397,6 +398,11 @@ def analyse_stems(
     def fit(c: np.ndarray) -> np.ndarray:
         return np.pad(c[:n], (0, max(0, n - len(c))))
 
+    # 6 stems: piano and guitar get their own tracks; together with the rest they are "other" as before
+    extra = {k: stems[k] for k in ("piano", "guitar") if k in stems}
+    if extra:
+        stems = {**stems, "other": stems["other"] + sum(extra.values())}
+
     env = {
         name: fit(_envelope(stems[name], hop, mix_ref)) if name in stems else np.zeros(n, np.float32)
         for name in ("drums", "bass", "vocals", "other")
@@ -482,6 +488,15 @@ def analyse_stems(
     centroid = fit(librosa.feature.spectral_centroid(y=stems["other"], sr=sr, hop_length=hop)[0])
     bright = np.clip((np.log2(np.maximum(centroid, 1)) - np.log2(400)) / (np.log2(6000) - np.log2(400)), 0, 1)
     bright = (_smooth(bright, rate, 0.4) * (env["other"] > 0.15)).astype(np.float32)
+
+    for name, stem in extra.items():
+        e = fit(_envelope(stem, hop, mix_ref))
+        env[name] = e
+        heard = _transcribe(stem, sr, "C2", "C8") if float(np.percentile(e, 90)) > 0.2 else None
+        tracks[name] = _events(*_note_events(heard, e, rate, 0.2).T) if heard is not None and len(heard) else []
+    for name in ("piano", "guitar"):
+        tracks.setdefault(name, [])
+        env.setdefault(name, np.zeros(n, np.float32))
 
     curves = {**env, "density": density, "tension": tension, "loudness": loud, "brightness": bright}
     return tracks, curves, {"harmony": h, "motifs": riffs}

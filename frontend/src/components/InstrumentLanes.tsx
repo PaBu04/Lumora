@@ -27,14 +27,18 @@ const LANES: {
   name: string;
   label: string;
   color: string;
-  curve?: "drums" | "bass" | "vocals" | "other";
+  curve?: "drums" | "bass" | "vocals" | "other" | "piano" | "guitar";
   /** tracks that light the label up at the playhead */
   active: string[];
+  /** only shown when the analysis has this track (6-stem separation) */
+  optional?: boolean;
 }[] = [
   { name: "drums", label: "Schlagzeug", color: "#f87171", curve: "drums", active: ["kick", "snare", "hihat", "crash"] },
   { name: "bass", label: "Bass", color: "#a78bfa", curve: "bass", active: ["bass"] },
   { name: "vocal", label: "Gesang", color: "#2dd4bf", curve: "vocals", active: ["vocal"] },
   { name: "lead", label: "Keys / Synth", color: "#60a5fa", curve: "other", active: ["keys", "lead"] },
+  { name: "piano", label: "Klavier", color: "#fda4af", curve: "piano", active: ["piano"], optional: true },
+  { name: "guitar", label: "Gitarre", color: "#fdba74", curve: "guitar", active: ["guitar"], optional: true },
   { name: "chords", label: "Akkorde", color: "#e879f9", active: ["chord"] },
   { name: "motifs", label: "Motive", color: "#34d399", active: ["motif"] },
   { name: "moments", label: "Momente", color: "#fbbf24", active: ["fill", "drop", "build"] },
@@ -88,6 +92,7 @@ export function InstrumentLanes({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const dur = duration || analysis.duration || 1;
+  const lanes = LANES.filter((l) => !l.optional || (analysis.tracks?.[l.name]?.length ?? 0) > 0);
   const [t0, t1] = range ?? [0, dur];
 
   useEffect(() => {
@@ -124,7 +129,7 @@ export function InstrumentLanes({
       g.fillStyle = "rgba(255,255,255,0.13)";
       for (const b of analysis.downbeats) if (b >= t0 && b <= t1) g.fillRect(x(b), 0, 1, H);
 
-      LANES.forEach((lane, li) => {
+      lanes.forEach((lane, li) => {
         const y0 = li * LANE_H;
         g.fillStyle = li % 2 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)";
         g.fillRect(0, y0, W, LANE_H);
@@ -184,6 +189,8 @@ export function InstrumentLanes({
           g.fillStyle = MOMENT_COLORS.phrase + "38";
           for (const [t, , d] of visible("phrase")) g.fillRect(x(t), y0 + 2, len(d), LANE_H - 4);
           notes("vocal", lane.color, ...pitchRange("vocal"));
+        } else if (lane.name === "piano" || lane.name === "guitar") {
+          notes(lane.name, lane.color, ...pitchRange(lane.name));
         } else if (lane.name === "bass") {
           notes(lane.name, lane.color, ...pitchRange(lane.name));
         } else if (lane.name === "lead") {
@@ -291,7 +298,7 @@ export function InstrumentLanes({
     const ro = new ResizeObserver(draw);
     ro.observe(c);
     return () => ro.disconnect();
-  }, [analysis, t0, t1, position]);
+  }, [analysis, t0, t1, position, lanes]);
 
   return (
     <canvas
@@ -299,7 +306,7 @@ export function InstrumentLanes({
       className="instrument-lanes"
       style={{
         width: "100%",
-        height: LANES.length * LANE_H,
+        height: lanes.length * LANE_H,
         display: "block",
         cursor: onSeek ? "pointer" : "default",
       }}

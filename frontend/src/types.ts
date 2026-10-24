@@ -181,7 +181,8 @@ export interface Analysis {
   } | null;
 }
 
-export type InstrumentCurve = "drums" | "bass" | "vocals" | "other" | "density" | "tension" | "loudness";
+export type InstrumentCurve =
+  | "drums" | "bass" | "vocals" | "other" | "density" | "tension" | "loudness" | "brightness" | "piano" | "guitar";
 
 export interface AiRun {
   id: string;
@@ -223,6 +224,9 @@ export interface AppSettings {
   flash_limit: number;
   /** the photosensitivity warning was confirmed */
   safety_ack: boolean;
+  /** instrument separation */
+  stems?: "auto" | "demucs6" | "demucs" | "approx";
+  separation?: { four: boolean; six: boolean };
   ai_model?: string;
   beat_this: { installed: boolean; loaded: boolean; error: string | null };
 }

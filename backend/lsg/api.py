@@ -876,6 +876,7 @@ async def ai_cancel(request: Request):
 class SettingsBody(BaseModel):
     beat_tracker: str | None = None
     flash_limit: float | None = Field(default=None, ge=0, le=10)  # large flashes per second, 0 = off
+    stems: str | None = None  # instrument separation
     safety_ack: bool | None = None
     ai_model: str | None = None
     shader_isolation: bool | None = None
@@ -996,7 +997,13 @@ def get_settings(request: Request):
     from lsg.audio import ml_beats
 
     st = state(request)
-    return {**st.settings, "beat_this": ml_beats.status()}
+    from lsg.audio import stems
+
+    return {
+        **{k: v for k, v in st.settings.items() if k != "remote_key"},
+        "beat_this": ml_beats.status(),
+        "separation": {"four": stems.installed(), "six": stems.six_installed()},
+    }
 
 
 @router.put("/settings")
@@ -1014,6 +1021,10 @@ async def put_settings(request: Request, body: SettingsBody):
             st.session.loaded.renderer.limiter.reset()
     if body.safety_ack is not None:
         st.settings["safety_ack"] = body.safety_ack
+    if body.stems is not None:
+        if body.stems not in ("auto", "demucs6", "demucs", "approx"):
+            raise HTTPException(422, "stems must be auto, demucs6, demucs or approx")
+        st.settings["stems"] = body.stems
     if body.ai_model is not None:
         from lsg.ai_agent import AI_MODELS
 
