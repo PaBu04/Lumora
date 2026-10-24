@@ -5,7 +5,9 @@ import { activity, InstrumentLanes, MOMENT_COLORS, MOMENT_LABELS } from "../comp
 import { SECTION_COLORS, sectionName, Waveform } from "../components/Waveform";
 import { useStore } from "../store";
 import type { Analysis, AppSettings, Song } from "../types";
-import { Field, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
+import { EmptyState, Expert, Field, formatTime, Icon, NumberInput, TextInput, useContextMenu } from "../ui";
+import { Help } from "../components/Help";
+import { friendly } from "../errors";
 
 function StatusBadge({ song }: { song: Song }) {
   switch (song.status) {
@@ -232,7 +234,9 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
       </div>
       {analysis && hasTracks && (
         <>
-          <h3>Instrumente</h3>
+          <h3>
+            Instrumente <Help id="analysis" />
+          </h3>
           <div className="now-chips" title="Was die Analyse an der Abspielposition erkannt hat">
             {NOW.map((n) => {
               const a = activity(tracks[n.track], t);
@@ -302,6 +306,9 @@ function SongDetail({ song }: { song: Song }) {
             Tonart: {analysis.harmony.key}
           </span>
         )}
+        {analysis?.harmony?.key && (
+          <Help id="harmony" />
+        )}
         {analysis?.stems && (
           <span
             className={`badge ${analysis.stems === "demucs" ? "info" : ""}`}
@@ -318,11 +325,11 @@ function SongDetail({ song }: { song: Song }) {
         </div>
       )}
       {analysis && (
-        <Field label="Tempo">
+        <Field label="Tempo" help={<Help id="tempo" />}>
           <TempoEditor song={song} analysis={analysis} onChange={setAnalysis} />
         </Field>
       )}
-      {song.status === "error" && <div className="banner err">Analyse fehlgeschlagen: {song.error}</div>}
+      {song.status === "error" && <div className="banner err">Analyse fehlgeschlagen: {friendly(song.error ?? "")}</div>}
       {analysis?.beat_note && <div className="banner info">Hinweis zur Beat-Erkennung: {analysis.beat_note}</div>}
       <SongPlayer song={song} analysis={analysis} />
       {analysis && (analysis.tracks && Object.keys(analysis.tracks).length ? (
@@ -360,7 +367,9 @@ function SongDetail({ song }: { song: Song }) {
               <span className="swatch" style={{ background: "#38bdf8" }} /> Höhen
             </span>
           </div>
-          <h3>Abschnitte</h3>
+          <h3>
+            Abschnitte <Help id="songform" />
+          </h3>
           <table className="grid" style={{ maxWidth: 720 }}>
             <thead>
               <tr>
@@ -415,6 +424,7 @@ function SongDetail({ song }: { song: Song }) {
         >
           Neu analysieren
         </button>
+        <Expert>
         <button
           className="btn small ghost"
           disabled={song.status === "running"}
@@ -427,6 +437,7 @@ function SongDetail({ song }: { song: Song }) {
         >
           … mit neuer Tempo-Erkennung
         </button>
+        </Expert>
       </div>
     </div>
   );
@@ -551,9 +562,16 @@ export function SongsView() {
             Demo-Song erzeugen
           </button>
         </div>
-        <TrackerSetting />
+        <Expert>
+          <TrackerSetting />
+        </Expert>
         <div className="list">
-          {songs.length === 0 && <p className="hint">Noch keine Songs.</p>}
+          {songs.length === 0 && (
+            <EmptyState title="Noch keine Songs">
+              Zieh eine Audiodatei in das Feld oben oder erzeuge einen Demo-Song. Die Analyse erkennt dann Takt, Abschnitte, Instrumente
+              und Akkorde.
+            </EmptyState>
+          )}
           {songs.map((s) => (
             <div
               key={s.id}

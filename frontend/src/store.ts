@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "./api";
+import { friendly } from "./errors";
 import type { AiRun, LedData, PlaybackState, Project, ShowSummary, Song } from "./types";
 
 export type Tab = "room" | "fixtures" | "devices" | "calibration" | "songs" | "shows";
@@ -34,12 +35,27 @@ interface AppStore {
   redo: () => void;
   setUndoScope: (s: "project" | "show") => void;
 
+  /** open help window: the manual (at a topic) or the shortcut list */
+  help: { kind: "manual" | "shortcuts"; topic?: string } | null;
+  openHelp: (kind: "manual" | "shortcuts", topic?: string) => void;
+  closeHelp: () => void;
+  /** expert mode: JSON, shaders, MCP, audio bindings and fine tuning are shown */
+  expert: boolean;
+  setExpert: (on: boolean) => void;
+  /** the "first steps" checklist is shown */
+  guide: boolean;
+  setGuide: (on: boolean) => void;
+  /** steps of the checklist done by hand (visited, skipped, played) */
+  guideMarks: Record<string, boolean>;
+  markGuide: (step: string) => void;
+
   setTab: (t: Tab) => void;
   notify: (message: string, kind?: Toast["kind"]) => void;
   dismiss: (id: number) => void;
   init: () => Promise<void>;
   openProject: (slug: string) => Promise<void>;
   createProject: (name: string, copyFrom?: string, copyShows?: boolean) => Promise<void>;
+  createExample: () => Promise<void>;
   updateProject: (fn: (p: Project) => Project) => void;
   reloadProject: () => Promise<void>;
   refreshLeds: () => Promise<void>;
@@ -84,6 +100,55 @@ export const useStore = create<AppStore>((set, get) => ({
   saving: false,
   songs: [],
   shows: [],
+  expert: (() => {
+    try {
+      return localStorage.getItem("lsg.expert") === "on";
+    } catch {
+      return false;
+    }
+  })(),
+  setExpert: (on) => {
+    try {
+      localStorage.setItem("lsg.expert", on ? "on" : "off");
+    } catch {
+      /* no storage */
+    }
+    set({ expert: on });
+  },
+  help: null,
+  openHelp: (kind, topic) => set({ help: { kind, topic } }),
+  closeHelp: () => set({ help: null }),
+  guide: (() => {
+    try {
+      return localStorage.getItem("lsg.guide") !== "off";
+    } catch {
+      return true;
+    }
+  })(),
+  guideMarks: (() => {
+    try {
+      return JSON.parse(localStorage.getItem("lsg.guide.steps") ?? "{}");
+    } catch {
+      return {};
+    }
+  })(),
+  markGuide: (step) => {
+    const marks = { ...get().guideMarks, [step]: true };
+    try {
+      localStorage.setItem("lsg.guide.steps", JSON.stringify(marks));
+    } catch {
+      /* no storage */
+    }
+    set({ guideMarks: marks });
+  },
+  setGuide: (on) => {
+    try {
+      localStorage.setItem("lsg.guide", on ? "on" : "off");
+    } catch {
+      /* no storage */
+    }
+    set({ guide: on });
+  },
   playback: null,
   selectedFixture: null,
   selectedPoint: null,
@@ -106,8 +171,9 @@ export const useStore = create<AppStore>((set, get) => ({
 
   notify: (message, kind = "info") => {
     const id = ++toastId;
-    set((s) => ({ toasts: [...s.toasts, { id, message, kind }] }));
-    setTimeout(() => get().dismiss(id), kind === "error" ? 8000 : 3500);
+    const text = kind === "error" ? friendly(message) : message;
+    set((s) => ({ toasts: [...s.toasts, { id, message: text, kind }] }));
+    setTimeout(() => get().dismiss(id), kind === "error" ? (text === message ? 8000 : 14000) : 3500);
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -127,6 +193,14 @@ export const useStore = create<AppStore>((set, get) => ({
     const [project, leds, shows] = await Promise.all([api.project(slug), api.leds(slug), api.shows(slug)]);
     set({ slug, project, leds, shows, projectError: null, selectedFixture: null, selectedPoint: null, past: [], future: [] });
     await api.activate(slug);
+  },
+
+  createExample: async () => {
+    const { slug } = await api.createExample();
+    await get().refreshProjects();
+    await get().openProject(slug);
+    await get().refreshSongs();
+    get().notify("Beispielraum angelegt – der Demo-Song wird analysiert, danach erscheint die Beispiel-Show unter „Shows“", "success");
   },
 
   createProject: async (name, copyFrom, copyShows) => {

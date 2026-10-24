@@ -7,6 +7,7 @@ import { Versions } from "../components/Versions";
 import { Scene3D } from "../three/Scene3D";
 import type { Project, Room, Vec2 } from "../types";
 import { Field, NumberInput, TextInput, Vec3Input } from "../ui";
+import { Help } from "../components/Help";
 
 function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
   const o = (p: Vec2, q: Vec2, r: Vec2) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
@@ -285,7 +286,9 @@ function ViewerEditor({ project }: { project: Project }) {
   return (
     <>
       <div className="row between" style={{ margin: "18px 0 8px" }}>
-        <h3 style={{ margin: 0 }}>Betrachter</h3>
+        <h3 style={{ margin: 0 }}>
+          Betrachter <Help id="viewer" />
+        </h3>
         <button className={`btn small${active ? " active" : ""}`} onClick={() => select(active ? null : "__viewer__")}>
           In 3D verschieben
         </button>
@@ -349,7 +352,9 @@ export function RoomView() {
   return (
     <Panes id="room" sizes={[400, null]} className="view">
       <div className="pane">
-        <h2>Raum</h2>
+        <h2>
+          Raum <Help id="room" />
+        </h2>
         <Field label="Projektname">
           <TextInput
             value={project.name}

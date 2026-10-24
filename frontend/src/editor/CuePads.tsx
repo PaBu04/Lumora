@@ -3,6 +3,7 @@ import type { Analysis, Clip, Show, Target } from "../types";
 import { liveFrame } from "../ws";
 import { useStore } from "../store";
 import { newId, round } from "./ops";
+import { Help } from "../components/Help";
 
 /** One-shot effects that can be played in by hand while the song runs (keys 1-7). */
 interface Pad {
@@ -228,7 +229,7 @@ export function CuePads({
       title="Einzelne Effekte einspielen: während der Song läuft klicken oder Tasten 1–7 drücken"
     >
       <span className="unit" style={{ whiteSpace: "nowrap" }}>
-        Cues
+        Cues <Help id="cues" />
       </span>
       {PADS.map((p) => (
         <button

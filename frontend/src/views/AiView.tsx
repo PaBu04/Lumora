@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import { formatTime } from "../ui";
+import { friendly } from "../errors";
+import { Help } from "../components/Help";
 
 const EXAMPLES = [
   "Dunkel und atmosphärisch: im Intro nur leichtes Glimmen, im Refrain Treffer auf Kick und Snare auf den Strips vor mir, die Strips hinter mir nur als Raumfarbe, bei Drops ein Lichtband vom Boden zur Decke.",
@@ -73,7 +75,7 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
     <>
       <p className="hint">
         Nutzt dein lokales Claude Code {claude.version?.replace(/\s*\(Claude Code\)/, "")} mit deinem Claude-Abo, ohne API-Kosten. Claude bekommt nur die
-        Werkzeuge dieser App.
+        Werkzeuge dieser App. <Help id="ai" />
       </p>
       <div className="row" style={{ marginBottom: 8, gap: 8 }}>
         <label className="unit" htmlFor="ai-model">
@@ -200,7 +202,7 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
               <Md text={run.result} />
             </div>
           )}
-          {run.error && run.status !== "cancelled" && <div className="banner err" style={{ marginTop: 8 }}>{run.error}</div>}
+          {run.error && run.status !== "cancelled" && <div className="banner err" style={{ marginTop: 8 }}>{friendly(run.error)}</div>}
           {run.status === "done" && run.show_ids.length > 0 && slug && (
             <button
               className="btn primary small"

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import type { Clip, EffectInfo, Layer, Look, Show, Target } from "../types";
-import { Field, NumberInput, Vec3Input } from "../ui";
+import { Expert, Field, NumberInput, Vec3Input } from "../ui";
 import { changeEffect, deleteClips, deleteLayer, findClip, mapClips, moveLayer, round, updateClip, updateLayer } from "./ops";
+import { Help } from "../components/Help";
 
 type ParamSchema = EffectInfo["params"][string];
 type Dyn = { audio?: string; lfo?: string; keys?: [number, unknown][]; [k: string]: unknown };
@@ -223,7 +224,8 @@ function ParamControl({
   clipTime: number;
 }) {
   const mode = modeOf(value);
-  const dynamic = schema.dynamic !== false;
+  const expert = useStore((s) => s.expert);
+  const dynamic = schema.dynamic !== false && (expert || mode !== "value");
   const modes: [string, string][] = [["value", "Wert"]];
   if (dynamic && schema.type === "number") modes.push(["audio", "Audio"], ["lfo", "LFO"]);
   if (dynamic && ["number", "color", "point"].includes(schema.type)) modes.push(["keys", "Keyframes"]);
@@ -243,6 +245,7 @@ function ParamControl({
       <div className="row between" style={{ marginBottom: 4 }}>
         <span title={schema.description}>
           <code>{name}</code> <span className="unit">{schema.description}</span>
+          {(name === "trigger" || name === "track") && <Help id="triggers" />}
         </span>
         <div className="row" style={{ gap: 2, flexWrap: "nowrap" }}>
           {modes.length > 1 &&
@@ -532,7 +535,7 @@ function ClipInspector({
           <NumberInput value={clip.end} min={0} step={0.1} onChange={(v) => v > clip.start && set({ end: v })} />
         </div>
       </Field>
-      <Field label="Mischung">
+      <Field label="Mischung" help={<Help id="blend" />}>
         <select value={clip.blend} onChange={(e) => set({ blend: e.target.value })}>
           {BLENDS.map(([v, l]) => (
             <option key={v} value={v}>
@@ -553,9 +556,11 @@ function ClipInspector({
 
       <div className="row between">
         <h3 style={{ margin: "14px 0 8px" }}>Parameter</h3>
-        <button className="btn ghost small" onClick={() => setRaw((r) => !r)}>
-          {raw || !info ? "Formular" : "JSON"}
-        </button>
+        <Expert>
+          <button className="btn ghost small" onClick={() => setRaw((r) => !r)}>
+            {raw || !info ? "Formular" : "JSON"}
+          </button>
+        </Expert>
       </div>
       {info && !raw ? (
         Object.entries(info.params).map(([name, schema]) => (
@@ -589,7 +594,9 @@ function ClipInspector({
         </>
       )}
 
-      <h3 style={{ margin: "14px 0 8px" }}>Ziel</h3>
+      <h3 style={{ margin: "14px 0 8px" }}>
+        Ziel <Help id="target" />
+      </h3>
       <TargetEditor target={clip.target} onChange={(target) => set({ target })} />
       <div className="row between" style={{ marginTop: 14 }}>
         <SaveLookButton ids={new Set([clip.id])} showId={show.id} onSaved={onLooksChanged} />
@@ -729,7 +736,7 @@ function ShowSettings({ show, apply }: { show: Show; apply: (fn: (s: Show) => Sh
       <Field label={`Gesamthelligkeit ${Math.round(show.master * 100)} %`}>
         <input type="range" min={0} max={1} step={0.01} value={show.master} onChange={(e) => apply((s) => ({ ...s, master: +e.target.value }))} />
       </Field>
-      <Field label={`Dynamik ${Math.round(dyn * 100)} %`}>
+      <Field label={`Dynamik ${Math.round(dyn * 100)} %`} help={<Help id="dynamics" />}>
         <input type="range" min={0} max={1} step={0.01} value={dyn} onChange={(e) => apply((s) => ({ ...s, dynamics: +e.target.value }))} />
       </Field>
       <p className="hint" style={{ margin: 0 }}>

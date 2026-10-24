@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { AppSettings } from "../types";
 import { Modal } from "../ui";
+import { Help } from "./Help";
 
 const LIMITS: { value: number; label: string }[] = [
   { value: 3, label: "höchstens 3 große Blitze pro Sekunde (empfohlen)" },
@@ -72,7 +73,9 @@ export function SafetyCard() {
   if (!settings) return null;
   return (
     <div className="card">
-      <strong>Sicherheit: Blitzbegrenzung</strong>
+      <strong>
+        Sicherheit: Blitzbegrenzung <Help id="flash_limit" />
+      </strong>
       <p className="hint">
         Große Blitze über den ganzen Raum werden gedämpft, wenn sie schneller als erlaubt aufeinander folgen; Stroboskope laufen nie
         schneller. Kleine, örtliche Treffer bleiben unverändert. Schützt Menschen mit lichtempfindlicher Epilepsie.

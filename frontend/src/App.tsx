@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "./api";
+import { Guide } from "./components/Guide";
+import { HelpMenu, HelpWindows } from "./components/Help";
 import { SafetyNotice } from "./components/Safety";
 import { useStore, type Tab } from "./store";
-import { Field, Icon, Modal } from "./ui";
+import { Expert, Field, Icon, Modal } from "./ui";
 // views are loaded on demand so the first paint does not wait for three.js
 const McpInfo = lazy(() => import("./views/AiView").then((m) => ({ default: m.McpInfo })));
 const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
@@ -23,6 +25,8 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
 
 function Welcome() {
   const create = useStore((s) => s.createProject);
+  const example = useStore((s) => s.createExample);
+  const [exampleBusy, setExampleBusy] = useState(false);
   const [name, setName] = useState("Mein Raum");
   return (
     <div className="welcome">
@@ -37,6 +41,20 @@ function Welcome() {
             Projekt anlegen
           </button>
         </div>
+        <div className="welcome-or">oder</div>
+        <button className="btn" style={{ width: "100%" }} disabled={exampleBusy} onClick={async () => {
+          setExampleBusy(true);
+          try {
+            await example();
+          } finally {
+            setExampleBusy(false);
+          }
+        }}>
+          {exampleBusy ? "Lege Beispiel an…" : "Beispielraum ausprobieren"}
+        </button>
+        <p className="hint" style={{ margin: "6px 0 0" }}>
+          Ein fertiger Raum mit vier Strips, einem Demo-Song und einer Show – ganz ohne Hardware in der 3D-Vorschau.
+        </p>
       </div>
     </div>
   );
@@ -283,7 +301,10 @@ export function App() {
         <div className="spacer" />
         {project && <StatusArea />}
         {project && <ModeSwitch />}
-        <McpButton />
+        <HelpMenu />
+        <Expert>
+          <McpButton />
+        </Expert>
       </header>
       <nav className="sidebar">
         {NAV.map((n) => (
@@ -292,6 +313,7 @@ export function App() {
             {n.label}
           </button>
         ))}
+        <Guide />
       </nav>
       <main className="main">
         {ready && !project ? (
@@ -308,6 +330,7 @@ export function App() {
         )}
       </main>
       {ready && <SafetyNotice />}
+      <HelpWindows />
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`} onClick={() => dismiss(t.id)}>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Vec3 } from "./types";
+import { useStore } from "./store";
 
 export function NumberInput({
   value,
@@ -97,11 +98,31 @@ export function Vec3Input({ value, onChange, step = 0.05 }: { value: Vec3; onCha
   );
 }
 
-export function Field({ label, children, stack }: { label: ReactNode; children: ReactNode; stack?: boolean }) {
+export function Field({ label, children, stack, help }: { label: ReactNode; children: ReactNode; stack?: boolean; help?: ReactNode }) {
   return (
     <div className={`field${stack ? " stack" : ""}`}>
-      <label>{label}</label>
+      <label>
+        {label}
+        {help}
+      </label>
       <div>{children}</div>
+    </div>
+  );
+}
+
+/** Shown only in expert mode (advanced settings that would confuse at first). */
+export function Expert({ children }: { children: ReactNode }) {
+  const expert = useStore((s) => s.expert);
+  return expert ? <>{children}</> : null;
+}
+
+/** What to do when there is nothing yet: a short explanation and the next step as buttons. */
+export function EmptyState({ title, children, actions }: { title: string; children?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      {children && <div className="hint">{children}</div>}
+      {actions && <div className="row">{actions}</div>}
     </div>
   );
 }

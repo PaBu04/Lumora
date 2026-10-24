@@ -62,6 +62,7 @@ export const api = {
     get<{ projects: { slug: string; name: string; fixtures: number; controllers: number }[]; active: string | null }>(
       "/api/projects",
     ),
+  createExample: () => post<{ slug: string; project: Project; song: Song }>("/api/projects/example"),
   createProject: (name: string, copyFrom?: string, copyShows = true) =>
     post<{ slug: string; project: Project }>("/api/projects", { name, copy_from: copyFrom ?? null, copy_shows: copyShows }),
   project: (slug: string) => get<Project>(`/api/projects/${slug}`),

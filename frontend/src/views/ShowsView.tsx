@@ -13,9 +13,10 @@ import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
 import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show, StarterStyle } from "../types";
-import { Field, formatTime, Icon, Modal, useContextMenu } from "../ui";
+import { EmptyState, Field, formatTime, Icon, Modal, useContextMenu } from "../ui";
 import { moveItem } from "../geometry";
 import { AiGenerator } from "./AiView";
+import { Help } from "../components/Help";
 
 const STYLES: { value: StarterStyle["style"]; label: string; hint: string }[] = [
   { value: "party", label: "Party", hint: "viel Schlagzeug, Akzente und Cues, Glitzer auf dem Höhepunkt" },
@@ -68,7 +69,7 @@ function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; 
         </Field>
         {template === "starter" && (
           <>
-            <Field label="Stil" stack>
+            <Field label="Stil" stack help={<Help id="styles" />}>
               <div className="style-grid" role="group" aria-label="Stil">
                 {STYLES.map((s) => (
                   <button
@@ -391,7 +392,9 @@ function LiveInputCard() {
   return (
     <div className={`card${live ? " selected" : ""}`}>
       <div className="row between">
-        <strong>Live-Eingang</strong>
+        <strong>
+          Live-Eingang <Help id="liveinput" />
+        </strong>
         {live && <span className="badge ok">{live.bpm.toFixed(0)} BPM</span>}
       </div>
       <p className="hint">Reagiert in Echtzeit auf Musik vom PC (Browser, Spotify …) oder ein Mikrofon.</p>
@@ -463,7 +466,9 @@ function ExportCard({ slug, showId }: { slug: string; showId: string }) {
   const ready = (project?.controllers.length ?? 0) > 0;
   return (
     <div className="card">
-      <strong>Exportieren</strong>
+      <strong>
+        Exportieren <Help id="export" />
+      </strong>
       <p className="hint">Für xLights oder einen Falcon Player – die Show läuft dann ohne PC.</p>
       <div className="row" style={{ flexWrap: "nowrap" }}>
         <select value={fps} onChange={(e) => setFps(+e.target.value)} style={{ width: 90 }}>
@@ -501,6 +506,7 @@ export function ShowsView() {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
   const [panel, setPanel] = useState<"edit" | "json" | "issues" | "history" | "shader">("edit");
+  const expert = useStore((s) => s.expert);
   const [viewerCam, setViewerCam] = useState(false);
   const [effects, setEffects] = useState<EffectInfo[]>([]);
   const [palettes, setPalettes] = useState<Record<string, string[]>>({});
@@ -681,7 +687,35 @@ export function ShowsView() {
         {show && <ExportCard slug={slug} showId={show.id} />}
         <h3>Deine Shows</h3>
         <div className="list" style={{ marginBottom: 8 }}>
-          {shows.length === 0 && <p className="hint">Noch keine Shows in diesem Projekt.</p>}
+          {shows.length === 0 &&
+            (songs.some((s) => s.status === "done") ? (
+              <EmptyState
+                title="Noch keine Show"
+                actions={
+                  <>
+                    <button className="btn primary small" onClick={() => setCreating(true)}>
+                      + Neue Show
+                    </button>
+                    <button className="btn small" onClick={() => setAiOpen(true)}>
+                      Mit KI
+                    </button>
+                  </>
+                }
+              >
+                Eine Starter-Show folgt der Musik: wähle Song und Stil. Oder beschreibe der KI, wie die Show wirken soll.
+              </EmptyState>
+            ) : (
+              <EmptyState
+                title="Erst einen Song hochladen"
+                actions={
+                  <button className="btn primary small" onClick={() => useStore.getState().setTab("songs")}>
+                    Zu „Songs“
+                  </button>
+                }
+              >
+                Jede Show gehört zu einem Song. Sobald einer analysiert ist, kannst du hier eine Show erstellen.
+              </EmptyState>
+            ))}
           {shows.map((s, i) => {
             const sg = songs.find((x) => x.id === s.song_id);
             const dropCls = drag && drag.over === i && drag.from !== i ? (drag.from < i ? " drop-below" : " drop-above") : "";
@@ -857,7 +891,9 @@ export function ShowsView() {
               ["history", "Verlauf"],
               ["shader", "Shader"],
             ] as const
-          ).map(([k, label]) => (
+          )
+            .filter(([k]) => expert || (k !== "json" && k !== "shader"))
+            .map(([k, label]) => (
             <button key={k} className={`btn small${panel === k ? " active" : ""}`} onClick={() => setPanel(k)}>
               {label}
             </button>

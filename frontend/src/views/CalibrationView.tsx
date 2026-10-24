@@ -6,7 +6,8 @@ import { LineChart } from "../components/LineChart";
 import { SafetyCard } from "../components/Safety";
 import { useStore } from "../store";
 import type { LedCalibration, LedType } from "../types";
-import { Field, Icon, NumberInput } from "../ui";
+import { Expert, Field, Icon, NumberInput } from "../ui";
+import { Help } from "../components/Help";
 
 const TYPE_LABEL: Record<LedType, string> = { ws2812b: "WS2812B", sk6812: "SK6812 (RGB)", sk6812_rgbw: "SK6812 RGBW" };
 const RAW_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32];
@@ -86,7 +87,9 @@ function SyncCard() {
   return (
     <div className={`card${syncing ? " selected" : ""}`}>
       <div className="row between" style={{ marginBottom: 6 }}>
-        <strong>Synchronisation Ton ↔ Licht</strong>
+        <strong>
+          Synchronisation Ton ↔ Licht <Help id="sync" />
+        </strong>
         <button className={`btn small${syncing ? " active" : ""}`} onClick={async () => setPlayback(await api.sync(!syncing, bpm))}>
           {syncing ? "Sync-Test beenden" : "Sync-Test starten"}
         </button>
@@ -148,6 +151,7 @@ const PATTERN_LABEL: Record<string, string> = {
 function Step({
   n,
   title,
+  help,
   children,
   pattern,
   onShow,
@@ -156,6 +160,7 @@ function Step({
 }: {
   n: number;
   title: string;
+  help?: string;
   children: React.ReactNode;
   pattern: string;
   onShow: (kind: string) => void;
@@ -167,6 +172,7 @@ function Step({
       <div className="row between" style={{ marginBottom: 6 }}>
         <strong className="row" style={{ gap: 8 }}>
           <span className="step-no">{n}</span> {title}
+          {help && <Help id={help} />}
         </strong>
         <button
           className={`btn small${active ? " active" : ""}`}
@@ -202,7 +208,9 @@ function OutputBar({
   return (
     <div className="cal-output">
       <div className="cal-output-item">
-        <span className="unit">Testmuster erscheinen</span>
+        <span className="unit">
+          Testmuster erscheinen <Help id="preview_live" />
+        </span>
         <div className="seg" role="group" aria-label="Ausgabe der Testmuster">
           <button className={!live ? "on" : ""} title="Nur in der 3D-Vorschau" onClick={() => setLive(false)}>
             nur in der Vorschau
@@ -289,7 +297,9 @@ export function CalibrationView() {
     <Panes id="calibration-v2" sizes={[null, 380]} className="view">
       <div className="pane">
         <div className="row between">
-          <h2>Kalibrierung</h2>
+          <h2>
+            Kalibrierung <Help id="calibration" />
+          </h2>
           <div className="row">
             {usedTypes.map((t) => (
               <button key={t} className={`btn small${t === ledType ? " active" : ""}`} onClick={() => setType(t)}>
@@ -313,7 +323,7 @@ export function CalibrationView() {
           stop={stop}
         />
         <div className="cal-steps">
-        <Step n={1} title="Mindeststufe finden" pattern="steps" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "steps"}>
+        <Step n={1} title="Mindeststufe finden" help="min_level" pattern="steps" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "steps"}>
           <p className="hint">
             Der Strip zeigt Segmente mit den Roh-Werten 1, 2, 3, 4, 5, 6, 8 … 255. Welches ist das erste Segment, das klar und farbtreu leuchtet?
           </p>
@@ -326,7 +336,7 @@ export function CalibrationView() {
           </div>
         </Step>
 
-        <Step n={2} title="Gleichmäßige Stufen" pattern="ramp" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "ramp"}>
+        <Step n={2} title="Gleichmäßige Stufen" help="curve" pattern="ramp" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "ramp"}>
           <p className="hint">8 Segmente mit 12,5 % … 100 % wahrgenommener Helligkeit sollten gleichmäßig ansteigen. Wirken die hellen Segmente zu ähnlich, Gamma erhöhen; wirken die dunklen zu ähnlich, senken.</p>
           <Field label="Kurve">
             <select value={cal.curve} onChange={(e) => set({ curve: e.target.value as LedCalibration["curve"] })}>
@@ -339,24 +349,28 @@ export function CalibrationView() {
               <input type="range" min={1} max={3.5} step={0.05} value={cal.gamma} onChange={(e) => set({ gamma: +e.target.value })} />
             </Field>
           )}
-          <Field label="Maximum (PWM)">
-            <NumberInput integer value={cal.max_level} min={16} max={255} step={1} onChange={(v) => set({ max_level: v })} />
-          </Field>
+          <Expert>
+            <Field label="Maximum (PWM)">
+              <NumberInput integer value={cal.max_level} min={16} max={255} step={1} onChange={(v) => set({ max_level: v })} />
+            </Field>
+          </Expert>
         </Step>
 
-        <Step n={3} title="Dunkle Szenen" pattern="dark" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "dark"}>
+        <Step n={3} title="Dunkle Szenen" help="dithering" pattern="dark" onShow={(k) => show(k)} onStop={stop} active={testing?.kind === "dark"}>
           <p className="hint">
             Segmente mit 1 %, 2 %, 3 %, 5 %, 7 %, 10 %, 15 %, 20 %. Unter ca. {pct(darkFloor)} liegen die Stufen weniger als einen PWM-Schritt
             auseinander – Dithering verteilt Zwischenwerte räumlich bzw. zeitlich.
           </p>
-          <Field label="Aus unterhalb">
-            <div className="row">
-              <input type="range" className="grow" min={0} max={0.05} step={0.001} value={cal.cutoff} onChange={(e) => set({ cutoff: +e.target.value })} />
-              <span className="unit" style={{ width: 44 }}>
-                {(cal.cutoff * 100).toFixed(1)} %
-              </span>
-            </div>
-          </Field>
+          <Expert>
+            <Field label="Aus unterhalb">
+              <div className="row">
+                <input type="range" className="grow" min={0} max={0.05} step={0.001} value={cal.cutoff} onChange={(e) => set({ cutoff: +e.target.value })} />
+                <span className="unit" style={{ width: 44 }}>
+                  {(cal.cutoff * 100).toFixed(1)} %
+                </span>
+              </div>
+            </Field>
+          </Expert>
           <Field label="Dithering">
             <select value={cal.dithering} onChange={(e) => set({ dithering: e.target.value as LedCalibration["dithering"] })}>
               <option value="none">aus</option>
@@ -366,7 +380,7 @@ export function CalibrationView() {
           </Field>
         </Step>
 
-        <Step n={4} title="Weißabgleich" pattern="white" onShow={(k) => show(k, { level: whiteLevel })} onStop={stop} active={testing?.kind === "white"}>
+        <Step n={4} title="Weißabgleich" help="white_balance" pattern="white" onShow={(k) => show(k, { level: whiteLevel })} onStop={stop} active={testing?.kind === "white"}>
           <p className="hint">Weiß sollte neutral wirken (z. B. neben einem weißen Blatt Papier). Den zu starken Kanal reduzieren.</p>
           <Field label={`Helligkeit ${pct(whiteLevel)}`}>
             <input
@@ -422,6 +436,7 @@ export function CalibrationView() {
 
         <SafetyCard />
 
+        <Expert>
         <div className="card">
           <strong>Stromaufnahme {TYPE_LABEL[ledType]}</strong>
           <p className="hint">Für das Strombudget. Datenblatt-Werte: WS2812B ≈ 20 mA je Kanal bei 255, SK6812 ≈ 16–20 mA.</p>
@@ -432,6 +447,7 @@ export function CalibrationView() {
             <NumberInput value={cal.ma_idle} min={0} max={10} step={0.1} onChange={(v) => set({ ma_idle: v })} />
           </Field>
         </div>
+        </Expert>
         </div>
       </div>
 

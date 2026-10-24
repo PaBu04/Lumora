@@ -155,7 +155,7 @@ def test_full_workflow(env):
     page.click("nav >> text=Shows")
     page.click("button:has-text('+ Neue Show')")
     page.fill(".card input[type=text]", "E2E Show")
-    page.click("button:has-text('Erstellen')")
+    page.get_by_role("button", name="Erstellen", exact=True).click()
     page.wait_for_selector(".tl-clip")
     show_id = api(env, "/api/playback")["show"]
     assert show_id

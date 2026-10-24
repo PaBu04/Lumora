@@ -4,7 +4,8 @@ import { makePreset, moveItem, PRESETS, round, wallLength, type PresetId } from 
 import { useStore } from "../store";
 import { MOVE_ALL, Scene3D } from "../three/Scene3D";
 import type { Fixture, Geometry, LedType, Project, Vec3 } from "../types";
-import { Field, Icon, NumberInput, TextInput, Vec3Input } from "../ui";
+import { EmptyState, Field, Icon, NumberInput, TextInput, Vec3Input } from "../ui";
+import { Help } from "../components/Help";
 
 const TYPE_LABEL: Record<Geometry["type"], string> = {
   polyline: "Linie",
@@ -400,7 +401,9 @@ export function FixturesView() {
     <Panes id="fixtures" sizes={[400, null]} className="view">
       <div className="pane">
         <div className="row between">
-          <h2>LED-Strips</h2>
+          <h2>
+            LED-Strips <Help id="strips" />
+          </h2>
           <span className="badge info">{total} LEDs gesamt</span>
         </div>
         {error && <div className="banner err">{error}</div>}
@@ -424,7 +427,24 @@ export function FixturesView() {
 
         <h3>Strips ({project.fixtures.length})</h3>
         <div className="list" style={{ marginBottom: 12 }}>
-          {project.fixtures.length === 0 && <p className="hint">Noch keine Strips. Füge oben einen hinzu.</p>}
+          {project.fixtures.length === 0 && (
+            <EmptyState
+              title="Noch keine LED-Strips"
+              actions={
+                <>
+                  <button className="btn primary small" onClick={() => add("ceiling")}>
+                    Deckenumrandung hinzufügen
+                  </button>
+                  <button className="btn small" onClick={() => add("wall")}>
+                    Wandleiste
+                  </button>
+                </>
+              }
+            >
+              Zeichne die Strips so ein, wie sie in deinem Raum hängen. Am schnellsten geht es mit einer Vorlage oben – wähle vorher die
+              Wand. Punkte kannst du danach in der 3D-Ansicht verschieben.
+            </EmptyState>
+          )}
           {project.fixtures.map((f) => {
             const info = leds?.fixtures.find((x) => x.id === f.id);
             return (

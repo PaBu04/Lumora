@@ -4,7 +4,9 @@ import { api } from "../api";
 import { uid } from "../geometry";
 import { useStore } from "../store";
 import type { Controller, SpeedTestResult, WledInfo } from "../types";
-import { Field, Icon, NumberInput, TextInput } from "../ui";
+import { EmptyState, Expert, Field, Icon, NumberInput, TextInput } from "../ui";
+import { Help } from "../components/Help";
+import { friendly } from "../errors";
 
 function StatusLine({ id }: { id: string }) {
   const st = useStore((s) => s.playback?.controller_status?.[id]);
@@ -12,7 +14,7 @@ function StatusLine({ id }: { id: string }) {
   const live = useStore((s) => s.playback?.mode === "live");
   const measuring = useStore((s) => s.playback?.speed_testing?.includes(id));
   if (!st) return <p className="hint">Status wird abgefragt…</p>;
-  if (!st.ok) return <div className="banner err">WLED {st.error}</div>;
+  if (!st.ok) return <div className="banner err">WLED {friendly(st.error ?? "nicht erreichbar")}</div>;
   const i = st.info!;
   return (
     <div style={{ marginBottom: 10 }}>
@@ -65,7 +67,7 @@ function PowerSupply() {
   const p = pb?.power;
   return (
     <>
-      <Field label="Netzteil gesamt (A)">
+      <Field label="Netzteil gesamt (A)" help={<Help id="power" />}>
         <input
           type="number"
           min={0.1}
@@ -178,6 +180,7 @@ function ControllerCard({ c }: { c: Controller }) {
           <button className="btn small" onClick={refresh}>
             WLED abfragen
           </button>
+          <Expert>
           <button
             className="btn small"
             disabled={measuring || used === 0}
@@ -196,6 +199,7 @@ function ControllerCard({ c }: { c: Controller }) {
           >
             {measuring ? "Misst… (6 s)" : "Geschwindigkeit messen"}
           </button>
+          </Expert>
           <button
             className="btn ghost small danger"
             onClick={() => update((p) => ({ ...p, controllers: p.controllers.filter((x) => x.id !== c.id) }))}
@@ -228,7 +232,7 @@ function ControllerCard({ c }: { c: Controller }) {
       {info && (
         <div className={`banner ${info.error ? "err" : "info"}`}>
           {info.error
-            ? `Nicht erreichbar: ${info.error}`
+            ? `Nicht erreichbar: ${friendly(info.error)}`
             : `${info.name} · WLED ${info.version ?? "?"} · ${info.led_count} LEDs konfiguriert · ${info.rgbw ? "RGBW" : "RGB"}`}
           {info.led_count !== undefined && used > info.led_count && (
             <div>Achtung: Zuordnung nutzt {used} Pixel, in WLED sind nur {info.led_count} konfiguriert.</div>
@@ -248,7 +252,7 @@ function ControllerCard({ c }: { c: Controller }) {
         <Field label="Pixel belegt">
           <span className="badge">{used}</span>
         </Field>
-        <Field label="Budget (A)">
+        <Field label="Budget (A)" help={<Help id="power" />}>
           <input
             type="number"
             min={0.1}
@@ -258,7 +262,8 @@ function ControllerCard({ c }: { c: Controller }) {
             onChange={(e) => set((x) => (x.budget_ma = e.target.value === "" ? null : Math.max(100, +e.target.value * 1000)))}
           />
         </Field>
-        <Field label="Bildrate (FPS)">
+        <Expert>
+        <Field label="Bildrate (FPS)" help={<Help id="fps" />}>
           <input
             type="number"
             min={5}
@@ -270,6 +275,7 @@ function ControllerCard({ c }: { c: Controller }) {
             onChange={(e) => set((x) => (x.max_fps = e.target.value === "" ? null : Math.min(120, Math.max(5, +e.target.value))))}
           />
         </Field>
+        </Expert>
         <Field label="Strom jetzt">
           {power ? (
             <span className={`badge ${power.scale < 1 ? "warn" : "info"}`} title="geschätzt aus den gesendeten PWM-Werten">
@@ -292,7 +298,9 @@ function ControllerCard({ c }: { c: Controller }) {
           </Field>
         </div>
       </details>
-      <h3>Zuordnung</h3>
+      <h3>
+        Zuordnung <Help id="mapping" />
+      </h3>
       <table className="grid">
         <thead>
           <tr>
@@ -399,6 +407,7 @@ function ControllerCard({ c }: { c: Controller }) {
 export function DevicesView() {
   const project = useStore((s) => s.project);
   const update = useStore((s) => s.updateProject);
+  const setTab = useStore((s) => s.setTab);
   const notify = useStore((s) => s.notify);
   const error = useStore((s) => s.projectError);
   const pb = useStore((s) => s.playback);
@@ -425,7 +434,9 @@ export function DevicesView() {
     <Panes id="devices" sizes={[null, 360]} className="view">
       <div className="pane">
         <div className="row between">
-          <h2>Controller (WLED)</h2>
+          <h2>
+            Controller (WLED) <Help id="controller" />
+          </h2>
           {pb?.test && (
             <button className="btn small active" onClick={async () => setPlayback(await api.test(false, null))}>
               Testmuster beenden
@@ -434,10 +445,23 @@ export function DevicesView() {
         </div>
         {error && <div className="banner err">{error}</div>}
         {project.controllers.length === 0 && (
-          <p className="hint">
-            Noch kein Controller. Suche WLED-Geräte im Netzwerk oder gib eine IP-Adresse ein. Danach Strips zuordnen: Start = erstes Pixel des
-            Strips am Ausgang des Controllers.
-          </p>
+          <EmptyState
+            title="Noch kein Controller"
+            actions={
+              <button
+                className="btn small"
+                onClick={() => {
+                  useStore.getState().markGuide("controller");
+                  setTab("songs");
+                }}
+              >
+                Ohne Hardware weiter zu „Songs“
+              </button>
+            }
+          >
+            Rechts „Netzwerk durchsuchen“ findet WLED-Geräte im Heimnetz, oder du gibst die IP-Adresse ein. Danach ordnest du die Strips zu:
+            Start = erstes Pixel des Strips am Ausgang des Controllers. Ohne Hardware laufen alle Shows in der 3D-Vorschau.
+          </EmptyState>
         )}
         {project.controllers.map((c) => (
           <ControllerCard key={c.id} c={c} />
