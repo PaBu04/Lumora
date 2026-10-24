@@ -70,6 +70,12 @@ export const api = {
       fd,
     );
   },
+  licenses: () =>
+    get<{
+      python: { name: string; version: string; license: string; use: string }[];
+      models: { name: string; license: string; use: string; bundled: boolean }[];
+    }>("/api/licenses"),
+  diagnostics: () => get<{ diagnostics: Record<string, unknown>; log: string }>("/api/diagnostics"),
   createExample: () => post<{ slug: string; project: Project; song: Song }>("/api/projects/example"),
   createProject: (name: string, copyFrom?: string, copyShows = true) =>
     post<{ slug: string; project: Project }>("/api/projects", { name, copy_from: copyFrom ?? null, copy_shows: copyShows }),

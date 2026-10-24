@@ -19,6 +19,9 @@ from lsg.state import AppState
 def create_app(
     data_dir: Path | None = None, audio: str | None = None, fps: float | None = None, frontend: Path | None = None
 ) -> FastAPI:
+    from lsg import diagnostics
+
+    diagnostics.install()  # last log lines for the diagnostics package
     st = AppState(data_dir or config.DATA_DIR, audio or config.AUDIO_BACKEND, fps or config.FPS)
     mcp = create_mcp(st)
     mcp_app = mcp.streamable_http_app(streamable_http_path="/mcp", host=config.HOST)

@@ -347,3 +347,4 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .empty-state .hint { margin: 0; }
 .guide-head .btn.icon { width: 22px; height: 22px; padding: 0; flex: none; }
 .guide-head .help-btn { margin-left: 0; }
+.diag-pre { max-height: 300px; overflow: auto; font-size: 11.5px; margin: 6px 0 10px; white-space: pre-wrap; word-break: break-word; }

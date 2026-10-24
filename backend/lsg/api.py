@@ -1,8 +1,10 @@
 """REST API and WebSocket used by the web UI."""
 
 import asyncio
+import json
 import re
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -858,6 +860,69 @@ class SettingsBody(BaseModel):
     safety_ack: bool | None = None
     ai_model: str | None = None
     shader_isolation: bool | None = None
+
+
+LICENSED = {  # package -> what the app uses it for
+    "numpy": "Rechnen mit Arrays",
+    "scipy": "Signalverarbeitung",
+    "librosa": "Audioanalyse",
+    "soundfile": "Audiodateien lesen",
+    "sounddevice": "Wiedergabe",
+    "soundcard": "Live-Eingang vom PC-Sound",
+    "fastapi": "Web-Server",
+    "starlette": "Web-Server",
+    "uvicorn": "Web-Server",
+    "pydantic": "Datenmodelle",
+    "python-multipart": "Datei-Uploads",
+    "httpx": "WLED-Abfragen",
+    "zeroconf": "WLED-Geräte finden (mDNS)",
+    "mcp": "Schnittstelle für KI-Programme",
+    "pillow": "Bilder",
+    "onnxruntime": "Notenerkennung (Basic Pitch)",
+    "torch": "KI-Modelle (optional)",
+    "torchaudio": "Instrumententrennung Hybrid Demucs (optional)",
+    "beat_this": "Beat-Erkennung (optional)",
+}
+MODELS = [
+    {"name": "Basic Pitch (Spotify)", "license": "Apache-2.0", "use": "Noten von Keys, Bass und Gesang", "bundled": True},
+    {"name": "Hybrid Demucs (Meta, über torchaudio)", "license": "MIT", "use": "Instrumente trennen", "bundled": False},
+    {"name": "beat_this (CPJKU)", "license": "MIT", "use": "Beats und Takte", "bundled": False},
+]
+
+
+@router.get("/licenses")
+def licenses():
+    """Third-party components with their licenses (Python packages read from their metadata)."""
+    from importlib import metadata
+
+    out = []
+    for pkg, use in LICENSED.items():
+        try:
+            m = metadata.metadata(pkg)
+        except metadata.PackageNotFoundError:
+            continue
+        lic = m.get("License-Expression") or ""
+        if not lic:
+            lic = ", ".join(c.split("::")[-1].strip() for c in m.get_all("Classifier") or [] if c.startswith("License ::"))
+        out.append({"name": pkg, "version": metadata.version(pkg), "license": lic or "siehe Paket", "use": use})
+    return {"python": out, "models": MODELS}
+
+
+@router.get("/diagnostics")
+def get_diagnostics(request: Request, download: bool = False):
+    """Diagnostics for bug reports, without private data (see lsg.diagnostics). download=true: as a zip."""
+    from lsg import diagnostics
+
+    st = state(request)
+    if download:
+        return Response(
+            diagnostics.package(st),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="lsg-diagnose-{time.strftime("%Y%m%d-%H%M")}.zip"'},
+        )
+    names = diagnostics.private_names(st)
+    data = json.loads(diagnostics.redact(json.dumps(diagnostics.collect(st), ensure_ascii=False, default=str), names))
+    return {"diagnostics": data, "log": diagnostics.log_text(st)}
 
 
 @router.get("/settings")

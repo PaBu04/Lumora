@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { api } from "../api";
+import { About } from "./About";
 import { CHAPTERS, HELP, SHORTCUTS } from "../help";
 import { lang, setLang, t, tr } from "../i18n";
 import { useStore } from "../store";
@@ -159,6 +161,39 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Diagnostics for bug reports: shows what is in it before it is saved. */
+function Diagnostics({ onClose }: { onClose: () => void }) {
+  const [data, setData] = useState<{ diagnostics: Record<string, unknown>; log: string } | null>(null);
+  useEffect(() => {
+    api.diagnostics().then(setData);
+  }, []);
+  return (
+    <Modal title={t("Diagnosepaket")} onClose={onClose} width={820}>
+      <p className="hint" style={{ marginTop: 0 }}>
+        {t(
+          "Hilft bei Fehlerberichten: Versionen, Einstellungen, Anzahlen (Strips, LEDs, Controller mit Firmware) und die letzten Log-Zeilen. Namen von Projekten, Strips, Songs und Controllern, IP- und MAC-Adressen, Rechnernamen, Benutzerpfade und E-Mail-Adressen sind entfernt. So sieht der Inhalt aus:",
+        )}
+      </p>
+      {!data ? (
+        <p className="hint">{t("Sammle…")}</p>
+      ) : (
+        <>
+          <pre className="code diag-pre">{JSON.stringify(data.diagnostics, null, 2)}</pre>
+          <strong className="unit">log.txt</strong>
+          <pre className="code diag-pre" style={{ maxHeight: 140 }}>
+            {data.log.split("\n").slice(-60).join("\n")}
+          </pre>
+        </>
+      )}
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}>
+        <a className="btn primary" href="/api/diagnostics?download=true" download>
+          {t("Als Datei speichern")}
+        </a>
+      </div>
+    </Modal>
+  );
+}
+
 /** Help windows, opened from anywhere through the store; "?" opens the shortcuts. */
 export function HelpWindows() {
   const help = useStore((s) => s.help);
@@ -175,6 +210,8 @@ export function HelpWindows() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openHelp]);
   if (!help) return null;
+  if (help.kind === "diagnostics") return <Diagnostics onClose={closeHelp} />;
+  if (help.kind === "about") return <About onClose={closeHelp} />;
   return help.kind === "manual" ? <Manual topic={help.topic} onClose={closeHelp} /> : <Shortcuts onClose={closeHelp} />;
 }
 
@@ -213,6 +250,8 @@ export function HelpMenu() {
           {item(t("Handbuch"), () => openHelp("manual"))}
           {item(t("Erste Schritte anzeigen"), () => setGuide(true))}
           {item(t("Tastenkürzel  (?)"), () => openHelp("shortcuts"))}
+          {item(t("Diagnosepaket für Fehlerberichte…"), () => openHelp("diagnostics"))}
+          {item(t("Über diese App, Datenschutz, Lizenzen"), () => openHelp("about"))}
           <div className="menu-sep" />
           {item(expert ? t("Expertenmodus ausschalten") : t("Expertenmodus einschalten"), () => setExpert(!expert))}
           {item(lang === "de" ? "English" : "Deutsch", () => setLang(lang === "de" ? "en" : "de"))}

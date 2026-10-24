@@ -36,8 +36,8 @@ interface AppStore {
   setUndoScope: (s: "project" | "show") => void;
 
   /** open help window: the manual (at a topic) or the shortcut list */
-  help: { kind: "manual" | "shortcuts"; topic?: string } | null;
-  openHelp: (kind: "manual" | "shortcuts", topic?: string) => void;
+  help: { kind: "manual" | "shortcuts" | "diagnostics" | "about"; topic?: string } | null;
+  openHelp: (kind: "manual" | "shortcuts" | "diagnostics" | "about", topic?: string) => void;
   closeHelp: () => void;
   /** expert mode: JSON, shaders, MCP, audio bindings and fine tuning are shown */
   expert: boolean;
