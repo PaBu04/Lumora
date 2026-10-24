@@ -71,7 +71,10 @@ def claude_command() -> list[str] | None:
         return [t.strip('"') for t in shlex.split(override, posix=os.name != "nt")]
     exe = shutil.which("claude")
     if not exe:
-        for candidate in (Path.home() / ".local" / "bin" / "claude.exe", Path.home() / ".local" / "bin" / "claude"):
+        # fresh installs: the app may have started before the installer extended PATH
+        npm = Path(os.environ.get("APPDATA", Path.home())) / "npm"
+        local = Path.home() / ".local" / "bin"
+        for candidate in (local / "claude.exe", local / "claude", npm / "claude.cmd"):
             if candidate.is_file():
                 exe = str(candidate)
                 break
@@ -199,7 +202,7 @@ def parse_line(run: AgentRun, line: str) -> None:
         state = servers.get("lightshow")
         run.add("info", f"Claude gestartet ({run.model or 'Modell unbekannt'}), Verbindung zur App: {state or 'unbekannt'}")
         if state not in (None, "connected"):
-            run.add("error", "Claude erreicht den MCP-Server der App nicht - läuft die App auf dem erwarteten Port?")
+            run.add("error", "Claude erreicht die App nicht - läuft Lumora noch, und blockiert keine Firewall localhost?")
     elif kind == "assistant":
         for block in msg.get("message", {}).get("content", []):
             if block.get("type") == "text" and block.get("text", "").strip():

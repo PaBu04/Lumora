@@ -291,8 +291,8 @@ Right-click a show → "Roll a new variant" creates another version in the same 
     chapter: "ai",
     title: { de: "Shows mit KI", en: "Shows with AI" },
     body: {
-      de: "„Mit KI“ beschreibst du, wie die Show wirken soll. Die App startet dein lokales Claude Code (Standard: Opus 5.5) mit deinem Claude-Abo – ohne API-Kosten. Claude bekommt nur die Werkzeuge dieser App: Analyse lesen, Shows schreiben, Bilder der Show ansehen und prüfen. Eigene KI-Programme verbindest du über MCP (oben rechts).",
-      en: '"With AI" you describe how the show should feel. The app starts your local Claude Code (default: Opus 5.5) with your Claude subscription – no API costs. Claude only gets this app\'s tools: read the analysis, write shows, look at and check images of the show. Connect your own AI programs via MCP (top right).',
+      de: "„Mit KI“ beschreibst du, wie die Show wirken soll. Die App startet dein lokales Claude Code (Standard: Opus 5.5) mit deinem Claude-Abo – ohne API-Kosten. Claude bekommt nur die Werkzeuge dieser App: Analyse lesen, Shows schreiben, Bilder der Show ansehen und prüfen. Ist Claude Code noch nicht eingerichtet, zeigt der Dialog eine Schritt-für-Schritt-Anleitung.",
+      en: '"With AI" you describe how the show should feel. The app starts your local Claude Code (default: Opus 5.5) with your Claude subscription – no API costs. Claude only gets this app\'s tools: read the analysis, write shows, look at and check images of the show. If Claude Code is not set up yet, the dialog shows a step-by-step guide.',
     },
   },
   flash_limit: {

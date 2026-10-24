@@ -4,10 +4,9 @@ import { Guide } from "./components/Guide";
 import { HelpMenu, HelpWindows } from "./components/Help";
 import { SafetyNotice } from "./components/Safety";
 import { useStore, type Tab } from "./store";
-import { Expert, Field, Icon, Modal } from "./ui";
+import { Field, Icon, Modal } from "./ui";
 import { t } from "./i18n";
 // views are loaded on demand so the first paint does not wait for three.js
-const McpInfo = lazy(() => import("./views/AiView").then((m) => ({ default: m.McpInfo })));
 const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
 const DevicesView = lazy(() => import("./views/DevicesView").then((m) => ({ default: m.DevicesView })));
 const FixturesView = lazy(() => import("./views/FixturesView").then((m) => ({ default: m.FixturesView })));
@@ -244,24 +243,6 @@ function StatusArea() {
   );
 }
 
-function McpButton() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button className="btn ghost small" title="Eigene KI-Programme (Claude Desktop, Claude Code …) über MCP verbinden" onClick={() => setOpen(true)}>
-        <Icon name="info" /> MCP
-      </button>
-      {open && (
-        <Modal title="KI-Programme über MCP verbinden" onClose={() => setOpen(false)}>
-          <Suspense fallback={<p className="hint">Lade…</p>}>
-            <McpInfo />
-          </Suspense>
-        </Modal>
-      )}
-    </>
-  );
-}
-
 /** Where frames go: only the 3D preview, or also to the LEDs. */
 function ModeSwitch() {
   const mode = useStore((s) => s.playback?.mode);
@@ -316,9 +297,6 @@ export function App() {
         {project && <StatusArea />}
         {project && <ModeSwitch />}
         <HelpMenu />
-        <Expert>
-          <McpButton />
-        </Expert>
       </header>
       <nav className="sidebar">
         {NAV.map((n) => (

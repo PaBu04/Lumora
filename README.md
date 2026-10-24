@@ -4,7 +4,7 @@
 
 Musiksynchrone Lichtshows für adressierbare LEDs (WS2812B, SK6812 RGB/RGBW) an WLED-Controllern –
 mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor und KI-Unterstützung
-(eingebaut über Claude Code oder als MCP-Server für eigene KI-Clients).
+über Claude Code.
 
 ## Funktionen
 
@@ -93,7 +93,7 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - Einführung „Erste Schritte“ (Checkliste in der Seitenleiste), Beispielraum ohne Hardware, Hilfe-Symbole (?) an
   allen Fachbegriffen, durchsuchbares Handbuch, Tastenkürzel (Taste „?“), leere Seiten mit nächstem Schritt,
   Fehlermeldungen mit Lösungsvorschlag.
-- Einfacher Modus und Expertenmodus (JSON, Shader, MCP, Feinabstimmung).
+- Einfacher Modus und Expertenmodus (JSON, Shader, Feinabstimmung).
 - Oberfläche auf Deutsch und Englisch (nach Browser-Sprache, umschaltbar im Hilfe-Menü).
 - Projekte als Datei exportieren und importieren (mit oder ohne Songs), Räume als Kopie anlegen.
 
@@ -109,7 +109,6 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
   Claude-Abo – keine API-Kosten. Claude bekommt nur die Werkzeuge dieser App (kein Datei- oder Shell-Zugriff).
   Modell wählbar (Standard: Opus 5.5, braucht Claude Code ≥ 2.1.280 – „Claude Code aktualisieren“ im KI-Dialog);
   lehnt Claude Code das Modell ab, läuft die Generierung mit dessen Standardmodell weiter.
-- MCP-Server unter `/mcp` für eigene KI-Clients (Claude Desktop, Claude Code, …).
 
 ## Voraussetzungen
 
@@ -141,14 +140,14 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 
 ### Umgebungsvariablen
 
-| Variable       | Standard    | Bedeutung                                                     |
-|----------------|-------------|---------------------------------------------------------------|
-| `LUMORA_DATA`     | `./data`    | Projekte, Songs, Shows, Einstellungen                         |
-| `LUMORA_PORT`     | `8000`      | HTTP-Port                                                     |
-| `LUMORA_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
-| `LUMORA_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
-| `LUMORA_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
-| `LUMORA_STEMS`    | (Einstellung) | Instrumententrennung: `auto`, `demucs6`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
+| Variable         | Standard      | Bedeutung |
+|------------------|---------------|---------------------------------------------------------------|
+| `LUMORA_DATA`    | `./data`      | Projekte, Songs, Shows, Einstellungen |
+| `LUMORA_PORT`    | `8000`        | HTTP-Port |
+| `LUMORA_HOST`    | `127.0.0.1`   | Bind-Adresse |
+| `LUMORA_AUDIO`   | `device`      | `null` = stumme Uhr ohne Soundkarte (Tests, Server) |
+| `LUMORA_FPS`     | `50`          | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
+| `LUMORA_STEMS`   | (Einstellung) | Instrumententrennung: `auto`, `demucs6`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
 
 ## Erste Schritte mit echten LEDs
 
@@ -168,22 +167,23 @@ wie seine Pins schaffen; `/sim/stats` meldet empfangene und angezeigte FPS).
 
 ## KI
 
-**In der App** (*Shows → Mit KI*): Song wählen, Wunsch beschreiben, *Show generieren*. Der Fortschritt erscheint
-live; das Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf. Die Verbindungsdaten für eigene
-KI-Programme zeigt der Knopf *MCP* oben rechts.
+*Shows → Mit KI*: Song wählen, Wunsch beschreiben, *Show generieren*. Der Fortschritt erscheint live; das
+Ergebnis ist eine normale, bearbeitbare Show mit Versionsverlauf. Die KI bekommt die Instrumentenspuren (wer trägt
+welchen Abschnitt, Drops, Build-ups, Fills, Noten), prüft ihre Show an gerenderten Bildern und darf den Song kurz
+im Internet recherchieren.
 
-**Eigener Client:** MCP-Endpunkt `http://127.0.0.1:8000/mcp`
-- Claude Code: `claude mcp add --transport http lightshow http://127.0.0.1:8000/mcp`
-- Claude Desktop (`claude_desktop_config.json`):
-  `{ "mcpServers": { "lightshow": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp"] } } }`
+**Einrichtung (einmalig)** – der KI-Dialog zeigt dieselbe Anleitung, solange Claude Code fehlt:
 
-Die KI bekommt die Instrumentenspuren (wer trägt welchen Abschnitt, Drops, Build-ups, Fills, Noten) und darf den
-Song kurz im Internet recherchieren.
+1. Claude-Konto mit Pro- oder Max-Abo.
+2. Claude Code installieren:
+   - Windows (PowerShell): `irm https://claude.ai/install.ps1 | iex`
+   - macOS/Linux: `curl -fsSL https://claude.ai/install.sh | bash`
+   - oder mit Node.js ≥ 18: `npm install -g @anthropic-ai/claude-code`
+3. Im Terminal `claude` starten und mit dem Claude-Konto (Abo, nicht Anthropic Console) anmelden, dann `/exit`.
+4. `claude --version` prüfen, Lumora neu starten.
 
-Werkzeuge: `get_overview`, `get_song_analysis`, `get_song_events`, `get_led_positions`, `list_effects`, `get_show_format`,
-`create_show`, `add_clips`, `update_clips`, `remove_clips`, `update_show`, `delete_show`, `validate`,
-`analyze_light`, `analyze_power`, `list_looks`, `apply_look`, `list_show_versions`, `restore_show_version`, `write_shader`,
-`get_shader`, `get_shader_api`, `render_snapshot`, `render_timeline`, `preview`, `playback`.
+Lumora startet Claude Code im Hintergrund (`claude -p`) und gibt ihm über eine lokale Schnittstelle nur die
+Werkzeuge der App. Ein gesetztes `ANTHROPIC_API_KEY` wird dabei bewusst ignoriert, damit keine API-Kosten entstehen.
 
 ## Show-Format (Kurzfassung)
 
@@ -220,7 +220,7 @@ backend/lumora/
   output/     Kalibrierkurve, Ausgabe-Pipeline mit Strombegrenzung, DDP, WLED-API/mDNS, FSEQ-Export
   playback/   Takt-Schleife, Testmuster, Sync-Test
   storage/    Projekte, Shows, Looks, Versionsverlauf, Export/Import
-  ai_agent    Claude-Code-Anbindung      mcp_server   MCP-Werkzeuge      desktop   App-Fenster
+  ai_agent    Claude-Code-Anbindung      mcp_server   Werkzeuge für Claude    desktop   App-Fenster
   remote      Handy-Fernbedienung        diagnostics  Diagnosepaket
 frontend/src/i18n  Englische Texte (en.ts), scripts/extract-strings.mjs listet fehlende Übersetzungen
 ```
@@ -246,4 +246,4 @@ Browser-Test aus.
 - Shader laufen in einem eigenen Prozess und mit eingeschränktem Python; das schützt vor Hängern und Versehen,
   ist aber keine Sicherheitsgrenze gegen absichtlich bösartigen Code.
 - Abschnittsnamen sind heuristisch; die Ähnlichkeits-Labels (A, B, C …) zeigen, welche Teile gleich klingen.
-- Der MCP-Server ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).
+- Die Schnittstelle für Claude Code ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).

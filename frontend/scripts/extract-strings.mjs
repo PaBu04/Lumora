@@ -88,7 +88,7 @@ if (process.argv.includes("--missing")) {
   const keys = Object.keys(mod.exports.EN);
   const known = (s) => keys.includes(s) || keys.some((k) => /\{\w+\}/.test(k) && k.replace(/\{\w+\}/g, "{0}") === s.replace(/\{\w+\}/g, "{0}"));
   // class names and the like are not visible text
-  out = out.filter((s) => !known(s) && !/^[\w-]*\{\d\}|^\{0\}-|^[a-z-]+ \{\d\}$|^(on live|m\)|m²|claude mcp)/.test(s));
+  out = out.filter((s) => !known(s) && !/^[\w-]*\{\d\}|^\{0\}-|^[a-z-]+ \{\d\}$|^(on live|m\)|m²|claude )/.test(s));
 }
 console.log(JSON.stringify(out, null, 1));
 console.error(`${out.length} texts`);

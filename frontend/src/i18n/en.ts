@@ -17,7 +17,6 @@ export const EN: Record<string, string> = {
   "Nicht gespeichert": "Not saved",
   Vorschau: "Preview",
   Live: "Live",
-  MCP: "MCP",
   Hilfe: "Help",
   "Hilfe: {title}": "Help: {title}",
   "Rückgängig (Strg+Z)": "Undo (Ctrl+Z)",
@@ -790,9 +789,6 @@ export const EN: Record<string, string> = {
   "Show mit KI erstellen": "Create a show with AI",
   "Show von Claude erstellen lassen (dein Claude-Abo, keine API-Kosten)": "Let Claude create a show (your Claude subscription, no API costs)",
   "Prüfe Claude Code…": "Checking Claude Code…",
-  "Claude Code wurde nicht gefunden. Installieren (siehe claude.com/claude-code) und einmal": "Claude Code was not found. Install it (see claude.com/claude-code) and run",
-  "im Terminal starten und anmelden – danach funktioniert die Generierung hier mit deinem Claude-Abo.":
-    "once in a terminal and sign in – then generating works here with your Claude subscription.",
   "Nutzt dein lokales Claude Code": "Uses your local Claude Code",
   "mit deinem Claude-Abo, ohne API-Kosten. Claude bekommt nur die Werkzeuge dieser App.":
     "with your Claude subscription, no API costs. Claude only gets the tools of this app.",
@@ -806,7 +802,6 @@ export const EN: Record<string, string> = {
   "Name der Show": "Name of the show",
   "Was soll die Show machen?": "What should the show do?",
   Beispiel: "Example",
-  "Beispiel-Auftrag": "Example request",
   "Show generieren": "Generate show",
   "Show öffnen": "Open show",
   "(Ersatz)": "(fallback)",
@@ -814,29 +809,53 @@ export const EN: Record<string, string> = {
   Werkzeug: "Tool",
   KI: "AI",
   Info: "Info",
-  "KI-Programme über MCP verbinden": "Connect AI programs via MCP",
-  "Eigene KI-Programme (Claude Desktop, Claude Code …) über MCP verbinden": "Connect your own AI programs (Claude Desktop, Claude Code …) via MCP",
-  "Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die Musikanalyse und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.":
-    "The app provides an MCP server. Through it an AI like Claude knows the room, the LED positions, the viewer and the music analysis and can program shows straight into the app. Changes appear in the preview at once.",
-  "MCP-Endpunkt": "MCP endpoint",
-  "Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.": "Streamable HTTP, only reachable locally. The app must run while the AI works.",
-  "In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):": "Add to claude_desktop_config.json (needs Node.js for mcp-remote):",
-  "Claude Desktop": "Claude Desktop",
   "Claude Code": "Claude Code",
   Werkzeuge: "Tools",
-  "Raum, Betrachter, Strips, Songs und Shows auf einen Blick": "Room, viewer, strips, songs and shows at a glance",
-  "Tempo, Beats, Takte, Abschnitte und Lautstärkekurven": "Tempo, beats, bars, sections and loudness curves",
-  "Einzelne LED-Positionen eines Strips": "Single LED positions of a strip",
-  "Effektbibliothek und Show-Format": "Effect library and show format",
-  "Shows programmieren": "Program shows",
-  "Eigene Effekte in Python/numpy": "Custom effects in Python/numpy",
-  "Fehler, Helligkeit, Abwechslung und Strombedarf prüfen": "Check errors, brightness, variety and current",
-  "Wiederverwendbare Clip-Gruppen (in Beats) einsetzen": "Use reusable clip groups (in beats)",
-  "Versionen ansehen und zurückrollen": "View versions and roll back",
-  "Bilder zur Selbstkontrolle der KI": "Images for the AI to check itself",
-  "Show in der App abspielen": "Play the show in the app",
-  "Schau dir mit get_overview mein Projekt{0} an und analysiere den Song. Erstelle eine dunkle Show: im Intro nur Glimmen, im Refrain Treffer auf Kick und Snare auf den Strips vor mir, die Strips hinter mir nur als Raumfarbe. Prüfe mit analyze_light und render_timeline und starte danach preview.":
-    "Look at my project{0} with get_overview and analyse the song. Create a dark show: only a glow in the intro, hits on kick and snare on the strips in front of me in the chorus, the strips behind me only as room colour. Check with analyze_light and render_timeline and then start preview.",
+
+  // Claude Code setup guide
+  "Anleitung: App mit Claude verbinden": "Guide: connect the app with Claude",
+  "So verbindest du die App mit Claude": "How to connect the app with Claude",
+  "Claude Code wurde auf diesem Rechner nicht gefunden. Mit dieser Anleitung ist die App in wenigen Minuten verbunden.":
+    "Claude Code was not found on this computer. With this guide the app is connected in a few minutes.",
+  "Lumora erzeugt Shows mit Claude Code, dem Kommandozeilen-Programm von Anthropic. Es läuft auf deinem Rechner und nutzt dein Claude-Abo – es entstehen keine API-Kosten und du brauchst keinen API-Schlüssel. Die Einrichtung ist einmalig.":
+    "Lumora creates shows with Claude Code, Anthropic's command-line program. It runs on your computer and uses your Claude subscription – there are no API costs and you need no API key. The setup is needed only once.",
+  "Claude-Abo": "Claude subscription",
+  "Du brauchst ein Claude-Konto mit Pro- oder Max-Abo (claude.ai). Mit dem kostenlosen Konto funktioniert Claude Code nicht.":
+    "You need a Claude account with a Pro or Max subscription (claude.ai). Claude Code does not work with the free account.",
+  "Claude Code installieren": "Install Claude Code",
+  "Ein Terminal öffnen (Windows: PowerShell) und diesen Befehl einfügen:": "Open a terminal (Windows: PowerShell) and paste this command:",
+  "Alternativ mit Node.js 18 oder neuer:": "Or with Node.js 18 or newer:",
+  "Einmal anmelden": "Sign in once",
+  "Im Terminal Claude Code starten:": "Start Claude Code in the terminal:",
+  "Beim ersten Start öffnet sich der Browser. Die Anmeldung mit dem Claude-Konto (Abo) wählen, nicht die Anthropic Console (API-Abrechnung). Danach im Terminal /exit eingeben.":
+    "On the first start the browser opens. Choose signing in with your Claude account (subscription), not the Anthropic Console (API billing). Then type /exit in the terminal.",
+  Prüfen: "Check",
+  "In einem neuen Terminal muss dieser Befehl eine Versionsnummer zeigen:": "In a new terminal this command must show a version number:",
+  "Dann hier erneut prüfen. Findet die App Claude Code immer noch nicht, Lumora einmal beenden und neu starten.":
+    "Then check again here. If the app still does not find Claude Code, quit Lumora once and start it again.",
+  "Erneut prüfen": "Check again",
+  Schließen: "Close",
+  "Wenn es nicht klappt": "If it does not work",
+  "„Claude Code wurde nicht gefunden“": "“Claude Code was not found”",
+  "Terminal und Lumora neu starten, damit der neue Programmpfad bekannt ist. Prüfen, ob claude --version im Terminal funktioniert.":
+    "Restart the terminal and Lumora so the new program path is known. Check that claude --version works in the terminal.",
+  "Fehler zur Anmeldung („login“, „auth“)": "Sign-in errors (“login”, “auth”)",
+  "Im Terminal claude starten und mit /login neu anmelden. Danach die Generierung erneut starten.":
+    "Start claude in the terminal and sign in again with /login. Then start generating again.",
+  "Modell nicht verfügbar": "Model not available",
+  "Oben „Claude Code aktualisieren“ drücken (oder claude update im Terminal) oder ein anderes Modell wählen.":
+    "Press “Update Claude Code” above (or claude update in the terminal) or choose another model.",
+  "„Claude erreicht die App nicht“": "“Claude cannot reach the app”",
+  "Claude spricht über eine lokale Schnittstelle mit Lumora. Die App muss laufen, solange Claude arbeitet; eine Firewall darf Verbindungen zu localhost nicht blockieren.":
+    "Claude talks to Lumora through a local interface. The app must keep running while Claude works; a firewall must not block connections to localhost.",
+  "Nutzungslimit erreicht": "Usage limit reached",
+  "Das Abo hat ein Kontingent pro Zeitfenster. Später erneut versuchen oder ein kleineres Modell wählen.":
+    "The subscription has a quota per time window. Try again later or choose a smaller model.",
+  "Bricht ohne Meldung ab": "Stops without a message",
+  "Claude Code im Terminal starten und eine kurze Frage stellen. Klappt das, Lumora neu starten und erneut versuchen.":
+    "Start Claude Code in the terminal and ask a short question. If that works, restart Lumora and try again.",
+  "Claude bekommt dabei nur die Werkzeuge von Lumora: Raum und Songanalyse lesen, Shows schreiben, Bilder der Show prüfen und im Internet recherchieren. Es hat keinen Zugriff auf deine Dateien oder die Kommandozeile.":
+    "Claude only gets Lumora's tools: read the room and song analysis, write shows, check images of the show and research on the web. It has no access to your files or the command line.",
 
   // section names (Waveform / timeline / tables)
   Intro: "Intro",

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import { formatTime } from "../ui";
 import { friendly } from "../errors";
 import { Help } from "../components/Help";
+import { ClaudeSetup } from "../components/ClaudeSetup";
 import { t } from "../i18n";
 
 const EXAMPLES = [
@@ -52,14 +53,16 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   const songId = song || analysed[0]?.id || "";
   const busy = run?.status === "running";
 
-  useEffect(() => {
-    api.aiStatus().then((s) => {
-      setClaude(s.claude);
-      setModels(s.models ?? {});
-      if (s.model) setModel(s.model);
-      if (s.run) setRun(s.run);
-    });
+  const check = useCallback(async () => {
+    const s = await api.aiStatus();
+    setClaude(s.claude);
+    setModels(s.models ?? {});
+    if (s.model) setModel(s.model);
+    if (s.run) setRun(s.run);
   }, [setRun]);
+  useEffect(() => {
+    void check();
+  }, [check]);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight });
   }, [run?.events.length]);
@@ -67,10 +70,10 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   if (!claude) return <p className="hint">Prüfe Claude Code…</p>;
   if (!claude.installed)
     return (
-      <div className="banner err">
-        Claude Code wurde nicht gefunden. Installieren (siehe claude.com/claude-code) und einmal <span className="kbd">claude</span> im Terminal starten und anmelden – danach
-        funktioniert die Generierung hier mit deinem Claude-Abo.
-      </div>
+      <>
+        <div className="banner err">Claude Code wurde auf diesem Rechner nicht gefunden. Mit dieser Anleitung ist die App in wenigen Minuten verbunden.</div>
+        <ClaudeSetup open onRecheck={check} />
+      </>
     );
   return (
     <>
@@ -78,6 +81,11 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
         Nutzt dein lokales Claude Code {claude.version?.replace(/\s*\(Claude Code\)/, "")} mit deinem Claude-Abo, ohne API-Kosten. Claude bekommt nur die
         Werkzeuge dieser App. <Help id="ai" />
       </p>
+      {!(run?.error && run.status === "error") && (
+        <div style={{ marginBottom: 8 }}>
+          <ClaudeSetup onRecheck={check} />
+        </div>
+      )}
       <div className="row" style={{ marginBottom: 8, gap: 8 }}>
         <label className="unit" htmlFor="ai-model">
           Modell
@@ -203,7 +211,16 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
               <Md text={run.result} />
             </div>
           )}
-          {run.error && run.status !== "cancelled" && <div className="banner err" style={{ marginTop: 8 }}>{friendly(run.error)}</div>}
+          {run.error && run.status === "error" && (
+            <>
+              <div className="banner err" style={{ marginTop: 8 }}>
+                {friendly(run.error)}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <ClaudeSetup onRecheck={check} />
+              </div>
+            </>
+          )}
           {run.status === "done" && run.show_ids.length > 0 && slug && (
             <button
               className="btn primary small"
@@ -218,72 +235,6 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
           )}
         </div>
       )}
-    </>
-  );
-}
-
-const TOOLS: [string, string][] = [
-  ["get_overview", "Raum, Betrachter, Strips, Songs und Shows auf einen Blick"],
-  ["get_song_analysis", "Tempo, Beats, Takte, Abschnitte und Lautstärkekurven"],
-  ["get_led_positions", "Einzelne LED-Positionen eines Strips"],
-  ["list_effects / get_show_format", "Effektbibliothek und Show-Format"],
-  ["create_show, add_clips, update_clips, remove_clips, update_show", "Shows programmieren"],
-  ["write_shader / get_shader_api", "Eigene Effekte in Python/numpy"],
-  ["validate / analyze_light / analyze_power", "Fehler, Helligkeit, Abwechslung und Strombedarf prüfen"],
-  ["list_looks / apply_look", "Wiederverwendbare Clip-Gruppen (in Beats) einsetzen"],
-  ["list_show_versions / restore_show_version", "Versionen ansehen und zurückrollen"],
-  ["render_snapshot / render_timeline", "Bilder zur Selbstkontrolle der KI"],
-  ["preview / playback", "Show in der App abspielen"],
-];
-
-/** How to connect an own AI client (Claude Desktop, Claude Code, ...) to the app's MCP server. */
-export function McpInfo() {
-  const slug = useStore((s) => s.slug);
-  const origin = location.port === "5173" ? `${location.protocol}//${location.hostname}:8000` : location.origin;
-  const url = `${origin}/mcp`;
-  const desktop = JSON.stringify({ mcpServers: { lightshow: { command: "npx", args: ["-y", "mcp-remote", url] } } }, null, 2);
-  return (
-    <>
-      <p className="hint" style={{ fontSize: 13.5, marginTop: 0 }}>
-        Die App stellt einen MCP-Server bereit. Eine KI wie Claude kennt darüber den Raum, die LED-Positionen, die Betrachterposition und die Musikanalyse
-        und kann Shows direkt hier hinein programmieren. Änderungen erscheinen sofort in der Vorschau.
-      </p>
-      <div className="card">
-        <strong>MCP-Endpunkt</strong>
-        <pre className="code">{url}</pre>
-        <p className="hint">Streamable HTTP, nur lokal erreichbar. Die App muss laufen, solange die KI arbeitet.</p>
-      </div>
-      <div className="card">
-        <strong>Claude Code</strong>
-        <pre className="code">claude mcp add --transport http lightshow {url}</pre>
-      </div>
-      <div className="card">
-        <strong>Claude Desktop</strong>
-        <p className="hint">In claude_desktop_config.json eintragen (benötigt Node.js für mcp-remote):</p>
-        <pre className="code">{desktop}</pre>
-      </div>
-      <div className="card">
-        <strong>Beispiel-Auftrag</strong>
-        <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
-          {`Schau dir mit get_overview mein Projekt${slug ? ` „${slug}"` : ""} an und analysiere den Song.
-Erstelle eine dunkle Show: im Intro nur Glimmen, im Refrain Treffer auf Kick und Snare auf den
-Strips vor mir, die Strips hinter mir nur als Raumfarbe. Prüfe mit analyze_light und render_timeline
-und starte danach preview.`}
-        </pre>
-      </div>
-      <h3 style={{ marginTop: 14 }}>Werkzeuge</h3>
-      <table className="grid">
-        <tbody>
-          {TOOLS.map(([k, v]) => (
-            <tr key={k}>
-              <td>
-                <code>{k}</code>
-              </td>
-              <td className="unit">{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </>
   );
 }

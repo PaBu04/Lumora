@@ -350,3 +350,10 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .remote-qr { display: grid; place-items: center; margin-top: 8px; }
 .remote-qr svg { width: 168px; height: 168px; border-radius: 8px; }
 .remote-url { display: block; font-size: 11px; word-break: break-all; color: var(--text-2); }
+
+/* Claude Code setup guide */
+.setup-step { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
+.setup-step .hint { margin: 4px 0; }
+.setup-step pre.code { margin: 2px 0 6px; user-select: all; }
+.setup-n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 650; background: var(--accent); color: #fff; }
+.setup-faq td:first-child { width: 34%; vertical-align: top; }

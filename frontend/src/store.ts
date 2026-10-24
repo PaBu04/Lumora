@@ -40,7 +40,7 @@ interface AppStore {
   help: { kind: "manual" | "shortcuts" | "diagnostics" | "about"; topic?: string } | null;
   openHelp: (kind: "manual" | "shortcuts" | "diagnostics" | "about", topic?: string) => void;
   closeHelp: () => void;
-  /** expert mode: JSON, shaders, MCP, audio bindings and fine tuning are shown */
+  /** expert mode: JSON, shaders, audio bindings and fine tuning are shown */
   expert: boolean;
   setExpert: (on: boolean) => void;
   /** the "first steps" checklist is shown */

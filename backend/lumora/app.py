@@ -1,4 +1,4 @@
-"""FastAPI application: REST API, WebSocket, MCP endpoint and the built web UI."""
+"""FastAPI application: REST API, WebSocket, the internal tool endpoint for Claude Code and the web UI."""
 
 import asyncio
 import logging
@@ -82,7 +82,7 @@ def main() -> None:
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    print(f"Lumora: http://{config.HOST}:{config.PORT}  (MCP: http://{config.HOST}:{config.PORT}/mcp)")
+    print(f"Lumora: http://{config.HOST}:{config.PORT}")
     uvicorn.run(create_app(), host=config.HOST, port=config.PORT, log_level="warning")
 
 

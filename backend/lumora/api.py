@@ -897,7 +897,7 @@ LICENSED = {  # package -> what the app uses it for
     "python-multipart": "Datei-Uploads",
     "httpx": "WLED-Abfragen",
     "zeroconf": "WLED-Geräte finden (mDNS)",
-    "mcp": "Schnittstelle für KI-Programme",
+    "mcp": "Verbindung zu Claude Code",
     "pillow": "Bilder",
     "onnxruntime": "Notenerkennung (Basic Pitch)",
     "torch": "KI-Modelle (optional)",
