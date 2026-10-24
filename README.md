@@ -37,18 +37,25 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - **Synchronisation:** Sync-Test (Klick auf jeden Beat + LED-Blitz) zum Einstellen von Audio- und Controller-Latenz.
 
 **Musik**
-- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten (3/4 oder 4/4), Abschnitten
-  (Intro/Strophe/Refrain/Break/Bridge/Build-up/Drop/Outro) und Pegeln je Frequenzband; Tempo-Korrektur ×2/÷2 und
-  auf 0,1 BPM genau (bleibt bei einer neuen Analyse erhalten).
-- **Instrumente:** Der Song wird mit dem KI-Modell *Hybrid Demucs* in Schlagzeug, Bass, Gesang und den Rest
-  (Keys, Synths, Gitarren) getrennt (~1 Minute pro Song auf der CPU). Daraus entstehen Instrumentenspuren:
-  Kick/Snare/Hi-Hat/Crash mit Anschlagstärke (Wirbel und Fills so schnell wie gespielt, nicht im Raster),
-  Bass-, Gesangs- und Lead-Noten mit Tonhöhe und Länge, Gesangsphrasen, Drum-Fills, Build-ups, Drops und
-  Passagen ohne Schlagzeug, dazu Lautstärkekurven je Instrument. Ohne PyTorch werden Schlagzeug/Bass/Rest
-  geschätzt (kein Gesang).
+- Songs hochladen (mp3/wav/flac/ogg); Analyse von Tempo, Beats, Takten (3/4 oder 4/4) und Pegeln je
+  Frequenzband; Tempo-Korrektur ×2/÷2 und auf 0,1 BPM genau (bleibt bei einer neuen Analyse erhalten).
+- **Instrumente:** Der Song wird mit *Demucs* in Schlagzeug, Bass, Gesang, Klavier, Gitarre und den Rest
+  getrennt (6 Spuren, ~1,5 Minuten pro Song auf der CPU; ohne das demucs-Paket 4 Spuren mit *Hybrid Demucs*).
+  Daraus entstehen Instrumentenspuren: Kick/Snare/Hi-Hat/Crash mit Anschlagstärke (Wirbel und Fills so schnell
+  wie gespielt), Bass- und Gesangsnoten, Gesangsphrasen, Drum-Fills, Build-ups, Drops und Passagen ohne
+  Schlagzeug, dazu Lautstärkekurven je Instrument. Ohne PyTorch werden Schlagzeug/Bass/Rest geschätzt.
+- **Noten mehrstimmig:** Das Notenmodell *Basic Pitch* (Spotify, mitgeliefert, läuft mit onnxruntime) hört alle
+  gleichzeitig klingenden Töne von Keys und Synths – Akkorde, die Melodie als oberste Stimme, Arpeggios – und
+  verbessert die Tonhöhen von Bass und Gesang. Daraus: Stabs (kurze Akkordschläge), Pads (gehaltene Flächen),
+  Arpeggios und die Klanghelligkeit.
+- **Harmonie:** Tonart und Akkorde Schlag für Schlag mit ihrer Stufe (I, IV, V, vi …).
+- **Songform:** Abschnitte dort, wo sich die Besetzung ändert, bevorzugt nach 4/8/16 Takten – Intro, Strophe,
+  Pre-Chorus, Refrain, Break, Build-up, Drop, Bridge, Outro; gleiche Teile bekommen denselben Buchstaben, jeder
+  Abschnitt eine Intensität 1–5, der stärkste ist der Höhepunkt (★); dazu Phrasen von 4 oder 8 Takten.
+- **Motive:** Riffs und Melodien, die mindestens dreimal wiederkommen, werden erkannt (eigene Spur).
 - Songs lassen sich im Reiter *Songs* abspielen (auch langsamer): Ein Positionsanzeiger läuft über Waveform und
-  Instrumentenspuren (ganzer Song oder mitlaufender 30-/10-s-Ausschnitt), und Anzeigen leuchten auf, sobald Kick,
-  Snare, Bass, Gesang, Fill oder Drop erkannt sind – so lässt sich die Analyse mit dem Ohr prüfen.
+  Instrumentenspuren mit Akkorden und Motiven (ganzer Song oder mitlaufender 30-/10-s-Ausschnitt), und Anzeigen
+  leuchten auf, sobald Kick, Snare, Bass, Gesang, Melodie, Stab, Fill oder Drop erkannt sind.
 - Genauere Beat- und Takterkennung mit dem neuronalen Modell *beat_this*; beide Modelle kommen mit
   `pip install -e ".[ml]"` (PyTorch, ca. 1 GB; Modelldaten werden beim ersten Mal geladen).
 - **Live-Eingang:** ohne vorbereiteten Song reagiert die Show „Live (Mikrofon)“ in Echtzeit auf Tempo, Bass und Höhen –
@@ -69,11 +76,33 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 - Der Betrachter sieht nicht alle LEDs: Ziele „im Blick“ / „hinter mir“ trennen Detail-Effekte von Raumlicht.
 - Eigene Effekte als Python/numpy-Shader (laufen in einem eigenen Prozess), **Looks** als
   wiederverwendbare Clip-Gruppen mit Zeiten in Beats (vier mitgeliefert, eigene aus jeder Auswahl).
-- Starter-Show aus Instrumenten und Raum: jeder sichtbare Strip zeigt ein Instrument (Schlagzeug als kleine
-  Treffer, Gesang/Lead und Bass als Noten), Cues auf Drops, Build-ups, Fills und Crashes, leise Passagen fast
-  dunkel; die Prüfung warnt vor zu heller Show, hellen leisen Stellen, fehlendem Kontrast und Stillstand.
+- Starter-Show aus Instrumenten, Songform und Raum: jeder sichtbare Strip zeigt ein Instrument (Schlagzeug als
+  kleine Treffer, Gesang/Keys und Bass als Noten, Arpeggios als Lauflicht, Stabs als Blitze), Cues auf Drops,
+  Build-ups, Fills und Crashes, jedes Motiv mit eigener Geste; gleiche Abschnitte sehen gleich aus, Wiederholungen
+  steigern sich, der Höhepunkt ist am hellsten, leise Passagen bleiben dunkel. **Stile** Party / Ruhig / Kino /
+  Minimal, **Farbwelten** (automatisch nach Tonart: Moll kühl, Dur warm; oder kühl, warm, Neon, Natur, mono),
+  Grundhelligkeit, Stroboskop auf dem Höhepunkt; „Neue Variante würfeln“. Die Prüfung warnt vor zu heller Show,
+  hellen leisen Stellen, fehlendem Kontrast und Stillstand.
 - 3D-Vorschau mit Bloom und Betrachter-Sicht; alle Bereiche lassen sich an den Trennlinien größer/kleiner ziehen.
-- **Export** als FSEQ-v2-Paket für xLights / Falcon Player (kalibrierte Werte, Audio, Kanal-Zuordnung).
+- **Export** als FSEQ-v2-Paket für xLights / Falcon Player (kalibrierte Werte, Audio, Kanal-Zuordnung) und
+  **Video** der 3D-Vorschau mit Ton (WebM).
+- **Handy als Fernbedienung:** QR-Code scannen, dann im WLAN Abspielen/Pause, ±10 s, Helligkeit, Show wechseln
+  und Cues live auslösen. Eigener kleiner Server (Port 8010), nur mit dem Code aus dem QR-Code; standardmäßig aus.
+
+**Bedienung**
+- Einführung „Erste Schritte“ (Checkliste in der Seitenleiste), Beispielraum ohne Hardware, Hilfe-Symbole (?) an
+  allen Fachbegriffen, durchsuchbares Handbuch, Tastenkürzel (Taste „?“), leere Seiten mit nächstem Schritt,
+  Fehlermeldungen mit Lösungsvorschlag.
+- Einfacher Modus und Expertenmodus (JSON, Shader, MCP, Feinabstimmung).
+- Oberfläche auf Deutsch und Englisch (nach Browser-Sprache, umschaltbar im Hilfe-Menü).
+- Projekte als Datei exportieren und importieren (mit oder ohne Songs), Räume als Kopie anlegen.
+
+**Sicherheit und Datenschutz**
+- Warnhinweis zu lichtempfindlicher Epilepsie beim ersten Start; **Blitzbegrenzung** (standardmäßig höchstens drei
+  große Blitze pro Sekunde, WCAG 2.3.1) für Vorschau, LEDs und Export; Stroboskope laufen nie schneller.
+- Alles läuft lokal. Ein **Diagnosepaket** für Fehlerberichte enthält Versionen, Anzahlen und Logs – ohne Namen,
+  IP-/MAC-Adressen, Rechnernamen, Benutzerpfade und E-Mail-Adressen. *Über diese App* zeigt, wann Daten den PC
+  verlassen, und die Lizenzen aller Bausteine.
 
 **KI**
 - *Show mit KI erstellen*: nutzt dein lokal installiertes **Claude Code** im Hintergrund (`claude -p`) mit deinem
@@ -119,7 +148,7 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 | `LSG_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
 | `LSG_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
 | `LSG_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
-| `LSG_STEMS`    | `auto`      | Instrumententrennung: `auto`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
+| `LSG_STEMS`    | (Einstellung) | Instrumententrennung: `auto`, `demucs6`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
 
 ## Erste Schritte mit echten LEDs
 
@@ -175,7 +204,8 @@ Werkzeuge: `get_overview`, `get_song_analysis`, `get_song_events`, `get_led_posi
 
 Helligkeiten sind wahrgenommen: Grundstimmung 0,03–0,15, Akzente 0,6–1,0, nichts unter 0,03. Lange Strips
 hellen den ganzen Raum auf und brauchen weniger. `"dynamics": 0.6` auf der Show dunkelt leise Passagen ab;
-Trigger wie `"kick"`, `"vocal"`, `"drop"` oder `"once"` (einmaliger Cue zum Clip-Start). Die vollständige Beschreibung liefert `get_show_format`.
+Trigger wie `"kick"`, `"vocal"`, `"keys"`, `"chord"`, `"stab"`, `"motif"`, `"drop"` oder `"once"` (einmaliger Cue
+zum Clip-Start). Die vollständige Beschreibung liefert `get_show_format`.
 
 ## Architektur
 
@@ -184,13 +214,15 @@ frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  
 backend/lsg/
   model/      Raum, Fixtures, Controller, Kalibrierung, Betrachter, Songs, Shows
   geometry/   Fixture → LED-Positionen, betrachterbezogene Koordinaten
-  audio/      Analyse (librosa, beat_this), Instrumententrennung (Demucs) und -spuren, Live-Analyse, Bibliothek,
-              Player, Demo-Songs
+  audio/      Analyse (librosa, beat_this), Instrumententrennung (Demucs) und -spuren, Notenerkennung (Basic
+              Pitch), Harmonie, Songform, Motive, Live-Analyse, Bibliothek, Player, Demo-Songs
   render/     Effekte, Parameter, Shader (+ Worker-Prozess), Looks, Engine, Validierung, Snapshots
   output/     Kalibrierkurve, Ausgabe-Pipeline mit Strombegrenzung, DDP, WLED-API/mDNS, FSEQ-Export
   playback/   Takt-Schleife, Testmuster, Sync-Test, Live-Eingang
-  storage/    Projekte, Shows, Looks, Versionsverlauf
+  storage/    Projekte, Shows, Looks, Versionsverlauf, Export/Import
   ai_agent    Claude-Code-Anbindung      mcp_server   MCP-Werkzeuge      desktop   App-Fenster
+  remote      Handy-Fernbedienung        diagnostics  Diagnosepaket
+frontend/src/i18n  Englische Texte (en.ts), scripts/extract-strings.mjs listet fehlende Übersetzungen
 ```
 
 Eine einzige Render-Engine erzeugt Vorschau, Live-Ausgabe, Export und KI-Snapshots – alle zeigen dasselbe.
@@ -199,9 +231,9 @@ Eine einzige Render-Engine erzeugt Vorschau, Live-Ausgabe, Export und KI-Snapsho
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest            # ~125 Unit- und Integrationstests
+.venv\Scripts\python -m pytest            # ~150 Unit- und Integrationstests
 .venv\Scripts\python -m pytest -m ml      # mit den neuronalen Modellen (Demucs)
-.venv\Scripts\python -m pytest -m ui      # Browser-Ende-zu-Ende-Test (braucht gebautes Frontend + Playwright)
+.venv\Scripts\python -m pytest -m ui      # Browser-Tests deutsch und englisch (gebautes Frontend + Playwright)
 .venv\Scripts\python -m ruff check lsg tests
 cd ..\frontend; npm run lint; npm run typecheck
 ```
