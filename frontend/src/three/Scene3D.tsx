@@ -284,7 +284,7 @@ function ViewerMarker({ viewer, editable }: { viewer: Viewer; editable: boolean 
   const eye = (s: number): Vec3 => [side.x * s * 0.045 + fwd.x * 0.09, side.y * s * 0.045 + fwd.y * 0.09, 0.02];
   const sight = (s: number): [Vec3, Vec3] => {
     const a = eye(s);
-    return [a, [a[0] + fwd.x * 0.35, a[1] + fwd.y * 0.35, a[2] + fwd.z * 0.35]];
+    return [a, [a[0] + fwd.x * 0.06, a[1] + fwd.y * 0.06, a[2] + fwd.z * 0.06]];
   };
   const leg = z - 0.72; // from the hips to the floor
   return (
