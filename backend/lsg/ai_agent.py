@@ -17,6 +17,22 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+# models the user can pick; "default" lets Claude Code decide (whatever the subscription allows)
+AI_MODELS = {
+    "claude-opus-5-5": "Opus 5.5",
+    "claude-sonnet-5-5": "Sonnet 5.5",
+    "default": "Standard von Claude Code",
+}
+DEFAULT_MODEL = "claude-opus-5-5"
+
+
+def model_unavailable(error: str | None) -> bool:
+    """True when Claude Code refused the requested model (too old a CLI, or not in the subscription)."""
+    e = (error or "").lower()
+    keys = ("not support", "does not exist", "not have access", "not available", "claude update", "invalid model")
+    return "model" in e and any(k in e for k in keys)
+
+
 TOOL_LABELS = {
     "get_overview": "Projekt und Raum gelesen",
     "get_song_analysis": "Songanalyse gelesen",
@@ -74,6 +90,22 @@ async def claude_status() -> dict:
         return {"installed": proc.returncode == 0, "version": out.decode(errors="replace").strip() or None}
     except (OSError, TimeoutError):
         return {"installed": False, "version": None}
+
+
+async def update_claude() -> dict:
+    """`claude update`: newer models (Opus 5.5) need a recent Claude Code."""
+    cmd = claude_command()
+    if not cmd:
+        raise FileNotFoundError("Claude Code (claude) wurde nicht gefunden")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, "update", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=_child_env()
+    )
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except TimeoutError:
+        proc.kill()
+        return {"ok": False, "output": "Zeitüberschreitung beim Aktualisieren", **await claude_status()}
+    return {"ok": proc.returncode == 0, "output": out.decode(errors="replace").strip()[-2000:], **await claude_status()}
 
 
 def _child_env() -> dict:
@@ -143,6 +175,7 @@ class AgentRun:
     turns: int | None = None
     duration_s: float | None = None
     model: str | None = None
+    fallback: bool = False  # the chosen model was refused and Claude Code's default ran instead
 
     def add(self, kind: str, text: str, **extra) -> None:
         self.events.append({"kind": kind, "text": text, "time": round(time.time() - self.started, 1), **extra})
@@ -231,7 +264,9 @@ class AgentManager:
     def busy(self) -> bool:
         return self.current is not None and self.current.status == "running"
 
-    async def start(self, project: str, song: dict | None, request: str, show_name: str, show_id: str | None) -> AgentRun:
+    async def start(
+        self, project: str, song: dict | None, request: str, show_name: str, show_id: str | None, model: str = DEFAULT_MODEL
+    ) -> AgentRun:
         if self.busy:
             raise RuntimeError("Es läuft bereits eine KI-Generierung")
         cmd = claude_command()
@@ -245,7 +280,7 @@ class AgentManager:
         cfg.write_text(json.dumps({"mcpServers": {"lightshow": {"type": "http", "url": self.mcp_url}}}), encoding="utf-8")
         run = AgentRun(id=uuid.uuid4().hex[:10], project=project, prompt=request)
         self.current = run
-        args = [
+        base = [
             *cmd,
             "-p",
             build_prompt(project, song, request, show_name, show_id),
@@ -261,12 +296,30 @@ class AgentManager:
             "dontAsk",
             "--no-session-persistence",
         ]
-        run.add("info", "Starte Claude Code …")
+        args = base if model == "default" else [*base, "--model", model]
+        run.add("info", f"Starte Claude Code mit {AI_MODELS.get(model, model)} …")
         await self._publish()
-        self._task = asyncio.create_task(self._run(args, run, cfg, work))
+        self._task = asyncio.create_task(self._run_with_fallback(args, base, model, run, cfg, work))
         return run
 
-    async def _run(self, args: list[str], run: AgentRun, cfg: Path, work: Path) -> None:
+    async def _run_with_fallback(self, args, base, model, run: AgentRun, cfg: Path, work: Path) -> None:
+        """Run once with the chosen model; if Claude Code refuses it, run again with its default model."""
+        try:
+            await self._run(args, run, work)
+            if run.status == "error" and model != "default" and model_unavailable(run.error):
+                old = "update" in (run.error or "").lower()
+                hint = " Claude Code ist dafür zu alt - im KI-Dialog „Claude Code aktualisieren“." if old else ""
+                name = AI_MODELS.get(model, model)
+                run.add("warn", f"{name} ist gerade nicht nutzbar ({run.error}).{hint} Weiter mit dem Standardmodell.")
+                run.fallback = True
+                run.status, run.error, run.result = "running", None, None
+                await self._publish()
+                await self._run(base, run, work)
+        finally:
+            cfg.unlink(missing_ok=True)
+            await self._publish()
+
+    async def _run(self, args: list[str], run: AgentRun, work: Path) -> None:
         try:
             self._proc = await asyncio.create_subprocess_exec(
                 *args,
@@ -293,7 +346,6 @@ class AgentManager:
         except Exception as exc:
             run.status, run.error = "error", f"{type(exc).__name__}: {exc}"
         finally:
-            cfg.unlink(missing_ok=True)
             self._proc = None
             await self._publish()
 

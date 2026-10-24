@@ -78,6 +78,8 @@ mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor u
 **KI**
 - *Show mit KI erstellen*: nutzt dein lokal installiertes **Claude Code** im Hintergrund (`claude -p`) mit deinem
   Claude-Abo – keine API-Kosten. Claude bekommt nur die Werkzeuge dieser App (kein Datei- oder Shell-Zugriff).
+  Modell wählbar (Standard: Opus 5.5, braucht Claude Code ≥ 2.1.280 – „Claude Code aktualisieren“ im KI-Dialog);
+  lehnt Claude Code das Modell ab, läuft die Generierung mit dessen Standardmodell weiter.
 - MCP-Server unter `/mcp` für eigene KI-Clients (Claude Desktop, Claude Code, …).
 
 ## Voraussetzungen

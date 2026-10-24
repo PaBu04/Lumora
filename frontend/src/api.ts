@@ -116,9 +116,13 @@ export const api = {
   scaleTempo: (id: string, factor: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { factor }),
   setBpm: (id: string, bpm: number) => post<{ bpm: number; beats: number }>(`/api/songs/${id}/tempo`, { bpm }),
 
-  aiStatus: () => get<{ claude: { installed: boolean; version: string | null }; run: AiRun | null }>("/api/ai/status"),
-  aiRun: (body: { project: string; prompt: string; song_id: string | null; show_name: string; show_id: string | null }) =>
+  aiStatus: () =>
+    get<{ claude: { installed: boolean; version: string | null }; run: AiRun | null; models: Record<string, string>; model: string }>(
+      "/api/ai/status",
+    ),
+  aiRun: (body: { project: string; prompt: string; song_id: string | null; show_name: string; show_id: string | null; model: string }) =>
     post<AiRun>("/api/ai/run", body),
+  aiUpdate: () => post<{ ok: boolean; output: string; installed: boolean; version: string | null }>("/api/ai/update"),
   aiCancel: () => post<AiRun | null>("/api/ai/cancel"),
   settings: () => get<AppSettings>("/api/settings"),
   saveSettings: (s: Partial<Pick<AppSettings, "beat_tracker" | "shader_isolation">>) => put<AppSettings>("/api/settings", s),

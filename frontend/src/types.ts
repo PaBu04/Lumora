@@ -177,6 +177,8 @@ export interface AiRun {
   turns: number | null;
   duration_s: number | null;
   model: string | null;
+  /** the chosen model was refused, Claude Code's default model ran instead */
+  fallback?: boolean;
 }
 
 export interface Look {

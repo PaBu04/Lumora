@@ -8,9 +8,12 @@ import time
 if "--version" in sys.argv:
     print("9.9.9 (Claude Code, fake)")
     sys.exit(0)
+if sys.argv[1:] == ["update"]:
+    print("Successfully updated from 9.9.9 to version 9.9.9")
+    sys.exit(0)
 
-with open(os.environ["FAKE_CLAUDE_ARGS"], "w", encoding="utf-8") as fh:
-    json.dump(sys.argv[1:], fh)
+with open(os.environ["FAKE_CLAUDE_ARGS"], "a", encoding="utf-8") as fh:  # one line per start
+    fh.write(json.dumps(sys.argv[1:]) + "\n")
 
 
 def emit(obj):
@@ -18,7 +21,19 @@ def emit(obj):
     time.sleep(0.05)
 
 
-emit({"type": "system", "subtype": "init", "model": "claude-test", "mcp_servers": [{"name": "lightshow", "status": "connected"}]})
+model = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else "claude-default"
+emit({"type": "system", "subtype": "init", "model": model, "mcp_servers": [{"name": "lightshow", "status": "connected"}]})
+if "--model" in sys.argv and os.environ.get("FAKE_CLAUDE_OLD"):
+    emit(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": True,
+            "result": "API Error: 400 Claude Code 9.9.9 does not support this model; version 10.0 or newer is required. "
+            "Run 'claude update', or update the Claude desktop app, then try again.",
+        }
+    )
+    sys.exit(1)
 emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "Ich schaue mir zuerst den Raum an."}]}})
 emit(
     {

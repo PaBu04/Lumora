@@ -41,6 +41,9 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   const [name, setName] = useState("KI-Show");
   const [target, setTarget] = useState("new");
   const [prompt, setPrompt] = useState(EXAMPLES[0]);
+  const [models, setModels] = useState<Record<string, string>>({});
+  const [model, setModel] = useState("claude-opus-5-5");
+  const [updating, setUpdating] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const analysed = songs.filter((s) => s.status === "done");
   const songId = song || analysed[0]?.id || "";
@@ -49,6 +52,8 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   useEffect(() => {
     api.aiStatus().then((s) => {
       setClaude(s.claude);
+      setModels(s.models ?? {});
+      if (s.model) setModel(s.model);
       if (s.run) setRun(s.run);
     });
   }, [setRun]);
@@ -70,6 +75,37 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
         Nutzt dein lokales Claude Code {claude.version?.replace(/\s*\(Claude Code\)/, "")} mit deinem Claude-Abo, ohne API-Kosten. Claude bekommt nur die
         Werkzeuge dieser App.
       </p>
+      <div className="row" style={{ marginBottom: 8, gap: 8 }}>
+        <label className="unit" htmlFor="ai-model">
+          Modell
+        </label>
+        <select id="ai-model" value={model} style={{ width: 220, flex: "none" }} disabled={busy} onChange={(e) => setModel(e.target.value)}>
+          {Object.entries(models).map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button
+          className="btn small ghost"
+          disabled={busy || updating}
+          title="Neue Modelle wie Opus 5.5 brauchen eine aktuelle Version von Claude Code (claude update)"
+          onClick={async () => {
+            setUpdating(true);
+            try {
+              const r = await api.aiUpdate();
+              setClaude({ installed: r.installed, version: r.version });
+              notify(r.ok ? `Claude Code ist aktuell: ${r.version ?? ""}` : `Aktualisieren fehlgeschlagen: ${r.output}`, r.ok ? "success" : "error");
+            } catch (e) {
+              notify((e as Error).message, "error");
+            } finally {
+              setUpdating(false);
+            }
+          }}
+        >
+          {updating ? "Aktualisiere…" : "Claude Code aktualisieren"}
+        </button>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
         <div>
           <label className="unit">Song</label>
@@ -118,7 +154,7 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
           disabled={busy || !slug || !songId || prompt.trim().length < 3}
           onClick={async () => {
             try {
-              setRun(await api.aiRun({ project: slug!, prompt, song_id: songId || null, show_name: name.trim() || "KI-Show", show_id: target === "new" ? null : target }));
+              setRun(await api.aiRun({ project: slug!, prompt, song_id: songId || null, show_name: name.trim() || "KI-Show", show_id: target === "new" ? null : target, model }));
             } catch (e) {
               notify((e as Error).message, "error");
             }
@@ -139,7 +175,8 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
               {run.status === "running" ? "Läuft" : run.status === "done" ? "Fertig" : run.status === "cancelled" ? "Abgebrochen" : "Fehler"}
             </strong>
             <span className="unit">
-              {run.model ?? ""} {run.turns ? `· ${run.turns} Schritte` : ""} {run.duration_s ? `· ${formatTime(run.duration_s)}` : ""}
+              {run.model ?? ""}
+              {run.fallback ? " (Ersatz)" : ""} {run.turns ? `· ${run.turns} Schritte` : ""} {run.duration_s ? `· ${formatTime(run.duration_s)}` : ""}
             </span>
           </div>
           <div ref={log} style={{ maxHeight: 260, overflow: "auto", fontSize: 13 }}>

@@ -69,13 +69,43 @@ def test_run_through_api_with_fake_cli(tmp_path, monkeypatch):
             "Show angelegt",
             "Clips hinzugefügt",
         ]
-    args = json.loads(args_file.read_text())
+    args = json.loads(args_file.read_text().splitlines()[-1])
+    assert args[args.index("--model") + 1] == "claude-opus-5-5"  # Opus 5.5 by default
     assert args[0] == "-p" and "--strict-mcp-config" in args and "--bare" not in args
     # only the app's tools and the web search, no shell / files
     assert args[args.index("--allowedTools") + 1] == "mcp__lightshow,WebSearch"
     assert args[args.index("--permission-mode") + 1] == "dontAsk"
     cfg_path = args[args.index("--mcp-config") + 1]
     assert not Path(cfg_path).exists()  # temporary MCP config removed afterwards
+
+
+def test_model_fallback_and_update(tmp_path, monkeypatch):
+    """An old Claude Code refuses Opus 5.5: the run goes on with Claude Code's default model."""
+    args_file = tmp_path / "args.json"
+    monkeypatch.setenv("LSG_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
+    monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(args_file))
+    monkeypatch.setenv("FAKE_CLAUDE_OLD", "1")
+    app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
+    with TestClient(app) as c:
+        slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]
+        status = c.get("/api/ai/status").json()
+        assert status["model"] == "claude-opus-5-5" and "claude-sonnet-5-5" in status["models"]
+        c.post("/api/ai/run", json={"project": slug, "prompt": "Mach was Schönes"})
+        for _ in range(100):
+            run = c.get("/api/ai/status").json()["run"]
+            if run["status"] != "running":
+                break
+            time.sleep(0.1)
+        assert run["status"] == "done" and run["fallback"] and run["model"] == "claude-default", run
+        assert any("aktualisieren" in e["text"] for e in run["events"] if e["kind"] == "warn")
+        runs = [json.loads(line) for line in args_file.read_text().splitlines()]
+        assert "--model" in runs[0] and "--model" not in runs[1]
+
+        # the chosen model is remembered; "default" never passes --model
+        assert c.put("/api/settings", json={"ai_model": "gpt"}).status_code == 422
+        assert c.put("/api/settings", json={"ai_model": "default"}).json()["ai_model"] == "default"
+        r = c.post("/api/ai/update").json()
+        assert r["ok"] and "updated" in r["output"] and r["installed"]
 
 
 def test_cancel(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from lsg import config
-from lsg.ai_agent import AgentManager
+from lsg.ai_agent import AI_MODELS, DEFAULT_MODEL, AgentManager
 from lsg.audio.library import SongLibrary
 from lsg.audio.player import create_player
 from lsg.playback.session import PlaybackSession
@@ -22,7 +22,7 @@ class AppState:
     def __init__(self, data_dir: Path, audio_backend: str, fps: float):
         self.data_dir = Path(data_dir)
         self.projects = ProjectStore(self.data_dir / "projects")
-        self.settings: dict = {"beat_tracker": "auto", "shader_isolation": True}
+        self.settings: dict = {"beat_tracker": "auto", "shader_isolation": True, "ai_model": DEFAULT_MODEL}
         self.songs = SongLibrary(
             self.data_dir / "songs",
             lambda: self.settings.get("beat_tracker", "auto"),
@@ -46,6 +46,8 @@ class AppState:
             from lsg.render import shader_host
 
             self.settings["shader_isolation"] = shader_host.ENABLED = data["shader_isolation"]
+        if data.get("ai_model") in AI_MODELS:
+            self.settings["ai_model"] = data["ai_model"]
         if data.get("beat_tracker") in ("librosa", "beat_this", "auto"):
             self.settings["beat_tracker"] = data["beat_tracker"]
         out = self.session.output

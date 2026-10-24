@@ -673,6 +673,7 @@ class AiRunBody(BaseModel):
     song_id: str | None = None
     show_name: str = "KI-Show"
     show_id: str | None = None
+    model: str | None = None  # default: the app setting ai_model
 
 
 @router.get("/ai/status")
@@ -680,7 +681,28 @@ async def ai_status(request: Request):
     from lsg.ai_agent import claude_status
 
     st = state(request)
-    return {"claude": await claude_status(), "run": st.ai.current.to_dict() if st.ai.current else None}
+    from lsg.ai_agent import AI_MODELS
+
+    return {
+        "claude": await claude_status(),
+        "run": st.ai.current.to_dict() if st.ai.current else None,
+        "models": AI_MODELS,
+        "model": st.settings["ai_model"],
+    }
+
+
+@router.post("/ai/update")
+async def ai_update(request: Request):
+    """Update the Claude Code CLI (`claude update`), e.g. when a newer model needs a newer version."""
+    from lsg.ai_agent import update_claude
+
+    st = state(request)
+    if st.ai.busy:
+        raise HTTPException(409, "Es läuft gerade eine KI-Generierung")
+    try:
+        return await update_claude()
+    except FileNotFoundError as exc:
+        raise HTTPException(424, str(exc))
 
 
 @router.post("/ai/run")
@@ -695,7 +717,11 @@ async def ai_run(request: Request, body: AiRunBody):
             raise _404(f"song {body.song_id!r}")
     try:
         await st.activate_project(body.project)
-        run = await st.ai.start(body.project, song, body.prompt, body.show_name, body.show_id)
+        model = body.model or st.settings["ai_model"]
+        if body.model and body.model != st.settings["ai_model"]:
+            st.settings["ai_model"] = body.model
+            st.save_settings()
+        run = await st.ai.start(body.project, song, body.prompt, body.show_name, body.show_id, model)
     except FileNotFoundError as exc:
         raise HTTPException(424, str(exc))
     except RuntimeError as exc:
@@ -715,6 +741,7 @@ async def ai_cancel(request: Request):
 
 class SettingsBody(BaseModel):
     beat_tracker: str | None = None
+    ai_model: str | None = None
     shader_isolation: bool | None = None
 
 
@@ -733,6 +760,12 @@ async def put_settings(request: Request, body: SettingsBody):
         if body.beat_tracker not in ("librosa", "beat_this", "auto"):
             raise HTTPException(422, "beat_tracker must be librosa, beat_this or auto")
         st.settings["beat_tracker"] = body.beat_tracker
+    if body.ai_model is not None:
+        from lsg.ai_agent import AI_MODELS
+
+        if body.ai_model not in AI_MODELS:
+            raise HTTPException(422, f"ai_model must be one of {sorted(AI_MODELS)}")
+        st.settings["ai_model"] = body.ai_model
     if body.shader_isolation is not None:
         from lsg.render import shader_host
 
