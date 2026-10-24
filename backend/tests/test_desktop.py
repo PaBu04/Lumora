@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from lsg.desktop import app_window_args
+from lumora.desktop import app_window_args
 
 FAKE = Path(__file__).parent / "fake_browser.py"
 
@@ -36,14 +36,14 @@ def test_closing_the_window_stops_the_server(tmp_path):
     args_file = tmp_path / "args.json"
     env = {
         **os.environ,
-        "LSG_PORT": str(port),
-        "LSG_DATA": str(tmp_path / "data"),
-        "LSG_AUDIO": "null",
-        "LSG_BROWSER": f'"{sys.executable}" "{FAKE}"',
+        "LUMORA_PORT": str(port),
+        "LUMORA_DATA": str(tmp_path / "data"),
+        "LUMORA_AUDIO": "null",
+        "LUMORA_BROWSER": f'"{sys.executable}" "{FAKE}"',
         "FAKE_BROWSER_ARGS": str(args_file),
         "FAKE_BROWSER_SECONDS": "4",
     }
-    proc = subprocess.Popen([sys.executable, "-m", "lsg.desktop"], env=env)
+    proc = subprocess.Popen([sys.executable, "-m", "lumora.desktop"], env=env)
     try:
         for _ in range(100):
             if port_open(port):

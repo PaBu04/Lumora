@@ -3,12 +3,12 @@ import time
 import numpy as np
 import pytest
 
-from lsg.audio.features import AudioFeatures
-from lsg.geometry.led_table import build_led_table
-from lsg.model.show import Clip, Layer, Show
-from lsg.render import shader_host
-from lsg.render.engine import Renderer
-from lsg.render.shaders import Shader
+from lumora.audio.features import AudioFeatures
+from lumora.geometry.led_table import build_led_table
+from lumora.model.show import Clip, Layer, Show
+from lumora.render import shader_host
+from lumora.render.engine import Renderer
+from lumora.render.shaders import Shader
 
 GOOD = """
 def render(t, leds, audio, params):

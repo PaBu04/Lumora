@@ -1,4 +1,4 @@
-// Mirror of backend/lsg/output/curve.py for charts and live feedback.
+// Mirror of backend/lumora/output/curve.py for charts and live feedback.
 import type { LedCalibration } from "./types";
 
 export function lightnessToDuty(v: number, cal: LedCalibration): number {

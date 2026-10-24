@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from lsg.audio.features import AudioFeatures
-from lsg.geometry.led_table import build_led_table
-from lsg.model.fixture import Fixture, PolylineGeometry
-from lsg.model.show import Clip, Layer, Range, Show, Target
-from lsg.model.song import Section
-from lsg.render.autoshow import starter_show
-from lsg.render.engine import Renderer, select_leds
-from lsg.render.validate import light_issues, light_report
+from lumora.audio.features import AudioFeatures
+from lumora.geometry.led_table import build_led_table
+from lumora.model.fixture import Fixture, PolylineGeometry
+from lumora.model.show import Clip, Layer, Range, Show, Target
+from lumora.model.song import Section
+from lumora.render.autoshow import starter_show
+from lumora.render.engine import Renderer, select_leds
+from lumora.render.validate import light_issues, light_report
 
 
 def test_drum_hits_match_the_demo_drums(demo_analysis):
@@ -190,8 +190,8 @@ def _form_analysis():
 
 
 def test_starter_styles_colours_strobe_and_variants(project):
-    from lsg.model.show import StarterStyle
-    from lsg.render.autoshow import PALETTES
+    from lumora.model.show import StarterStyle
+    from lumora.render.autoshow import PALETTES
 
     a, t = _form_analysis(), build_led_table(project)
 
@@ -244,7 +244,7 @@ def test_starter_styles_colours_strobe_and_variants(project):
 def test_variant_endpoint(tmp_path):
     from fastapi.testclient import TestClient
 
-    from lsg.app import create_app
+    from lumora.app import create_app
 
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
     with TestClient(app) as c:

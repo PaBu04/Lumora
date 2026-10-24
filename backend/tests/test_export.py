@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from lsg.app import create_app
-from lsg.audio.features import AudioFeatures
-from lsg.geometry.led_table import build_led_table
-from lsg.model.show import Clip, Layer, Show
-from lsg.output.export import export_show
-from lsg.output.fseq import read_fseq, write_fseq, zstd_available
-from lsg.output.pipeline import OutputPipeline
-from lsg.render.engine import Renderer
+from lumora.app import create_app
+from lumora.audio.features import AudioFeatures
+from lumora.geometry.led_table import build_led_table
+from lumora.model.show import Clip, Layer, Show
+from lumora.output.export import export_show
+from lumora.output.fseq import read_fseq, write_fseq, zstd_available
+from lumora.output.pipeline import OutputPipeline
+from lumora.render.engine import Renderer
 
 
 def frames(n, channels):
@@ -31,7 +31,7 @@ def test_fseq_roundtrip(tmp_path, compress):
     assert info["compressed"] == compress
     f = read_fseq(path)
     assert f["version"] == (2, 0) and f["channels"] == 90 and f["frames"] == 700 and f["step_ms"] == 25
-    assert f["headers"] == {"mf": "song.mp3", "sp": "Neopixel Light Show Generator"}
+    assert f["headers"] == {"mf": "song.mp3", "sp": "Lumora"}
     assert f["compression"] == (1 if compress else 0)
     assert f["data_len"] == 700 * 90
     assert all(f["frame"](i) == data[i] for i in (0, 1, 350, 699))
@@ -50,7 +50,7 @@ def test_header_bytes_follow_the_spec(tmp_path):
     assert raw[18] == 50 and raw[20] == 0 and raw[21] == 0 and raw[22] == 0
     offset = struct.unpack_from("<H", raw, 4)[0]
     assert offset % 4 == 0 and len(raw) == offset + 18
-    assert raw[32:34] == struct.pack("<H", 4 + len(b"Neopixel Light Show Generator\0")) and raw[34:36] == b"sp"
+    assert raw[32:34] == struct.pack("<H", 4 + len(b"Lumora\0")) and raw[34:36] == b"sp"
 
 
 def test_export_matches_live_output(project, tmp_path):

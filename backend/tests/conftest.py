@@ -2,13 +2,13 @@ import os
 
 import pytest
 
-from lsg.audio.analysis import analyse_file
-from lsg.audio.demo import make_demo_track
-from lsg.model.controller import Controller, FixtureMapping
-from lsg.model.fixture import CircleGeometry, Fixture, MatrixGeometry, PolylineGeometry
-from lsg.model.project import Project
-from lsg.model.room import Room
-from lsg.model.viewer import Viewer
+from lumora.audio.analysis import analyse_file
+from lumora.audio.demo import make_demo_track
+from lumora.model.controller import Controller, FixtureMapping
+from lumora.model.fixture import CircleGeometry, Fixture, MatrixGeometry, PolylineGeometry
+from lumora.model.project import Project
+from lumora.model.room import Room
+from lumora.model.viewer import Viewer
 
 
 @pytest.fixture(autouse=True)
@@ -16,14 +16,14 @@ def _no_separation_model(request, monkeypatch):
     """Tests use the fast harmonic / percussive approximation instead of the Demucs model
     (tests marked "ml" run the real model)."""
     if "ml" not in request.keywords:
-        from lsg.audio import stems
+        from lumora.audio import stems
 
         monkeypatch.setattr(stems, "installed", lambda: False)
         monkeypatch.setattr(stems, "six_installed", lambda: False)  # also skips importing torch
 
 
 # analyses that a test started in the background may outlive its monkeypatch: never let them load the models
-os.environ["LSG_STEMS"] = "approx"
+os.environ["LUMORA_STEMS"] = "approx"
 
 SHORT_STRUCTURE = [
     ("intro", 2, {"hat", "pad"}),

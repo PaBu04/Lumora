@@ -1,4 +1,4 @@
-# Neopixel Light Show Generator
+# Lumora
 
 Musiksynchrone Lichtshows für adressierbare LEDs (WS2812B, SK6812 RGB/RGBW) an WLED-Controllern –
 mit 3D-Raummodell, Betrachterposition, Songanalyse, grafischem Timeline-Editor und KI-Unterstützung
@@ -131,8 +131,8 @@ python -m venv .venv
 cd ..\frontend
 npm install
 npm run build
-..\backend\.venv\Scripts\lsg            # Server im Terminal
-..\backend\.venv\Scripts\lsg-desktop    # oder als App-Fenster (schließen = beenden)
+..\backend\.venv\Scripts\lumora            # Server im Terminal
+..\backend\.venv\Scripts\lumora-desktop    # oder als App-Fenster (schließen = beenden)
 ```
 
 Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `frontend` (<http://localhost:5173>).
@@ -141,12 +141,12 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 
 | Variable       | Standard    | Bedeutung                                                     |
 |----------------|-------------|---------------------------------------------------------------|
-| `LSG_DATA`     | `./data`    | Projekte, Songs, Shows, Einstellungen                         |
-| `LSG_PORT`     | `8000`      | HTTP-Port                                                     |
-| `LSG_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
-| `LSG_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
-| `LSG_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
-| `LSG_STEMS`    | (Einstellung) | Instrumententrennung: `auto`, `demucs6`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
+| `LUMORA_DATA`     | `./data`    | Projekte, Songs, Shows, Einstellungen                         |
+| `LUMORA_PORT`     | `8000`      | HTTP-Port                                                     |
+| `LUMORA_HOST`     | `127.0.0.1` | Bind-Adresse                                                  |
+| `LUMORA_AUDIO`    | `device`    | `null` = stumme Uhr ohne Soundkarte (Tests, Server)          |
+| `LUMORA_FPS`      | `50`        | höchste Bildrate für DDP (langsamere Controller bekommen weniger) |
+| `LUMORA_STEMS`    | (Einstellung) | Instrumententrennung: `auto`, `demucs6`, `demucs`, `approx` (schnell, ohne Gesang), `off` |
 
 ## Erste Schritte mit echten LEDs
 
@@ -160,7 +160,7 @@ Entwicklung mit Hot-Reload: Backend starten und zusätzlich `npm run dev` in `fr
 Mehr FPS bei langen Strips: In WLED die LEDs auf mehrere Ausgänge (Datenpins) verteilen – die Pins werden
 parallel beschrieben, z. B. 2 × 437 statt 1 × 873 LEDs ≈ 50 statt 32 FPS. WLAN-Energiesparen in WLED ausschalten.
 
-Ohne Hardware testen: `backend\.venv\Scripts\lsg-wled-sim --leds 600 --http 8081 [--pins 2]` startet einen
+Ohne Hardware testen: `backend\.venv\Scripts\lumora-wled-sim --leds 600 --http 8081 [--pins 2]` startet einen
 simulierten WLED-Controller (per mDNS auffindbar, empfängt DDP, zeigt wie ein echter höchstens so viele Bilder,
 wie seine Pins schaffen; `/sim/stats` meldet empfangene und angezeigte FPS).
 
@@ -208,8 +208,8 @@ zum Clip-Start). Die vollständige Beschreibung liefert `get_show_format`.
 ## Architektur
 
 ```
-frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  backend/ FastAPI (lsg)
-backend/lsg/
+frontend/  React + Three.js (react-three-fiber)  ──REST/WebSocket──►  backend/ FastAPI (lumora)
+backend/lumora/
   model/      Raum, Fixtures, Controller, Kalibrierung, Betrachter, Songs, Shows
   geometry/   Fixture → LED-Positionen, betrachterbezogene Koordinaten
   audio/      Analyse (librosa, beat_this), Instrumententrennung (Demucs) und -spuren, Notenerkennung (Basic
@@ -232,7 +232,7 @@ cd backend
 .venv\Scripts\python -m pytest            # ~150 Unit- und Integrationstests
 .venv\Scripts\python -m pytest -m ml      # mit den neuronalen Modellen (Demucs)
 .venv\Scripts\python -m pytest -m ui      # Browser-Tests deutsch und englisch (gebautes Frontend + Playwright)
-.venv\Scripts\python -m ruff check lsg tests
+.venv\Scripts\python -m ruff check lumora tests
 cd ..\frontend; npm run lint; npm run typecheck
 ```
 

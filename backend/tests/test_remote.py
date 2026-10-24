@@ -3,12 +3,12 @@
 import numpy as np
 from fastapi.testclient import TestClient
 
-from lsg.app import create_app
-from lsg.remote import create_remote_app
+from lumora.app import create_app
+from lumora.remote import create_remote_app
 
 
 def _app(tmp_path, monkeypatch):
-    from lsg.remote import RemoteServer
+    from lumora.remote import RemoteServer
 
     async def no_network(self, port=0):  # never open a port on all interfaces in tests
         return None
@@ -29,8 +29,8 @@ def test_remote_needs_the_key_and_controls_playback(tmp_path, monkeypatch):
         c.post("/api/playback/load", json={"project": slug, "show": show["id"]})
 
         info = c.put("/api/remote", json={"enabled": True}).json()
-        assert info["enabled"] and info["url"].endswith(c.app.state.lsg.settings["remote_key"]) and "<svg" in info["qr"]
-        st = app.state.lsg
+        assert info["enabled"] and info["url"].endswith(c.app.state.lumora.settings["remote_key"]) and "<svg" in info["qr"]
+        st = app.state.lumora
         r = TestClient(create_remote_app(st))
         key = st.settings["remote_key"]
         assert r.get("/state").status_code == 403 and r.get("/state", params={"k": "wrong"}).status_code == 403

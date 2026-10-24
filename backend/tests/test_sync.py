@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from lsg.output.wled import controller_status
-from lsg.playback.sync import click_track, sync_features, sync_show
+from lumora.output.wled import controller_status
+from lumora.playback.sync import click_track, sync_features, sync_show
 
 
 def test_click_track_has_clicks_on_the_beat(tmp_path):
@@ -18,8 +18,8 @@ def test_click_track_has_clicks_on_the_beat(tmp_path):
 
 
 def test_sync_show_flashes_exactly_on_the_beat(project):
-    from lsg.geometry.led_table import build_led_table
-    from lsg.render.engine import Renderer
+    from lumora.geometry.led_table import build_led_table
+    from lumora.render.engine import Renderer
 
     feats = sync_features(100, 20)
     r = Renderer(project, build_led_table(project), sync_show(20), feats, {})
@@ -33,7 +33,7 @@ def test_controller_status_warnings(monkeypatch):
     async def fake_info(host, timeout=2.0):
         return {"led_count": 500, "arch": "esp8266", "rssi": -80, "fps": 20}
 
-    monkeypatch.setattr("lsg.output.wled.fetch_info", fake_info)
+    monkeypatch.setattr("lumora.output.wled.fetch_info", fake_info)
     cfg = {"buses": [{"type": 22, "len": 900, "pins": [2], "ms": 27.3}], "max_fps": 31.0, "wifi_sleep": True}
     st = asyncio.run(controller_status("x", pixels=900, sent_fps=30, live=True, cfg=cfg))
     text = " ".join(st["warnings"])
@@ -47,6 +47,6 @@ def test_controller_status_warnings(monkeypatch):
     async def down(host, timeout=2.0):
         raise OSError("timeout")
 
-    monkeypatch.setattr("lsg.output.wled.fetch_info", down)
+    monkeypatch.setattr("lumora.output.wled.fetch_info", down)
     st = asyncio.run(controller_status("x", pixels=10, sent_fps=0, live=False))
     assert not st["ok"] and "nicht erreichbar" in st["error"]

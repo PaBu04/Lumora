@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from lsg.app import create_app
-from lsg.audio.features import AudioFeatures
-from lsg.model.show import Clip, Layer, Show
-from lsg.model.song import Analysis, Section
-from lsg.render.looks import BUILTIN_LOOKS, apply_look, look_from_clips
+from lumora.app import create_app
+from lumora.audio.features import AudioFeatures
+from lumora.model.show import Clip, Layer, Show
+from lumora.model.song import Analysis, Section
+from lumora.render.looks import BUILTIN_LOOKS, apply_look, look_from_clips
 
 
 def grid_features(bpm: float, seconds: float = 120) -> AudioFeatures:
@@ -61,8 +61,8 @@ def test_look_keeps_its_musical_length_across_tempos():
 
 
 def test_builtin_looks_render(project):
-    from lsg.geometry.led_table import build_led_table
-    from lsg.render.engine import Renderer
+    from lumora.geometry.led_table import build_led_table
+    from lumora.render.engine import Renderer
 
     f = grid_features(128)
     for look in BUILTIN_LOOKS:

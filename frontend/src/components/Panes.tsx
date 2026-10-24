@@ -4,7 +4,7 @@ const MIN = 140;
 
 function load(id: string, fallback: (number | null)[]): (number | null)[] {
   try {
-    const v = JSON.parse(localStorage.getItem(`lsg.panes.${id}`) ?? "null");
+    const v = JSON.parse(localStorage.getItem(`lumora.panes.${id}`) ?? "null");
     if (Array.isArray(v) && v.length === fallback.length && v.every((x, i) => (x === null) === (fallback[i] === null))) return v;
   } catch {
     /* no storage */
@@ -14,7 +14,7 @@ function load(id: string, fallback: (number | null)[]): (number | null)[] {
 
 function save(id: string, v: (number | null)[]) {
   try {
-    localStorage.setItem(`lsg.panes.${id}`, JSON.stringify(v));
+    localStorage.setItem(`lumora.panes.${id}`, JSON.stringify(v));
   } catch {
     /* private mode */
   }

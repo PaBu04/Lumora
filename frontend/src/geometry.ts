@@ -13,7 +13,7 @@ const norm = (a: Vec3): Vec3 => {
 };
 export const round = (v: number, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
 
-/** Same basis as backend lsg/geometry/sampling._plane_basis. */
+/** Same basis as backend lumora/geometry/sampling._plane_basis. */
 function planeBasis(normal: Vec3, reference: Vec3 | null): [Vec3, Vec3] {
   const n = norm(normal);
   let r = reference;
@@ -42,7 +42,7 @@ function heartOutline(steps = 180): [number, number][] {
   return pts.map(([x, y]) => [(x - cx) / w, (y - cy) / w]);
 }
 
-/** Right and up of an upright heart (backend: lsg/geometry/sampling.heart_basis). */
+/** Right and up of an upright heart (backend: lumora/geometry/sampling.heart_basis). */
 function heartBasis(normal: Vec3, reference: Vec3 | null): [Vec3, Vec3] {
   if (!reference) {
     const side = cross([0, 0, 1], norm(normal));

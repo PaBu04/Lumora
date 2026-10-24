@@ -3,15 +3,15 @@ import time
 import numpy as np
 import pytest
 
-from lsg.audio.features import AudioFeatures
-from lsg.geometry.led_table import build_led_table
-from lsg.model.show import Clip, Layer, Range, Show, Target
-from lsg.render.colors import palette_at, parse_color, parse_palette
-from lsg.render.effects import EFFECTS
-from lsg.render.engine import Renderer, select_leds
-from lsg.render.shaders import Shader, ShaderError
-from lsg.render.snapshot import render_timeline_image, render_top_image, render_viewer_image
-from lsg.render.validate import validate_show
+from lumora.audio.features import AudioFeatures
+from lumora.geometry.led_table import build_led_table
+from lumora.model.show import Clip, Layer, Range, Show, Target
+from lumora.render.colors import palette_at, parse_color, parse_palette
+from lumora.render.effects import EFFECTS
+from lumora.render.engine import Renderer, select_leds
+from lumora.render.shaders import Shader, ShaderError
+from lumora.render.snapshot import render_timeline_image, render_top_image, render_viewer_image
+from lumora.render.validate import validate_show
 
 
 def make_renderer(project, clips, features=None, shaders=None, **show_kw):
@@ -189,7 +189,7 @@ def test_validate_show(project):
 
 def test_render_performance(project):
     """~5000 LEDs, 10 layered clips: well below the 20 ms frame budget."""
-    from lsg.model.fixture import Fixture, PolylineGeometry
+    from lumora.model.fixture import Fixture, PolylineGeometry
 
     big = project.model_copy(deep=True)
     for k in range(6):

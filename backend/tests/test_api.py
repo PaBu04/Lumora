@@ -4,7 +4,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from lsg.app import create_app
+from lumora.app import create_app
 
 FIXTURES = [
     {
@@ -184,7 +184,7 @@ def test_export_and_import_project(client, tmp_path):
     # into another installation: project, show and song arrive
     other = create_app(data_dir=tmp_path / "other", audio="null", fps=50, frontend=tmp_path / "nofrontend")
     with TestClient(other) as c2:
-        res = c2.post("/api/projects/import", files={"file": ("p.lsg.zip", r.content, "application/zip")}).json()
+        res = c2.post("/api/projects/import", files={"file": ("p.lumora.zip", r.content, "application/zip")}).json()
         assert res["name"] == "Wohnzimmer" and res["shows"] == 1 and res["songs_added"] == [song["id"]]
         new = res["slug"]
         assert len(c2.get(f"/api/projects/{new}").json()["fixtures"]) == 2
@@ -193,13 +193,13 @@ def test_export_and_import_project(client, tmp_path):
         assert c2.get(f"/api/songs/{song['id']}").json()["status"] == "done"
         assert c2.get(f"/api/songs/{song['id']}/analysis").status_code == 200
         # importing again: a second project, the song is not copied twice
-        again = c2.post("/api/projects/import", files={"file": ("p.lsg.zip", r.content, "application/zip")}).json()
+        again = c2.post("/api/projects/import", files={"file": ("p.lumora.zip", r.content, "application/zip")}).json()
         assert again["name"] == "Wohnzimmer (2)" and again["songs_present"] == [song["id"]]
 
         # no files outside the project
         evil = io.BytesIO()
         with zipfile.ZipFile(evil, "w") as z:
-            z.writestr("manifest.json", '{"format": "lsg-project", "version": 1}')
+            z.writestr("manifest.json", '{"format": "lumora-project", "version": 1}')
             z.writestr("project.json", c2.get(f"/api/projects/{new}").text)
             z.writestr("../../evil.py", "print(1)")
         bad = c2.post("/api/projects/import", files={"file": ("e.zip", evil.getvalue(), "application/zip")})

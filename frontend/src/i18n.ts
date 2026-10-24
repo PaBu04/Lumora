@@ -9,7 +9,7 @@ export type Lang = "de" | "en";
 
 function initial(): Lang {
   try {
-    const saved = localStorage.getItem("lsg.lang");
+    const saved = localStorage.getItem("lumora.lang");
     if (saved === "de" || saved === "en") return saved;
   } catch {
     /* no storage */
@@ -21,7 +21,7 @@ export const lang: Lang = initial();
 
 export function setLang(l: Lang): void {
   try {
-    localStorage.setItem("lsg.lang", l);
+    localStorage.setItem("lumora.lang", l);
   } catch {
     /* no storage */
   }

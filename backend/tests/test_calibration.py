@@ -3,12 +3,12 @@ import itertools
 import numpy as np
 import pytest
 
-from lsg.geometry.led_table import build_led_table
-from lsg.model.calibration import LedCalibration
-from lsg.model.controller import Controller, FixtureMapping
-from lsg.output.curve import duty_to_lightness, extract_white, lightness_to_duty, pwm_of_level, to_pwm
-from lsg.output.pipeline import OutputPipeline
-from lsg.playback.patterns import DARK_STEPS, RAW_STEPS, pattern_frame
+from lumora.geometry.led_table import build_led_table
+from lumora.model.calibration import LedCalibration
+from lumora.model.controller import Controller, FixtureMapping
+from lumora.output.curve import duty_to_lightness, extract_white, lightness_to_duty, pwm_of_level, to_pwm
+from lumora.output.pipeline import OutputPipeline
+from lumora.playback.patterns import DARK_STEPS, RAW_STEPS, pattern_frame
 
 
 def test_cie_curve_is_perceptual_and_invertible():
@@ -128,11 +128,11 @@ def test_patterns(project):
 
 
 def test_power_analysis_and_validation(project):
-    from lsg.audio.features import AudioFeatures
-    from lsg.model.show import Clip, Layer, Show
-    from lsg.output.power import analyse_power
-    from lsg.render.engine import Renderer
-    from lsg.render.validate import validate_show
+    from lumora.audio.features import AudioFeatures
+    from lumora.model.show import Clip, Layer, Show
+    from lumora.output.power import analyse_power
+    from lumora.render.engine import Renderer
+    from lumora.render.validate import validate_show
 
     project.controllers = [Controller(id="c", host="x", budget_ma=1500, mappings=[FixtureMapping(fixture_id="north")])]
     table = build_led_table(project)

@@ -3,9 +3,9 @@ import math
 import numpy as np
 import pytest
 
-from lsg.geometry.sampling import curve_length, fixture_led_count, sample_fixture
-from lsg.geometry.viewer import viewer_relative
-from lsg.model.fixture import (
+from lumora.geometry.sampling import curve_length, fixture_led_count, sample_fixture
+from lumora.geometry.viewer import viewer_relative
+from lumora.model.fixture import (
     ArcGeometry,
     BezierGeometry,
     CircleGeometry,
@@ -13,7 +13,7 @@ from lsg.model.fixture import (
     MatrixGeometry,
     PolylineGeometry,
 )
-from lsg.model.viewer import Viewer
+from lumora.model.viewer import Viewer
 
 
 def spacing(pos: np.ndarray) -> np.ndarray:
@@ -123,8 +123,8 @@ def test_viewer_yaw_rotates_frame():
 
 
 def test_heart_is_upright_sized_and_starts_at_the_tip():
-    from lsg.geometry.sampling import sample_fixture
-    from lsg.model.fixture import Fixture
+    from lumora.geometry.sampling import sample_fixture
+    from lumora.model.fixture import Fixture
 
     f = Fixture(
         name="h", geometry={"type": "heart", "center": [1, 0.02, 1.5], "size": 0.6, "normal": [0, 1, 0]}, leds_per_meter=60

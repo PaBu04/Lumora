@@ -1,4 +1,4 @@
-// Mirrors the backend pydantic models (backend/lsg/model).
+// Mirrors the backend pydantic models (backend/lumora/model).
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];

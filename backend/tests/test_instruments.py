@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from lsg.audio.analysis import analyse_file
-from lsg.audio.features import AudioFeatures
-from lsg.geometry.led_table import build_led_table
-from lsg.model.show import Clip, Layer, Show
-from lsg.model.song import Analysis, Section
-from lsg.render.engine import Renderer, dynamics_gain
+from lumora.audio.analysis import analyse_file
+from lumora.audio.features import AudioFeatures
+from lumora.geometry.led_table import build_led_table
+from lumora.model.show import Clip, Layer, Show
+from lumora.model.song import Analysis, Section
+from lumora.render.engine import Renderer, dynamics_gain
 
 
 def test_demo_tracks(demo_analysis):
@@ -30,7 +30,7 @@ def test_demo_tracks(demo_analysis):
 
 
 def test_drops_and_build_ups(tmp_path):
-    from lsg.audio.demo import make_demo_track
+    from lumora.audio.demo import make_demo_track
 
     path = tmp_path / "full.wav"
     make_demo_track(path, bpm=124)
@@ -163,7 +163,7 @@ def test_instrument_audio_sources(project):
 
 @pytest.mark.ml
 def test_demucs_separates_the_demo(demo_analysis):
-    from lsg.audio import stems
+    from lumora.audio import stems
 
     if not stems.installed():
         pytest.skip("torch / torchaudio not installed")
@@ -183,8 +183,8 @@ def _tone(midi: float, seconds: float, sr: int = 22050) -> np.ndarray:
 
 
 def test_transcription_hears_chords_and_melody():
-    from lsg.audio import transcribe
-    from lsg.audio.instruments import _melody, _note_events
+    from lumora.audio import transcribe
+    from lumora.audio.instruments import _melody, _note_events
 
     if not transcribe.installed():
         pytest.skip("onnxruntime not installed")
@@ -206,8 +206,8 @@ def test_transcription_hears_chords_and_melody():
 
 
 def test_six_stems_give_piano_and_guitar_tracks():
-    from lsg.audio import transcribe
-    from lsg.audio.instruments import analyse_stems
+    from lumora.audio import transcribe
+    from lumora.audio.instruments import analyse_stems
 
     if not transcribe.installed():
         pytest.skip("onnxruntime not installed")

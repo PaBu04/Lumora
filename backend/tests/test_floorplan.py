@@ -3,7 +3,7 @@ import io
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from lsg.app import create_app
+from lumora.app import create_app
 
 
 def png(w: int, h: int) -> bytes:

@@ -93,7 +93,7 @@ function scheduleSave(get: () => AppStore, set: (p: Partial<AppStore>) => void) 
 }
 
 export const useStore = create<AppStore>((set, get) => ({
-  tab: (localStorage.getItem("lsg.tab") as Tab) || "room",
+  tab: (localStorage.getItem("lumora.tab") as Tab) || "room",
   projects: [],
   slug: null,
   project: null,
@@ -104,14 +104,14 @@ export const useStore = create<AppStore>((set, get) => ({
   shows: [],
   expert: (() => {
     try {
-      return localStorage.getItem("lsg.expert") === "on";
+      return localStorage.getItem("lumora.expert") === "on";
     } catch {
       return false;
     }
   })(),
   setExpert: (on) => {
     try {
-      localStorage.setItem("lsg.expert", on ? "on" : "off");
+      localStorage.setItem("lumora.expert", on ? "on" : "off");
     } catch {
       /* no storage */
     }
@@ -122,14 +122,14 @@ export const useStore = create<AppStore>((set, get) => ({
   closeHelp: () => set({ help: null }),
   guide: (() => {
     try {
-      return localStorage.getItem("lsg.guide") !== "off";
+      return localStorage.getItem("lumora.guide") !== "off";
     } catch {
       return true;
     }
   })(),
   guideMarks: (() => {
     try {
-      return JSON.parse(localStorage.getItem("lsg.guide.steps") ?? "{}");
+      return JSON.parse(localStorage.getItem("lumora.guide.steps") ?? "{}");
     } catch {
       return {};
     }
@@ -137,7 +137,7 @@ export const useStore = create<AppStore>((set, get) => ({
   markGuide: (step) => {
     const marks = { ...get().guideMarks, [step]: true };
     try {
-      localStorage.setItem("lsg.guide.steps", JSON.stringify(marks));
+      localStorage.setItem("lumora.guide.steps", JSON.stringify(marks));
     } catch {
       /* no storage */
     }
@@ -145,7 +145,7 @@ export const useStore = create<AppStore>((set, get) => ({
   },
   setGuide: (on) => {
     try {
-      localStorage.setItem("lsg.guide", on ? "on" : "off");
+      localStorage.setItem("lumora.guide", on ? "on" : "off");
     } catch {
       /* no storage */
     }
@@ -164,7 +164,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setTab: (tab) => {
     try {
-      localStorage.setItem("lsg.tab", tab);
+      localStorage.setItem("lumora.tab", tab);
     } catch {
       /* storage unavailable */
     }

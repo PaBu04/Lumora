@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from lsg.audio.features import AudioFeatures
-from lsg.audio.library import SongLibrary
+from lumora.audio.features import AudioFeatures
+from lumora.audio.library import SongLibrary
 
 
 def test_analysis_finds_tempo_and_beats(demo_analysis):
@@ -42,7 +42,7 @@ def test_features_without_analysis():
 def test_library_roundtrip(tmp_path, demo_analysis):
     path, _ = demo_analysis
     lib = SongLibrary(tmp_path, stems=lambda: "approx")
-    song = lib.add_file(path, title="Demo", artist="LSG")
+    song = lib.add_file(path, title="Demo", artist="Lumora")
     assert song.duration > 10 and song.status == "pending"
     assert [s.id for s in lib.list()] == [song.id]
     done = lib.analyse(song.id)
@@ -72,8 +72,8 @@ def test_title_parsing(tmp_path, demo_analysis):
 
 
 def test_sections_match_the_track_structure(tmp_path):
-    from lsg.audio.analysis import analyse_file
-    from lsg.audio.demo import DEFAULT_STRUCTURE, make_demo_track
+    from lumora.audio.analysis import analyse_file
+    from lumora.audio.demo import DEFAULT_STRUCTURE, make_demo_track
 
     path = tmp_path / "full.wav"
     make_demo_track(path, bpm=124)
@@ -96,7 +96,7 @@ def test_sections_match_the_track_structure(tmp_path):
 
 
 def test_tempo_correction(demo_analysis):
-    from lsg.audio.analysis import scale_tempo
+    from lumora.audio.analysis import scale_tempo
 
     _, a = demo_analysis
     doubled = scale_tempo(a, 2.0)
@@ -109,7 +109,7 @@ def test_tempo_correction(demo_analysis):
 
 
 def test_exact_bpm_keeps_the_beat_phase(demo_analysis):
-    from lsg.audio.analysis import set_bpm
+    from lumora.audio.analysis import set_bpm
 
     _, a = demo_analysis
     nudged = set_bpm(a, round(a.bpm, 1) + 0.1)
@@ -125,8 +125,8 @@ def test_exact_bpm_keeps_the_beat_phase(demo_analysis):
 
 
 def test_neural_beat_tracker_is_used_when_available(demo_analysis, monkeypatch):
-    from lsg.audio import ml_beats
-    from lsg.audio.analysis import analyse_file
+    from lumora.audio import ml_beats
+    from lumora.audio.analysis import analyse_file
 
     path, _ = demo_analysis
     grid = np.arange(0.25, 18.0, 0.5)
@@ -139,8 +139,8 @@ def test_neural_beat_tracker_is_used_when_available(demo_analysis, monkeypatch):
 
 
 def test_neural_beat_tracker_falls_back(demo_analysis, monkeypatch):
-    from lsg.audio import ml_beats
-    from lsg.audio.analysis import analyse_file
+    from lumora.audio import ml_beats
+    from lumora.audio.analysis import analyse_file
 
     path, _ = demo_analysis
 
@@ -158,8 +158,8 @@ def test_neural_beat_tracker_falls_back(demo_analysis, monkeypatch):
 
 
 def test_hand_set_tempo_is_recognised():
-    from lsg.audio.library import hand_set
-    from lsg.model.song import Analysis
+    from lumora.audio.library import hand_set
+    from lumora.model.song import Analysis
 
     def make(bpm, beats, **kw):
         return Analysis(duration=60, bpm=bpm, beats=beats, downbeats=beats[::4], onsets=[], sections=[],

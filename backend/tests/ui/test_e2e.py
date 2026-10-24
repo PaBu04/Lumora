@@ -13,8 +13,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from lsg.app import create_app
-from lsg.tools import wled_sim
+from lumora.app import create_app
+from lumora.tools import wled_sim
 
 pytestmark = pytest.mark.ui
 

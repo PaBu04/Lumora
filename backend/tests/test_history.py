@@ -3,11 +3,11 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from lsg.app import create_app
-from lsg.model.show import Clip, Layer, Show
-from lsg.storage import history as history_mod
-from lsg.storage.history import History, show_summary
-from lsg.storage.show_store import ShowStore
+from lumora.app import create_app
+from lumora.model.show import Clip, Layer, Show
+from lumora.storage import history as history_mod
+from lumora.storage.history import History, show_summary
+from lumora.storage.show_store import ShowStore
 
 
 def make_show(n: int) -> Show:

@@ -11,8 +11,8 @@ import pytest
 import uvicorn
 from mcp import Client
 
-from lsg.app import create_app
-from lsg.tools import wled_sim
+from lumora.app import create_app
+from lumora.tools import wled_sim
 
 
 def free_port(kind=socket.SOCK_STREAM) -> int:
@@ -166,7 +166,7 @@ def test_live_output_reaches_wled(server, wled):
 def test_slow_controller_gets_frames_it_can_show(server, monkeypatch):
     """900 WS2812B on one pin can show ~31 FPS: the app sends evenly just below that and
     the speed test finds the limit."""
-    monkeypatch.setattr("lsg.playback.session.MONITOR_SECONDS", 0.3)
+    monkeypatch.setattr("lumora.playback.session.MONITOR_SECONDS", 0.3)
     with simulated_wled(leds=900) as (http_port, ddp_port):
         host = f"127.0.0.1:{http_port}"
         slug = setup_project(server, [{"id": "c1", "host": host, "port": ddp_port, "mappings": [{"fixture_id": "s1"}]}])

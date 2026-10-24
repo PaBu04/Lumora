@@ -5,8 +5,8 @@ import itertools
 import numpy as np
 import pytest
 
-from lsg.render import safety
-from lsg.render.safety import FlashLimiter
+from lumora.render import safety
+from lumora.render.safety import FlashLimiter
 
 
 @pytest.fixture(autouse=True)
@@ -55,10 +55,10 @@ def test_off_and_strobe_rate():
 
 
 def test_strobe_effect_respects_the_limit(project):
-    from lsg.audio.features import AudioFeatures
-    from lsg.geometry.led_table import build_led_table
-    from lsg.model.show import Clip, Layer, Show
-    from lsg.render.engine import Renderer
+    from lumora.audio.features import AudioFeatures
+    from lumora.geometry.led_table import build_led_table
+    from lumora.model.show import Clip, Layer, Show
+    from lumora.render.engine import Renderer
 
     show = Show(layers=[Layer(clips=[Clip(start=0, end=4, effect="strobe", params={"rate": 15, "duty": 0.5})])])
     r = Renderer(project, build_led_table(project), show, AudioFeatures(None, 4.0))
@@ -73,7 +73,7 @@ def test_strobe_effect_respects_the_limit(project):
 def test_settings_api(tmp_path):
     from fastapi.testclient import TestClient
 
-    from lsg.app import create_app
+    from lumora.app import create_app
 
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
     with TestClient(app) as c:

@@ -60,7 +60,7 @@ export function About({ onClose }: { onClose: () => void }) {
       {table(FRONTEND)}
       <p className="hint">
         {t(
-          "Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei; der Hinweis zu Basic Pitch steht in lsg/audio/models/NOTICE-basic-pitch.",
+          "Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei; der Hinweis zu Basic Pitch steht in lumora/audio/models/NOTICE-basic-pitch.",
         )}
       </p>
     </Modal>

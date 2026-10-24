@@ -4,12 +4,12 @@ import struct
 import numpy as np
 import pytest
 
-from lsg.geometry.led_table import build_led_table
-from lsg.model.calibration import LedCalibration
-from lsg.model.controller import Controller, FixtureMapping
-from lsg.model.fixture import LedType
-from lsg.output.ddp import DdpSender, build_packets, parse_packet
-from lsg.output.pipeline import OutputPipeline
+from lumora.geometry.led_table import build_led_table
+from lumora.model.calibration import LedCalibration
+from lumora.model.controller import Controller, FixtureMapping
+from lumora.model.fixture import LedType
+from lumora.output.ddp import DdpSender, build_packets, parse_packet
+from lumora.output.pipeline import OutputPipeline
 
 
 def test_ddp_header_layout():
@@ -81,7 +81,7 @@ def test_sender_delivers_frames():
 
 
 def test_output_link_paces_evenly_and_skips_static_frames():
-    from lsg.output.link import KEEPALIVE_S, REPEATS, OutputLink
+    from lumora.output.link import KEEPALIVE_S, REPEATS, OutputLink
 
     link = OutputLink(rate=25.0, next_due=0.0)
     sent = []
@@ -112,7 +112,7 @@ def test_output_link_paces_evenly_and_skips_static_frames():
 
 
 def test_wled_frame_rate_estimate():
-    from lsg.output.wled import bus_ms, estimate_fps, limit_hint, recommended_fps
+    from lumora.output.wled import bus_ms, estimate_fps, limit_hint, recommended_fps
 
     # measured on a real ESP32: 873 WS2812B on one pin showed 32-33 FPS
     ms = bus_ms(22, 873)

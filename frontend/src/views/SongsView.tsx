@@ -96,7 +96,7 @@ const ZOOMS: { value: number; label: string }[] = [
 
 function savedZoom(): number {
   try {
-    return Number(localStorage.getItem("lsg.songs.zoom") ?? 0) || 0;
+    return Number(localStorage.getItem("lumora.songs.zoom") ?? 0) || 0;
   } catch {
     return 0;
   }
@@ -219,7 +219,7 @@ function SongPlayer({ song, analysis }: { song: Song; analysis: Analysis | null 
                 onClick={() => {
                   setZoom(z.value);
                   try {
-                    localStorage.setItem("lsg.songs.zoom", String(z.value));
+                    localStorage.setItem("lumora.songs.zoom", String(z.value));
                   } catch {
                     /* no storage */
                   }

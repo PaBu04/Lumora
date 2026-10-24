@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from lsg.audio import harmony
+from lumora.audio import harmony
 
 
 def _chord(t: float, d: float, pitches, s: float = 0.8) -> list[list[float]]:
@@ -52,7 +52,7 @@ def test_character_stabs_pads_arpeggios():
 
 
 def test_recurring_riff_becomes_a_motif():
-    from lsg.audio.motifs import motifs
+    from lumora.audio.motifs import motifs
 
     rng = np.random.default_rng(1)
     downbeats = np.arange(0, 32.0, 2.0)  # 16 bars

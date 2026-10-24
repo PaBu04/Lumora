@@ -10,7 +10,7 @@ const LIMITS: { value: number; label: string }[] = [
   { value: 0, label: "keine Begrenzung" },
 ];
 
-/** Choice of the flash limit (lsg.render.safety). */
+/** Choice of the flash limit (lumora.render.safety). */
 export function FlashLimitSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <select value={value} onChange={(e) => onChange(+e.target.value)}>

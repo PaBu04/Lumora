@@ -2,13 +2,13 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from lsg.geometry.led_table import build_led_table
-from lsg.model.controller import Controller, FixtureMapping
-from lsg.model.fixture import Fixture, LedType, MatrixGeometry, PolylineGeometry
-from lsg.model.project import Project
-from lsg.model.room import Room, polygon_area
-from lsg.model.viewer import Viewer
-from lsg.storage.project_store import ProjectStore
+from lumora.geometry.led_table import build_led_table
+from lumora.model.controller import Controller, FixtureMapping
+from lumora.model.fixture import Fixture, LedType, MatrixGeometry, PolylineGeometry
+from lumora.model.project import Project
+from lumora.model.room import Room, polygon_area
+from lumora.model.viewer import Viewer
+from lumora.storage.project_store import ProjectStore
 
 ROOM = Room(floor=[(0, 0), (4, 0), (4, 3), (0, 3)], height=2.5)
 

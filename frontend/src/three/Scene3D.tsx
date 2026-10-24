@@ -363,7 +363,7 @@ const lastView: { pos: Vec3 | null; target: Vec3 | null } = { pos: null, target:
 
 function loadOrtho(): boolean {
   try {
-    return localStorage.getItem("lsg.ortho") === "1";
+    return localStorage.getItem("lumora.ortho") === "1";
   } catch {
     return false;
   }
@@ -421,7 +421,7 @@ export function Scene3D({
   const toggle = (o: boolean) => {
     setOrtho(o);
     try {
-      localStorage.setItem("lsg.ortho", o ? "1" : "0");
+      localStorage.setItem("lumora.ortho", o ? "1" : "0");
     } catch {
       /* private mode */
     }

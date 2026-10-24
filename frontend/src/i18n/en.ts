@@ -63,7 +63,7 @@ export const EN: Record<string, string> = {
   "Kopie anlegen": "Create copy",
   Importieren: "Import",
   "Aus Datei importieren": "Import from file",
-  "eine mit „Projekt exportieren“ gesicherte Datei (.lsg.zip)": "a file saved with “Export project” (.lsg.zip)",
+  "eine mit „Projekt exportieren“ gesicherte Datei (.lumora.zip)": "a file saved with “Export project” (.lumora.zip)",
   "Projekt „{0}\" angelegt": "Project “{0}” created",
   "Öffne oben links ein Projekt oder lege eines an.": "Open a project at the top left or create one.",
 
@@ -133,8 +133,8 @@ export const EN: Record<string, string> = {
   " (mitgeliefert)": " (included)",
   " (wird bei Bedarf geladen)": " (downloaded when needed)",
   "Verwendete Bibliotheken": "Libraries used",
-  "Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei; der Hinweis zu Basic Pitch steht in lsg/audio/models/NOTICE-basic-pitch.":
-    "The full license texts come with each package; the Basic Pitch notice is in lsg/audio/models/NOTICE-basic-pitch.",
+  "Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei; der Hinweis zu Basic Pitch steht in lumora/audio/models/NOTICE-basic-pitch.":
+    "The full license texts come with each package; the Basic Pitch notice is in lumora/audio/models/NOTICE-basic-pitch.",
   Oberfläche: "Interface",
   "3D-Ansicht": "3D view",
   "Leuchteffekt der LEDs": "LED glow",
@@ -899,7 +899,7 @@ export const EN: Record<string, string> = {
     "Calm and warm in amber and red: few, slow movements, accents only on the first beat of each bar, the climax in the last chorus.",
   "Party: kräftige Farben, viel Abwechslung zwischen den Strips, Hi-Hats als Glitzern, kurze Blitze im ganzen Raum vor jedem Refrain.":
     "Party: strong colours, lots of variety between the strips, hi-hats as glitter, short flashes in the whole room before every chorus.",
-  // built-in looks (lsg/render/looks.py)
+  // built-in looks (lumora/render/looks.py)
   "✦ Drop-Akzent": "✦ Drop accent",
   "✦ Bass-Puls": "✦ Bass pulse",
   "✦ Aufbau (Riser)": "✦ Build (riser)",

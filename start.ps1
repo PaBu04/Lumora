@@ -1,4 +1,4 @@
-# Starts the Light Show Generator (builds the web UI on first run).
+# Starts the Lumora (builds the web UI on first run).
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $python = Join-Path $root "backend\.venv\Scripts\python.exe"
@@ -15,5 +15,5 @@ if (-not (Test-Path (Join-Path $root "frontend\dist\index.html"))) {
     npm run build
     Pop-Location
 }
-Start-Process "http://127.0.0.1:$(if ($env:LSG_PORT) { $env:LSG_PORT } else { 8000 })"
-& $python -m lsg.app
+Start-Process "http://127.0.0.1:$(if ($env:LUMORA_PORT) { $env:LUMORA_PORT } else { 8000 })"
+& $python -m lumora.app

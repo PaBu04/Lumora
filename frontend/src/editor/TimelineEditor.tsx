@@ -321,16 +321,16 @@ export function TimelineEditor({
             }}
             onDragOver={(e) => {
               const types = e.dataTransfer.types;
-              if (types.includes("application/x-lsg-effect") || types.includes("application/x-lsg-look")) e.preventDefault();
+              if (types.includes("application/x-lumora-effect") || types.includes("application/x-lumora-look")) e.preventDefault();
             }}
             onDrop={(e) => {
-              const look = e.dataTransfer.getData("application/x-lsg-look");
+              const look = e.dataTransfer.getData("application/x-lumora-look");
               if (look) {
                 e.preventDefault();
                 onDropLook(look, snapT(timeAt(e.clientX), false), li);
                 return;
               }
-              const id = e.dataTransfer.getData("application/x-lsg-effect");
+              const id = e.dataTransfer.getData("application/x-lumora-effect");
               if (id) {
                 e.preventDefault();
                 createAt(e.clientX, li, { id });
@@ -501,7 +501,7 @@ export function EffectBar({
           draggable
           title={`${e.description}\nIn eine Ebene ziehen, oder auswählen und Doppelklick in die Timeline`}
           onDragStart={(ev) => {
-            ev.dataTransfer.setData("application/x-lsg-effect", e.id);
+            ev.dataTransfer.setData("application/x-lumora-effect", e.id);
             ev.dataTransfer.effectAllowed = "copy";
           }}
           onClick={() => onPick(e.id)}
@@ -522,7 +522,7 @@ export function EffectBar({
           draggable
           title={`${l.description || "eigener Look"}\n${l.beats} Beats · in eine Ebene ziehen`}
           onDragStart={(ev) => {
-            ev.dataTransfer.setData("application/x-lsg-look", l.id);
+            ev.dataTransfer.setData("application/x-lumora-look", l.id);
             ev.dataTransfer.effectAllowed = "copy";
           }}
         >

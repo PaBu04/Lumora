@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from lsg.audio import structure
-from lsg.model.song import Section
+from lumora.audio import structure
+from lumora.model.song import Section
 
 
 def _presence(parts: list[tuple[int, list[float]]]) -> np.ndarray:

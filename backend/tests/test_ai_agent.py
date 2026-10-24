@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from lsg.ai_agent import AgentRun, build_prompt, parse_line
-from lsg.app import create_app
+from lumora.ai_agent import AgentRun, build_prompt, parse_line
+from lumora.app import create_app
 
 FAKE = Path(__file__).parent / "fake_claude.py"
 
@@ -46,7 +46,7 @@ def test_prompt_mentions_task_and_brightness():
 
 def test_run_through_api_with_fake_cli(tmp_path, monkeypatch):
     args_file = tmp_path / "args.json"
-    monkeypatch.setenv("LSG_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
+    monkeypatch.setenv("LUMORA_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(args_file))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-be-passed")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
@@ -82,7 +82,7 @@ def test_run_through_api_with_fake_cli(tmp_path, monkeypatch):
 def test_model_fallback_and_update(tmp_path, monkeypatch):
     """An old Claude Code refuses Opus 5.5: the run goes on with Claude Code's default model."""
     args_file = tmp_path / "args.json"
-    monkeypatch.setenv("LSG_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
+    monkeypatch.setenv("LUMORA_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(args_file))
     monkeypatch.setenv("FAKE_CLAUDE_OLD", "1")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
@@ -109,7 +109,7 @@ def test_model_fallback_and_update(tmp_path, monkeypatch):
 
 
 def test_cancel(tmp_path, monkeypatch):
-    monkeypatch.setenv("LSG_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
+    monkeypatch.setenv("LUMORA_CLAUDE_CMD", f'"{sys.executable}" "{FAKE}"')
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(tmp_path / "a.json"))
     monkeypatch.setenv("FAKE_CLAUDE_SLOW", "1")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
@@ -127,7 +127,7 @@ def test_cancel(tmp_path, monkeypatch):
 
 
 def test_missing_cli(tmp_path, monkeypatch):
-    monkeypatch.setattr("lsg.ai_agent.claude_command", lambda: None)
+    monkeypatch.setattr("lumora.ai_agent.claude_command", lambda: None)
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
     with TestClient(app) as c:
         slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]

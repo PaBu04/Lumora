@@ -118,7 +118,7 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
           <input type="radio" name="source" checked={source === "__file__"} onChange={() => setSource("__file__")} />
           <div className="grow">
             <div>Aus Datei importieren</div>
-            <div className="meta">eine mit „Projekt exportieren“ gesicherte Datei (.lsg.zip)</div>
+            <div className="meta">eine mit „Projekt exportieren“ gesicherte Datei (.lumora.zip)</div>
           </div>
         </label>
       </div>

@@ -24,11 +24,11 @@ jobs:
       - name: System libraries (PortAudio for sounddevice)
         run: sudo apt-get update && sudo apt-get install -y libportaudio2
       - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check lsg tests
-      - run: python -m ruff format --check lsg tests
+      - run: python -m ruff check lumora tests
+      - run: python -m ruff format --check lumora tests
       - run: python -m pytest -q
         env:
-          LSG_AUDIO: "null"
+          LUMORA_AUDIO: "null"
 
   frontend:
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
       - working-directory: backend
         run: python -m pytest -m ui -q
         env:
-          LSG_AUDIO: "null"
+          LUMORA_AUDIO: "null"
       - if: always()
         uses: actions/upload-artifact@v4
         with:

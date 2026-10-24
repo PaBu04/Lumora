@@ -6,8 +6,8 @@ import zipfile
 
 from fastapi.testclient import TestClient
 
-from lsg import diagnostics
-from lsg.app import create_app
+from lumora import diagnostics
+from lumora.app import create_app
 
 
 def test_redact():
@@ -35,7 +35,7 @@ def test_package_without_private_data(tmp_path):
         assert c.put(f"/api/projects/{slug}", json=project).status_code == 200
         song = c.post("/api/songs/demo", params={"bpm": 120}).json()
         c.patch(f"/api/songs/{song['id']}", json={"title": "Geheimer Lieblingssong", "artist": "Privat"})
-        logging.getLogger("lsg.test").warning("could not reach 10.0.0.15 for Arbeitszimmer.local")
+        logging.getLogger("lumora.test").warning("could not reach 10.0.0.15 for Arbeitszimmer.local")
 
         d = c.get("/api/diagnostics").json()
         assert d["diagnostics"]["projects"][0]["strips"] == 1 and len(d["diagnostics"]["projects"][0]["controllers"]) == 1
@@ -46,7 +46,7 @@ def test_package_without_private_data(tmp_path):
         assert set(z.namelist()) == {"diagnostics.json", "log.txt", "LIESMICH.txt"}
         everything = (z.read("diagnostics.json") + z.read("log.txt")).decode()
         assert "could not reach" in everything  # the log is there ...
-        c.app.state.lsg.settings["remote_key"] = "geheimerschluessel"
+        c.app.state.lumora.settings["remote_key"] = "geheimerschluessel"
         r = c.get("/api/diagnostics", params={"download": True})
         z = zipfile.ZipFile(io.BytesIO(r.content))
         everything = (z.read("diagnostics.json") + z.read("log.txt")).decode()
