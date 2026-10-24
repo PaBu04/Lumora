@@ -93,6 +93,50 @@ async def create_project(request: Request, body: NewProject):
     return {"slug": slug, "project": project}
 
 
+@router.post("/projects/example")
+async def create_example(request: Request):
+    """A ready room to try the app without hardware: four strips, a demo song and, once the song is
+    analysed, a starter show (shown in the 3D preview)."""
+    from lsg.model.fixture import CircleGeometry, Fixture, PolylineGeometry
+
+    st = state(request)
+    room = Room(floor=[(0, 0), (5, 0), (5, 4), (0, 4)], height=2.5)
+    project = Project(name="Beispielraum", room=room)
+    project.viewer.position = (2.5, 0.8, 1.2)
+    project.viewer.yaw_deg = 90.0
+    z = 2.42
+    project.fixtures = [
+        Fixture(name="Decke vorne", geometry=PolylineGeometry(points=[(0.1, 3.9, z), (4.9, 3.9, z)]), leds_per_meter=60),
+        Fixture(
+            name="Decke Rand",
+            geometry=PolylineGeometry(points=[(4.9, 3.6, z), (4.9, 0.1, z), (0.1, 0.1, z), (0.1, 3.6, z)]),
+            leds_per_meter=30,
+            tags=["ceiling"],
+        ),
+        Fixture(name="Hinter dem TV", geometry=PolylineGeometry(points=[(1.6, 3.95, 0.8), (3.4, 3.95, 0.8)]), leds_per_meter=60),
+        Fixture(name="Deckenring", geometry=CircleGeometry(center=(2.5, 2.4, z), radius=0.6), leds_per_meter=60),
+    ]
+    slug = st.projects.create(project)
+    await st.activate_project(slug)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "LSG - Beispiel 124 BPM.wav"
+        await asyncio.to_thread(make_demo_track, path, 124.0)
+        song = await asyncio.to_thread(st.songs.add_file, path)
+
+    async def make_show(analysed) -> None:
+        if analysed.status != "done":
+            return
+        p = st.projects.load(slug)
+        show = starter_show(
+            "Beispiel-Show", song.id, st.songs.analysis(song.id), analysed.duration, p, build_led_table(p), StarterStyle()
+        )
+        st.show_store(slug).save(show, "system")
+        await st.session.broadcast_event({"kind": "show_changed", "project": slug, "show": show.id})
+
+    st.analyse_song(song.id, then=make_show)
+    return {"slug": slug, "project": project, "song": song}
+
+
 @router.get("/projects/{slug}")
 def get_project(request: Request, slug: str):
     return _project(state(request), slug)

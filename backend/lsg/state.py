@@ -116,7 +116,8 @@ class AppState:
         await self.session.broadcast_event({"kind": "shaders_changed", "project": slug})
 
     # song analysis in the background
-    def analyse_song(self, song_id: str, keep_tempo: bool = True) -> None:
+    def analyse_song(self, song_id: str, keep_tempo: bool = True, then=None) -> None:
+        """Analyse in the background; `then(song)` (a coroutine function) runs on the event loop afterwards."""
         loop = self.loop
 
         def progress(song) -> None:
@@ -135,6 +136,8 @@ class AppState:
                 lo = self.session.loaded
                 if lo and lo.show and lo.show.song_id == song_id:
                     asyncio.run_coroutine_threadsafe(self.session.reload(lo.project_slug, lo.show.id), loop)
+                if then is not None:
+                    asyncio.run_coroutine_threadsafe(then(song), loop)
 
         self._analysis_pool.submit(job)
 

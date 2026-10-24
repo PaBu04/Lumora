@@ -154,3 +154,15 @@ def test_show_order_is_kept(client):
     assert names() == ["C", "B", "0 neu"]
     assert client.get(f"/api/projects/{slug}/shows/order").status_code == 404
     assert d["id"] != "order"
+
+
+def test_example_project(client):
+    r = client.post("/api/projects/example")
+    assert r.status_code == 200, r.text
+    slug, song = r.json()["slug"], r.json()["song"]
+    project = client.get(f"/api/projects/{slug}").json()
+    assert project["name"] == "Beispielraum" and len(project["fixtures"]) == 4
+    assert client.get("/api/projects").json()["active"] == slug
+    # once the demo song is analysed, the starter show appears
+    shows = wait_for(lambda: client.get(f"/api/projects/{slug}/shows").json(), timeout=120)
+    assert shows[0]["name"] == "Beispiel-Show" and shows[0]["song_id"] == song["id"] and shows[0]["clips"] > 10
