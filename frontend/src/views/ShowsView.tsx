@@ -12,10 +12,25 @@ import { allClips, deleteClips, insertLookClips, moveClips, pasteClips, type Sna
 import { CuePads } from "../editor/CuePads";
 import { EffectBar, TimelineEditor, usePlayhead } from "../editor/TimelineEditor";
 import { useShowEditor } from "../editor/useShowEditor";
-import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show } from "../types";
+import type { Analysis, Clip, EffectInfo, Issue, Look, PowerReport, Show, StarterStyle } from "../types";
 import { Field, formatTime, Icon, Modal, useContextMenu } from "../ui";
 import { moveItem } from "../geometry";
 import { AiGenerator } from "./AiView";
+
+const STYLES: { value: StarterStyle["style"]; label: string; hint: string }[] = [
+  { value: "party", label: "Party", hint: "viel Schlagzeug, Akzente und Cues, Glitzer auf dem Höhepunkt" },
+  { value: "calm", label: "Ruhig", hint: "weiche Übergänge, wenig Akzente, Raumfarbe folgt den Akkorden" },
+  { value: "cinematic", label: "Kino", hint: "großer Bogen: Gesten auf Phrasen und Motiven, starker Hell-Dunkel-Kontrast" },
+  { value: "minimal", label: "Minimal", hint: "nur Schlagzeug und Melodie auf wenigen Strips" },
+];
+const COLORS: { value: StarterStyle["colors"]; label: string }[] = [
+  { value: "auto", label: "automatisch (nach Tonart)" },
+  { value: "cool", label: "kühl" },
+  { value: "warm", label: "warm" },
+  { value: "neon", label: "Neon" },
+  { value: "nature", label: "Natur" },
+  { value: "mono", label: "monochrom" },
+];
 
 function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   const slug = useStore((s) => s.slug)!;
@@ -25,7 +40,9 @@ function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; 
   const [name, setName] = useState("");
   const [song, setSong] = useState("");
   const [template, setTemplate] = useState("starter");
+  const [style, setStyle] = useState<StarterStyle>({ style: "party", colors: "auto", brightness: 1, strobe: false, variant: 0 });
   const songId = song || songs[0]?.id || "";
+  const chosen = STYLES.find((s) => s.value === style.style)!;
   return (
     <div className="card">
       <div>
@@ -49,12 +66,56 @@ function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; 
             <option value="empty">Leer (z. B. für die KI)</option>
           </select>
         </Field>
+        {template === "starter" && (
+          <>
+            <Field label="Stil" stack>
+              <div className="style-grid" role="group" aria-label="Stil">
+                {STYLES.map((s) => (
+                  <button
+                    key={s.value}
+                    className={`btn small${style.style === s.value ? " active" : ""}`}
+                    title={s.hint}
+                    onClick={() => setStyle({ ...style, style: s.value })}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <p className="hint" style={{ margin: "-4px 0 8px" }}>
+              {chosen.hint}
+            </p>
+            <Field label="Farben" stack>
+              <select value={style.colors} onChange={(e) => setStyle({ ...style, colors: e.target.value as StarterStyle["colors"] })}>
+                {COLORS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`Grundhelligkeit ${Math.round(style.brightness * 100)} %`} stack>
+              <input
+                type="range"
+                min={0.5}
+                max={1.3}
+                step={0.05}
+                value={style.brightness}
+                onChange={(e) => setStyle({ ...style, brightness: +e.target.value })}
+              />
+            </Field>
+            <label className="check-line">
+              <input type="checkbox" checked={style.strobe} onChange={(e) => setStyle({ ...style, strobe: e.target.checked })} />
+              Stroboskop auf dem Höhepunkt erlauben
+            </label>
+          </>
+        )}
         <button
           className="btn primary"
           style={{ width: "100%" }}
           onClick={async () => {
             try {
-              const show = await api.createShow(slug, name.trim() || "Neue Show", songId || null, template);
+              const show = await api.createShow(slug, name.trim() || "Neue Show", songId || null, template, style);
               await refreshShows();
               onCreated(show.id);
               setName("");
@@ -648,6 +709,23 @@ export function ShowsView() {
                 onClick={() => open(s.id)}
                 onContextMenu={(e) =>
                   ctx.open(e, [
+                    ...(s.style && s.song_id
+                      ? [
+                          {
+                            label: "Neue Variante würfeln",
+                            onClick: async () => {
+                              try {
+                                const v = await api.showVariant(slug, s.id);
+                                await refreshShows();
+                                await open(v.id);
+                                notify(`„${v.name}" erstellt`, "success");
+                              } catch (err) {
+                                notify((err as Error).message, "error");
+                              }
+                            },
+                          },
+                        ]
+                      : []),
                     { label: "Umbenennen", onClick: () => void rename(s.id, s.name) },
                     { label: "Löschen", danger: true, onClick: () => void remove(s.id, s.name) },
                   ])

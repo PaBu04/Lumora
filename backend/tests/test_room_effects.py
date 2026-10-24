@@ -7,6 +7,7 @@ from lsg.audio.features import AudioFeatures
 from lsg.geometry.led_table import build_led_table
 from lsg.model.fixture import Fixture, PolylineGeometry
 from lsg.model.show import Clip, Layer, Range, Show, Target
+from lsg.model.song import Section
 from lsg.render.autoshow import starter_show
 from lsg.render.engine import Renderer, select_leds
 from lsg.render.validate import light_issues, light_report
@@ -158,3 +159,109 @@ def test_starter_show_cues_on_drops_and_builds(project):
     assert rise and rise[0].start == 8.0 and rise[0].end == 12.0
     assert any(c.effect == "pulse" and c.params["trigger"] == "once" and c.start == 12.0 for c in cues)
     assert any(c.effect == "sweep" and c.start == 6.0 for c in cues)
+
+
+def _form_analysis():
+    """A song with a song form: quiet intro, verse, chorus (drop, the peak) with a riff and chords."""
+    from tests.test_instruments import _analysis_with
+
+    a = _analysis_with(
+        {
+            "drop": [[24.0, 1.0, 0, 0]],
+            "build": [[20.0, 0.9, 4.0, 0]],
+            "kick": [[float(x), 1.0, 0, 0] for x in np.arange(8, 40, 0.5)],
+            "snare": [[float(x), 0.8, 0, 0] for x in np.arange(9, 40, 1.0)],
+            "hihat": [[float(x), 0.5, 0, 0] for x in np.arange(8, 40, 0.25)],
+            "motif": [[8.0, 0.8, 2.0, 1], [16.0, 0.8, 2.0, 1], [28.0, 0.9, 2.0, 2], [32.0, 0.9, 2.0, 1]],
+            "chord": [[float(x), 0.6, 2.0, 60 + (x // 2) % 12] for x in np.arange(0, 40, 2.0)],
+        },
+        duration=40.0,
+    )
+    a.sections = [
+        Section(start=0, end=8, name="intro", label="A", energy=0.2, intensity=1),
+        Section(start=8, end=20, name="verse", label="B", energy=0.5, intensity=3),
+        Section(start=20, end=24, name="build", label="C", energy=0.6, intensity=3),
+        Section(start=24, end=40, name="drop", label="D", energy=0.9, intensity=5, peak=True),
+    ]
+    a.phrases = [[float(t), 4] for t in range(0, 40, 8)]
+    a.features["drums"] = [0.0] * 80 + [0.6] * 320
+    a.harmony = {"key": "A Moll", "tonic": 9, "mode": "minor", "confidence": 0.8, "chords": []}
+    return a
+
+
+def test_starter_styles_colours_strobe_and_variants(project):
+    from lsg.model.show import StarterStyle
+    from lsg.render.autoshow import PALETTES
+
+    a, t = _form_analysis(), build_led_table(project)
+
+    def make(**style):
+        return starter_show("S", "song", a, None, project, t, StarterStyle(**style))
+
+    party = make(style="party")
+    assert party.style.style == "party" and party.dynamics == 0.55
+    clips = [c for _, c in party.clips()]
+    hihat = [c for c in clips if c.params.get("trigger") == "hihat"]
+    assert hihat and all(c.start >= 24 for c in hihat)  # glitter only on the peak
+    # the same riff gets the same gesture every time it plays (outside the build-up and the drop moment)
+    gestures = {
+        (c.start, c.effect, str(c.params.get("axis")))
+        for c in clips
+        if c.params.get("trigger") == "once" and c.start in (8.0, 16.0, 32.0)
+    }
+    assert len({g[1:] for g in gestures}) == 1 and len(gestures) == 3
+    assert not any(c.effect == "strobe" for c in clips)
+    # minor key -> cool colours
+    assert "Farben cool" in party.description
+    assert {c.params.get("color") for c in clips} & {lk[1] for lk in PALETTES["cool"]}
+
+    calm = make(style="calm", strobe=True)
+    calm_clips = [c for _, c in calm.clips()]
+    assert calm.dynamics > party.dynamics
+    assert any(c.effect == "strobe" and c.start == 24.0 for c in calm_clips)  # strobe only at the peak drop
+    assert sum(c.effect == "strobe" for c in calm_clips) == 1
+
+    minimal = make(style="minimal")
+
+    def cues(show):
+        return [c for layer, c in show.clips() if layer.name == "Cues"]
+
+    assert len(cues(minimal)) < len(cues(party))  # no riff gestures, crashes or fills
+
+    # the peak is brighter than the verse
+    def kick_level(show, t0):
+        return max(c.params["brightness"] for _, c in show.clips() if c.params.get("trigger") == "kick" and c.start == t0)
+
+    assert kick_level(party, 24) > kick_level(party, 8)
+    # a variant changes the colours; explicit colours win over the key
+    warm = make(colors="warm")
+    assert {c.params.get("color") for _, c in warm.clips()} & {lk[1] for lk in PALETTES["warm"]}
+    v0 = {c.params.get("color") for c in clips}
+    v1 = {c.params.get("color") for _, c in make(variant=1).clips()}
+    assert v0 != v1
+
+
+def test_variant_endpoint(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from lsg.app import create_app
+
+    app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
+    with TestClient(app) as c:
+        slug = c.post("/api/projects", json={"name": "V"}).json()["slug"]
+        song = c.post("/api/songs/demo", params={"bpm": 120}).json()
+        for _ in range(300):
+            if c.get(f"/api/songs/{song['id']}").json()["status"] == "done":
+                break
+            import time
+
+            time.sleep(0.2)
+        show = c.post(
+            f"/api/projects/{slug}/shows",
+            json={"name": "Party", "song_id": song["id"], "style": {"style": "cinematic", "colors": "neon"}},
+        ).json()
+        assert show["style"]["style"] == "cinematic" and show["style"]["variant"] == 0
+        v = c.post(f"/api/projects/{slug}/shows/{show['id']}/variant").json()
+        assert v["name"] == "Party (Variante 1)" and v["style"]["variant"] == 1 and v["style"]["colors"] == "neon"
+        v2 = c.post(f"/api/projects/{slug}/shows/{v['id']}/variant").json()
+        assert v2["name"] == "Party (Variante 2)"

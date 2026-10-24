@@ -17,7 +17,7 @@ from lsg.geometry.sampling import curve_length, fixture_led_count
 from lsg.model.fixture import MatrixGeometry
 from lsg.model.project import Project
 from lsg.model.room import Room
-from lsg.model.show import Show
+from lsg.model.show import Show, StarterStyle
 from lsg.output import wled
 from lsg.render.autoshow import starter_show
 from lsg.render.colors import PALETTES
@@ -227,6 +227,7 @@ class NewShow(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     song_id: str | None = None
     template: str = "starter"  # starter | empty
+    style: StarterStyle | None = None  # look of a starter show
 
 
 def _features(st: AppState, show: Show) -> AudioFeatures:
@@ -251,6 +252,7 @@ def list_shows(request: Request, slug: str):
             "description": s.description,
             "clips": sum(len(l.clips) for l in s.layers),
             "layers": len(s.layers),
+            "style": s.style.model_dump() if s.style else None,
         }
         for s in st.show_store(slug).list()
     ]
@@ -281,9 +283,38 @@ async def create_show(request: Request, slug: str, body: NewShow):
             raise _404(f"song {body.song_id!r}")
         analysis = st.songs.analysis(body.song_id)
     if body.template == "starter":
-        show = starter_show(body.name, body.song_id, analysis, duration, project, build_led_table(project))
+        show = starter_show(body.name, body.song_id, analysis, duration, project, build_led_table(project), body.style)
     else:
         show = Show(name=body.name, song_id=body.song_id)
+    st.show_store(slug).save(show, "system")
+    return show
+
+
+@router.post("/projects/{slug}/shows/{show_id}/variant")
+async def show_variant(request: Request, slug: str, show_id: str):
+    """A new starter show for the same song in the same style, with the next variant number."""
+    st = state(request)
+    project = _project(st, slug)
+    base = _show(st, slug, show_id)
+    if not base.song_id:
+        raise HTTPException(422, "the show has no song")
+    style = (base.style or StarterStyle()).model_copy()
+    taken = {s.style.variant for s in st.show_store(slug).list() if s.song_id == base.song_id and s.style}
+    style.variant = max(taken | {style.variant}) + 1
+    try:
+        duration = st.songs.get(base.song_id).duration
+    except KeyError:
+        raise _404(f"song {base.song_id!r}")
+    stem = base.name.split(" (Variante")[0]
+    show = starter_show(
+        f"{stem} (Variante {style.variant})",
+        base.song_id,
+        st.songs.analysis(base.song_id),
+        duration,
+        project,
+        build_led_table(project),
+        style,
+    )
     st.show_store(slug).save(show, "system")
     return show
 

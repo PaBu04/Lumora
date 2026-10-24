@@ -11,7 +11,7 @@ from lsg.audio.features import AudioFeatures
 from lsg.geometry.led_table import build_led_table
 from lsg.geometry.sampling import curve_length
 from lsg.model.fixture import MatrixGeometry
-from lsg.model.show import Clip, Layer, Show
+from lsg.model.show import Clip, Layer, Show, StarterStyle
 from lsg.output.curve import pwm_of_level
 from lsg.render.autoshow import starter_show
 from lsg.render.colors import PALETTES
@@ -530,9 +530,12 @@ def create_mcp(st: AppState) -> MCPServer:
         layers: list[dict] | None = None,
         description: str = "",
         project: str | None = None,
+        style: dict | None = None,
     ) -> dict[str, Any]:
         """Create a show for a song. template: 'empty' or 'starter' (rule-based show from the song structure).
-        Optionally pass layers directly (same format as in get_show_format). Returns the show id and issues."""
+        style (starter only): {"style": party|calm|cinematic|minimal, "colors": auto|cool|warm|neon|nature|mono,
+        "brightness": 0.3-1.5, "strobe": bool, "variant": int}. Optionally pass layers directly (same format as in
+        get_show_format). Returns the show id and issues."""
         slug = st.resolve_project(project)
         analysis, duration = None, None
         if song_id:
@@ -546,7 +549,9 @@ def create_mcp(st: AppState) -> MCPServer:
                 show = Show(name=name, song_id=song_id, description=description, layers=[Layer.model_validate(l) for l in layers])
             elif template == "starter":
                 p = st.projects.load(slug)
-                show = starter_show(name, song_id, analysis, duration, p, build_led_table(p))
+                show = starter_show(
+                    name, song_id, analysis, duration, p, build_led_table(p), StarterStyle.model_validate(style or {})
+                )
             else:
                 show = Show(name=name, song_id=song_id, description=description)
         except ValidationError as exc:

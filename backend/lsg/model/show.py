@@ -69,6 +69,16 @@ class Layer(BaseModel):
     clips: list[Clip] = Field(default_factory=list)
 
 
+class StarterStyle(BaseModel):
+    """How a generated starter show looks (lsg.render.autoshow); kept on the show for new variants."""
+
+    style: Literal["party", "calm", "cinematic", "minimal"] = "party"
+    colors: Literal["auto", "cool", "warm", "neon", "nature", "mono"] = "auto"  # auto: minor key cool, major warm
+    brightness: float = Field(default=1.0, ge=0.3, le=1.5)
+    strobe: bool = False  # strobe flashes on the song's peak
+    variant: int = Field(default=0, ge=0)
+
+
 class Show(BaseModel):
     """Layers are composited bottom (first) to top (last)."""
 
@@ -80,6 +90,7 @@ class Show(BaseModel):
     master: float = Field(default=1.0, ge=0, le=1)
     # 0..1: how much quiet passages of the song darken the whole show (1 = quiet parts nearly dark)
     dynamics: float = Field(default=0.0, ge=0, le=1)
+    style: StarterStyle | None = None  # set when the show was generated as a starter show
     layers: list[Layer] = Field(default_factory=list)
 
     def clips(self):

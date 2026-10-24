@@ -14,6 +14,7 @@ import type {
   Show,
   ShowSummary,
   SpeedTestResult,
+  StarterStyle,
   Song,
   Version,
   WledInfo,
@@ -77,8 +78,9 @@ export const api = {
   fixturePreview: (f: Fixture) => post<{ count: number; length: number }>("/api/fixtures/preview", f),
 
   shows: (slug: string) => get<ShowSummary[]>(`/api/projects/${slug}/shows`),
-  createShow: (slug: string, name: string, song_id: string | null, template: string) =>
-    post<Show>(`/api/projects/${slug}/shows`, { name, song_id, template }),
+  createShow: (slug: string, name: string, song_id: string | null, template: string, style?: StarterStyle) =>
+    post<Show>(`/api/projects/${slug}/shows`, { name, song_id, template, style: style ?? null }),
+  showVariant: (slug: string, id: string) => post<Show>(`/api/projects/${slug}/shows/${id}/variant`),
   show: (slug: string, id: string) => get<Show>(`/api/projects/${slug}/shows/${id}`),
   saveShow: (slug: string, show: Show) => put<Show>(`/api/projects/${slug}/shows/${show.id}`, show),
   deleteShow: (slug: string, id: string) => del(`/api/projects/${slug}/shows/${id}`),

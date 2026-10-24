@@ -300,3 +300,6 @@ input[type="range"]:disabled { opacity: 0.45; cursor: default; }
 .intensity > span { width: 9px; height: 9px; border-radius: 50%; background: var(--bg-4); }
 .intensity > span.on { background: var(--accent); }
 .intensity strong { color: #fbbf24; margin-left: 4px; }
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.check-line { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.check-line input { flex: none; margin-top: 2px; }

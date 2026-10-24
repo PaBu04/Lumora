@@ -259,7 +259,18 @@ export interface Show {
   duration: number | null;
   master: number;
   dynamics?: number;
+  /** set on generated starter shows */
+  style?: StarterStyle | null;
   layers: Layer[];
+}
+
+/** How a generated starter show looks (kept on the show for new variants). */
+export interface StarterStyle {
+  style: "party" | "calm" | "cinematic" | "minimal";
+  colors: "auto" | "cool" | "warm" | "neon" | "nature" | "mono";
+  brightness: number;
+  strobe: boolean;
+  variant: number;
 }
 
 export interface ShowSummary {
@@ -269,6 +280,7 @@ export interface ShowSummary {
   description: string;
   clips: number;
   layers: number;
+  style?: StarterStyle | null;
 }
 
 export interface Issue {
