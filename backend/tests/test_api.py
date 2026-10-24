@@ -166,3 +166,42 @@ def test_example_project(client):
     # once the demo song is analysed, the starter show appears
     shows = wait_for(lambda: client.get(f"/api/projects/{slug}/shows").json(), timeout=120)
     assert shows[0]["name"] == "Beispiel-Show" and shows[0]["song_id"] == song["id"] and shows[0]["clips"] > 10
+
+
+def test_export_and_import_project(client, tmp_path):
+    import io
+    import zipfile
+
+    slug = make_project(client)
+    song = client.post("/api/songs/demo", params={"bpm": 120}).json()
+    wait_for(lambda: client.get(f"/api/songs/{song['id']}").json()["status"] == "done")
+    show = client.post(f"/api/projects/{slug}/shows", json={"name": "Mit Song", "song_id": song["id"]}).json()
+    r = client.get(f"/api/projects/{slug}/export")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+    assert {"manifest.json", "project.json", f"shows/{show['id']}.json", f"songs/{song['id']}/analysis.json"} <= set(names)
+
+    # into another installation: project, show and song arrive
+    other = create_app(data_dir=tmp_path / "other", audio="null", fps=50, frontend=tmp_path / "nofrontend")
+    with TestClient(other) as c2:
+        res = c2.post("/api/projects/import", files={"file": ("p.lsg.zip", r.content, "application/zip")}).json()
+        assert res["name"] == "Wohnzimmer" and res["shows"] == 1 and res["songs_added"] == [song["id"]]
+        new = res["slug"]
+        assert len(c2.get(f"/api/projects/{new}").json()["fixtures"]) == 2
+        shows = c2.get(f"/api/projects/{new}/shows").json()
+        assert shows[0]["id"] == show["id"] and shows[0]["song_id"] == song["id"]
+        assert c2.get(f"/api/songs/{song['id']}").json()["status"] == "done"
+        assert c2.get(f"/api/songs/{song['id']}/analysis").status_code == 200
+        # importing again: a second project, the song is not copied twice
+        again = c2.post("/api/projects/import", files={"file": ("p.lsg.zip", r.content, "application/zip")}).json()
+        assert again["name"] == "Wohnzimmer (2)" and again["songs_present"] == [song["id"]]
+
+        # no files outside the project
+        evil = io.BytesIO()
+        with zipfile.ZipFile(evil, "w") as z:
+            z.writestr("manifest.json", '{"format": "lsg-project", "version": 1}')
+            z.writestr("project.json", c2.get(f"/api/projects/{new}").text)
+            z.writestr("../../evil.py", "print(1)")
+        bad = c2.post("/api/projects/import", files={"file": ("e.zip", evil.getvalue(), "application/zip")})
+        assert bad.status_code == 422 and "unerwartete" in bad.json()["detail"]
+        assert c2.post("/api/projects/import", files={"file": ("x.zip", b"nope", "application/zip")}).status_code == 422

@@ -325,6 +325,26 @@ function ViewerEditor({ project }: { project: Project }) {
   );
 }
 
+/** Save the project as one file (backup, another PC); imported again under "+ Neuer Raum". */
+function ProjectFile({ slug }: { slug: string }) {
+  const [songs, setSongs] = useState(true);
+  return (
+    <div className="card">
+      <strong>Projekt sichern</strong>
+      <p className="hint">
+        Eine Datei mit Raum, Strips, Controllern, Kalibrierung und allen Shows – als Sicherung oder für einen anderen PC. Einlesen über
+        „+ Neuer Raum…“ → „Aus Datei importieren“.
+      </p>
+      <label className="check-line">
+        <input type="checkbox" checked={songs} onChange={(e) => setSongs(e.target.checked)} /> Songs mit Audio und Analyse einpacken
+      </label>
+      <a className="btn small" href={`/api/projects/${slug}/export?songs=${songs}`} download>
+        Projekt exportieren
+      </a>
+    </div>
+  );
+}
+
 export function RoomView() {
   const project = useStore((s) => s.project);
   const slug = useStore((s) => s.slug);
@@ -544,6 +564,7 @@ export function RoomView() {
         <Versions limit={12} />
 
         <h3>Projekt</h3>
+        <ProjectFile slug={slug} />
         <button
           className="btn danger small"
           onClick={async () => {

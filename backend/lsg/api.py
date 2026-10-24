@@ -93,6 +93,44 @@ async def create_project(request: Request, body: NewProject):
     return {"slug": slug, "project": project}
 
 
+@router.get("/projects/{slug}/export")
+async def export_project_file(request: Request, slug: str, songs: bool = True):
+    """The project as one file (zip): room, strips, controllers, calibration, shows, shaders, looks,
+    floor plan and - with songs - the songs of its shows with their analysis."""
+    from lsg.storage.transfer import export_project
+
+    st = state(request)
+    project = _project(st, slug)
+    out_dir = st.data_dir / "exports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{slug}.zip"
+    await asyncio.to_thread(export_project, st.projects, st.songs, slug, out, songs)
+    name = re.sub(r"[^\w\- ]+", "", project.name).strip() or slug
+    return FileResponse(out, media_type="application/zip", filename=f"{name}.lsg.zip")
+
+
+@router.post("/projects/import")
+async def import_project_file(request: Request, file: UploadFile = File(...)):
+    """A new project from an exported file; its songs join the library (and get analysed if needed)."""
+    from lsg.storage.transfer import ImportError_, import_project
+
+    st = state(request)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "import.zip"
+        with path.open("wb") as fh:
+            while chunk := await file.read(1024 * 1024):
+                fh.write(chunk)
+        try:
+            slug, summary = await asyncio.to_thread(import_project, st.projects, st.songs, path)
+        except ImportError_ as exc:
+            raise HTTPException(422, str(exc))
+    for sid in summary["songs_added"]:
+        if st.songs.get(sid).status != "done":
+            st.analyse_song(sid)
+    await st.activate_project(slug)
+    return {"slug": slug, **summary}
+
+
 @router.post("/projects/example")
 async def create_example(request: Request):
     """A ready room to try the app without hardware: four strips, a demo song and, once the song is

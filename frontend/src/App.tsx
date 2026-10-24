@@ -65,7 +65,9 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const projects = useStore((s) => s.projects);
   const current = useStore((s) => s.slug);
   const create = useStore((s) => s.createProject);
+  const importProject = useStore((s) => s.importProject);
   const notify = useStore((s) => s.notify);
+  const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState("");
   const [shows, setShows] = useState(true);
   const [name, setName] = useState("Neuer Raum");
@@ -76,10 +78,11 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
     setName(from ? `${from.name} (Kopie)` : "Neuer Raum");
   };
   const submit = async () => {
-    if (!name.trim() || busy) return;
+    if (busy || (source === "__file__" ? !file : !name.trim())) return;
     setBusy(true);
     try {
-      await create(name.trim(), source || undefined, shows);
+      if (source === "__file__") await importProject(file!);
+      else await create(name.trim(), source || undefined, shows);
       onClose();
     } catch (e) {
       notify((e as Error).message, "error");
@@ -110,21 +113,35 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
               </div>
             </label>
           ))}
+        <label className={`list-item${source === "__file__" ? " active" : ""}`}>
+          <input type="radio" name="source" checked={source === "__file__"} onChange={() => setSource("__file__")} />
+          <div className="grow">
+            <div>Aus Datei importieren</div>
+            <div className="meta">eine mit „Projekt exportieren“ gesicherte Datei (.lsg.zip)</div>
+          </div>
+        </label>
       </div>
-      {source && (
+      {source === "__file__" && (
+        <div style={{ margin: "10px 0 0" }}>
+          <input type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </div>
+      )}
+      {source && source !== "__file__" && (
         <label className="row" style={{ margin: "10px 0 0" }}>
           <input type="checkbox" checked={shows} onChange={(e) => setShows(e.target.checked)} /> Shows mitkopieren
         </label>
       )}
-      <Field label="Name">
-        <input type="text" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-      </Field>
+      {source !== "__file__" && (
+        <Field label="Name">
+          <input type="text" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </Field>
+      )}
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         <button className="btn" onClick={onClose}>
           Abbrechen
         </button>
-        <button className="btn primary" disabled={!name.trim() || busy} onClick={submit}>
-          {source ? "Kopie anlegen" : "Anlegen"}
+        <button className="btn primary" disabled={busy || (source === "__file__" ? !file : !name.trim())} onClick={submit}>
+          {source === "__file__" ? "Importieren" : source ? "Kopie anlegen" : "Anlegen"}
         </button>
       </div>
     </Modal>

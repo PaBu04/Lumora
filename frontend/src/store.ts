@@ -56,6 +56,7 @@ interface AppStore {
   openProject: (slug: string) => Promise<void>;
   createProject: (name: string, copyFrom?: string, copyShows?: boolean) => Promise<void>;
   createExample: () => Promise<void>;
+  importProject: (file: File) => Promise<void>;
   updateProject: (fn: (p: Project) => Project) => void;
   reloadProject: () => Promise<void>;
   refreshLeds: () => Promise<void>;
@@ -201,6 +202,18 @@ export const useStore = create<AppStore>((set, get) => ({
     await get().openProject(slug);
     await get().refreshSongs();
     get().notify("Beispielraum angelegt – der Demo-Song wird analysiert, danach erscheint die Beispiel-Show unter „Shows“", "success");
+  },
+
+  importProject: async (file) => {
+    const r = await api.importProject(file);
+    await get().refreshProjects();
+    await get().openProject(r.slug);
+    await get().refreshSongs();
+    get().notify(
+      `„${r.name}“ importiert: ${r.shows} Shows, ${r.songs_added.length} neue Songs` +
+        (r.songs_present.length ? `, ${r.songs_present.length} schon vorhanden` : ""),
+      "success",
+    );
   },
 
   createProject: async (name, copyFrom, copyShows) => {

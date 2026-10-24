@@ -62,6 +62,14 @@ export const api = {
     get<{ projects: { slug: string; name: string; fixtures: number; controllers: number }[]; active: string | null }>(
       "/api/projects",
     ),
+  importProject: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return post<{ slug: string; name: string; shows: number; songs_added: string[]; songs_present: string[] }>(
+      "/api/projects/import",
+      fd,
+    );
+  },
   createExample: () => post<{ slug: string; project: Project; song: Song }>("/api/projects/example"),
   createProject: (name: string, copyFrom?: string, copyShows = true) =>
     post<{ slug: string; project: Project }>("/api/projects", { name, copy_from: copyFrom ?? null, copy_shows: copyShows }),
