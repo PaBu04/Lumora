@@ -5,6 +5,7 @@ import { HelpMenu, HelpWindows } from "./components/Help";
 import { SafetyNotice } from "./components/Safety";
 import { useStore, type Tab } from "./store";
 import { Expert, Field, Icon, Modal } from "./ui";
+import { t } from "./i18n";
 // views are loaded on demand so the first paint does not wait for three.js
 const McpInfo = lazy(() => import("./views/AiView").then((m) => ({ default: m.McpInfo })));
 const CalibrationView = lazy(() => import("./views/CalibrationView").then((m) => ({ default: m.CalibrationView })));
@@ -27,7 +28,7 @@ function Welcome() {
   const create = useStore((s) => s.createProject);
   const example = useStore((s) => s.createExample);
   const [exampleBusy, setExampleBusy] = useState(false);
-  const [name, setName] = useState("Mein Raum");
+  const [name, setName] = useState(t("Mein Raum"));
   return (
     <div className="welcome">
       <div className="card">
@@ -70,12 +71,12 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState("");
   const [shows, setShows] = useState(true);
-  const [name, setName] = useState("Neuer Raum");
+  const [name, setName] = useState(t("Neuer Raum"));
   const [busy, setBusy] = useState(false);
   const pick = (slug: string) => {
     setSource(slug);
     const from = projects.find((p) => p.slug === slug);
-    setName(from ? `${from.name} (Kopie)` : "Neuer Raum");
+    setName(from ? `${from.name}${t(" (Kopie)")}` : t("Neuer Raum"));
   };
   const submit = async () => {
     if (busy || (source === "__file__" ? !file : !name.trim())) return;

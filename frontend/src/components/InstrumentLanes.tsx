@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { t as t_ } from "../i18n";
 import type { Analysis } from "../types";
 
 type Ev = [number, number, number, number];
@@ -266,7 +267,7 @@ export function InstrumentLanes({
             g.globalAlpha = 0.4 + 0.6 * v;
             g.fillRect(x(t) - 1, y0 + 1, 2.5, LANE_H - 2);
             g.globalAlpha = 1;
-            if (v >= 0.8) g.fillText("Drop", x(t) + 4, y0 + 12);
+            if (v >= 0.8) g.fillText(t_("Drop"), x(t) + 4, y0 + 12);
           }
         }
         g.restore();
@@ -279,7 +280,7 @@ export function InstrumentLanes({
           g.globalAlpha = 1;
         }
         g.fillStyle = a > 0.3 ? "#fff" : "#9aa4b8";
-        g.fillText(lane.label, 6, y0 + LANE_H / 2 + 4);
+        g.fillText(t_(lane.label), 6, y0 + LANE_H / 2 + 4);
       });
       if (position !== undefined && position >= t0 && position <= t1) {
         g.fillStyle = "#fff";

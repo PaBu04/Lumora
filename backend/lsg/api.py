@@ -134,32 +134,45 @@ async def import_project_file(request: Request, file: UploadFile = File(...)):
 
 
 @router.post("/projects/example")
-async def create_example(request: Request):
+async def create_example(request: Request, lang: str = "de"):
     """A ready room to try the app without hardware: four strips, a demo song and, once the song is
     analysed, a starter show (shown in the 3D preview)."""
     from lsg.model.fixture import CircleGeometry, Fixture, PolylineGeometry
 
     st = state(request)
+    en = lang == "en"
     room = Room(floor=[(0, 0), (5, 0), (5, 4), (0, 4)], height=2.5)
-    project = Project(name="Beispielraum", room=room)
+    project = Project(name="Example room" if en else "Beispielraum", room=room)
     project.viewer.position = (2.5, 0.8, 1.2)
     project.viewer.yaw_deg = 90.0
     z = 2.42
     project.fixtures = [
-        Fixture(name="Decke vorne", geometry=PolylineGeometry(points=[(0.1, 3.9, z), (4.9, 3.9, z)]), leds_per_meter=60),
         Fixture(
-            name="Decke Rand",
+            name="Ceiling front" if en else "Decke vorne",
+            geometry=PolylineGeometry(points=[(0.1, 3.9, z), (4.9, 3.9, z)]),
+            leds_per_meter=60,
+        ),
+        Fixture(
+            name="Ceiling edge" if en else "Decke Rand",
             geometry=PolylineGeometry(points=[(4.9, 3.6, z), (4.9, 0.1, z), (0.1, 0.1, z), (0.1, 3.6, z)]),
             leds_per_meter=30,
             tags=["ceiling"],
         ),
-        Fixture(name="Hinter dem TV", geometry=PolylineGeometry(points=[(1.6, 3.95, 0.8), (3.4, 3.95, 0.8)]), leds_per_meter=60),
-        Fixture(name="Deckenring", geometry=CircleGeometry(center=(2.5, 2.4, z), radius=0.6), leds_per_meter=60),
+        Fixture(
+            name="Behind the TV" if en else "Hinter dem TV",
+            geometry=PolylineGeometry(points=[(1.6, 3.95, 0.8), (3.4, 3.95, 0.8)]),
+            leds_per_meter=60,
+        ),
+        Fixture(
+            name="Ceiling ring" if en else "Deckenring",
+            geometry=CircleGeometry(center=(2.5, 2.4, z), radius=0.6),
+            leds_per_meter=60,
+        ),
     ]
     slug = st.projects.create(project)
     await st.activate_project(slug)
     with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "LSG - Beispiel 124 BPM.wav"
+        path = Path(tmp) / ("LSG - Example 124 BPM.wav" if en else "LSG - Beispiel 124 BPM.wav")
         await asyncio.to_thread(make_demo_track, path, 124.0)
         song = await asyncio.to_thread(st.songs.add_file, path)
 
@@ -168,7 +181,13 @@ async def create_example(request: Request):
             return
         p = st.projects.load(slug)
         show = starter_show(
-            "Beispiel-Show", song.id, st.songs.analysis(song.id), analysed.duration, p, build_led_table(p), StarterStyle()
+            "Example show" if en else "Beispiel-Show",
+            song.id,
+            st.songs.analysis(song.id),
+            analysed.duration,
+            p,
+            build_led_table(p),
+            StarterStyle(),
         )
         st.show_store(slug).save(show, "system")
         await st.session.broadcast_event({"kind": "show_changed", "project": slug, "show": show.id})

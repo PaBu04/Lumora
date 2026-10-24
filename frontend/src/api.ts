@@ -76,7 +76,7 @@ export const api = {
       models: { name: string; license: string; use: string; bundled: boolean }[];
     }>("/api/licenses"),
   diagnostics: () => get<{ diagnostics: Record<string, unknown>; log: string }>("/api/diagnostics"),
-  createExample: () => post<{ slug: string; project: Project; song: Song }>("/api/projects/example"),
+  createExample: (lang: string) => post<{ slug: string; project: Project; song: Song }>(`/api/projects/example?lang=${lang}`),
   createProject: (name: string, copyFrom?: string, copyShows = true) =>
     post<{ slug: string; project: Project }>("/api/projects", { name, copy_from: copyFrom ?? null, copy_shows: copyShows }),
   project: (slug: string) => get<Project>(`/api/projects/${slug}`),

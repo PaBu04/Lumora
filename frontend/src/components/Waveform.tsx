@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { t } from "../i18n";
 import type { Analysis } from "../types";
 
 export const SECTION_COLORS: Record<string, string> = {
@@ -25,7 +26,7 @@ export const SECTION_NAMES: Record<string, string> = {
   drop: "Drop",
   outro: "Outro",
 };
-export const sectionName = (name: string) => SECTION_NAMES[name] ?? name;
+export const sectionName = (name: string) => t(SECTION_NAMES[name] ?? name);
 
 /** Waveform with section bands and beat grid; optional playhead and click-to-seek. */
 export function Waveform({

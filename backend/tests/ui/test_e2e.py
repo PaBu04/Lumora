@@ -70,7 +70,7 @@ def env(tmp_path_factory):
             browser = p.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
         except Exception as exc:  # browser not installed
             pytest.skip(f"Playwright Chromium not available: {exc}")
-        page = browser.new_page(viewport={"width": 1600, "height": 950})
+        page = browser.new_page(viewport={"width": 1600, "height": 950}, locale="de-DE")  # the German interface
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
@@ -203,3 +203,20 @@ def test_full_workflow(env):
     page.click("button:has-text('Muster beenden')")
 
     assert env["errors"] == []
+
+
+def test_english_interface(env):
+    """With an English browser the interface is English (help, tabs, empty states)."""
+    page = env["page"].context.browser.new_page(viewport={"width": 1400, "height": 900}, locale="en-US")
+    try:
+        page.goto(env["base"])
+        page.wait_for_selector("nav")
+        page.wait_for_timeout(1500)
+        nav = page.locator("nav").inner_text()
+        assert "LED strips" in nav and "Calibration" in nav and "Kalibrierung" not in nav
+        page.get_by_role("button", name="? Help").click()
+        page.get_by_text("Manual", exact=True).click()
+        page.wait_for_selector("text=Your first show in six steps")
+        shot(page, "10_english_manual")
+    finally:
+        page.close()

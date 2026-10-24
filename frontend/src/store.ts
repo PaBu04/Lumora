@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "./api";
 import { friendly } from "./errors";
+import { lang } from "./i18n";
 import type { AiRun, LedData, PlaybackState, Project, ShowSummary, Song } from "./types";
 
 export type Tab = "room" | "fixtures" | "devices" | "calibration" | "songs" | "shows";
@@ -197,7 +198,7 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   createExample: async () => {
-    const { slug } = await api.createExample();
+    const { slug } = await api.createExample(lang);
     await get().refreshProjects();
     await get().openProject(slug);
     await get().refreshSongs();

@@ -18,6 +18,7 @@ import { EmptyState, Field, formatTime, Icon, Modal, useContextMenu } from "../u
 import { moveItem } from "../geometry";
 import { AiGenerator } from "./AiView";
 import { Help } from "../components/Help";
+import { t } from "../i18n";
 
 const STYLES: { value: StarterStyle["style"]; label: string; hint: string }[] = [
   { value: "party", label: "Party", hint: "viel Schlagzeug, Akzente und Cues, Glitzer auf dem Höhepunkt" },
@@ -117,7 +118,7 @@ function NewShowForm({ onCreated, onClose }: { onCreated: (id: string) => void; 
           style={{ width: "100%" }}
           onClick={async () => {
             try {
-              const show = await api.createShow(slug, name.trim() || "Neue Show", songId || null, template, style);
+              const show = await api.createShow(slug, name.trim() || t("Neue Show"), songId || null, template, style);
               await refreshShows();
               onCreated(show.id);
               setName("");

@@ -4,12 +4,13 @@ import { useStore } from "../store";
 import { formatTime } from "../ui";
 import { friendly } from "../errors";
 import { Help } from "../components/Help";
+import { t } from "../i18n";
 
 const EXAMPLES = [
   "Dunkel und atmosphärisch: im Intro nur leichtes Glimmen, im Refrain Treffer auf Kick und Snare auf den Strips vor mir, die Strips hinter mir nur als Raumfarbe, bei Drops ein Lichtband vom Boden zur Decke.",
   "Ruhig und warm in Bernstein und Rot: wenige, langsame Bewegungen, Akzente nur auf den Taktanfängen, Höhepunkt im letzten Refrain.",
   "Party: kräftige Farben, viel Abwechslung zwischen den Strips, Hi-Hats als Glitzern, kurze Blitze im ganzen Raum vor jedem Refrain.",
-];
+].map((e) => t(e));
 
 /** Minimal inline markdown: **bold** and `code`. */
 function Md({ text }: { text: string }) {
@@ -40,7 +41,7 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
   const notify = useStore((s) => s.notify);
   const [claude, setClaude] = useState<{ installed: boolean; version: string | null } | null>(null);
   const [song, setSong] = useState("");
-  const [name, setName] = useState("KI-Show");
+  const [name, setName] = useState(t("KI-Show"));
   const [target, setTarget] = useState("new");
   const [prompt, setPrompt] = useState(EXAMPLES[0]);
   const [models, setModels] = useState<Record<string, string>>({});
@@ -156,7 +157,7 @@ export function AiGenerator({ onOpenShow }: { onOpenShow?: () => void }) {
           disabled={busy || !slug || !songId || prompt.trim().length < 3}
           onClick={async () => {
             try {
-              setRun(await api.aiRun({ project: slug!, prompt, song_id: songId || null, show_name: name.trim() || "KI-Show", show_id: target === "new" ? null : target, model }));
+              setRun(await api.aiRun({ project: slug!, prompt, song_id: songId || null, show_name: name.trim() || t("KI-Show"), show_id: target === "new" ? null : target, model }));
             } catch (e) {
               notify((e as Error).message, "error");
             }
