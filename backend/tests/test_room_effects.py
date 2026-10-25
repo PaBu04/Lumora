@@ -247,7 +247,7 @@ def test_variant_endpoint(tmp_path):
     from lumora.app import create_app
 
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "V"}).json()["slug"]
         song = c.post("/api/songs/demo", params={"bpm": 120}).json()
         for _ in range(300):

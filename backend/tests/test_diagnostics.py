@@ -23,7 +23,7 @@ def test_redact():
 
 def test_package_without_private_data(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "Wohnung Familie Muster"}).json()["slug"]
         project = c.get(f"/api/projects/{slug}").json()
         project["fixtures"] = [
@@ -67,14 +67,16 @@ def test_package_without_private_data(tmp_path):
 
 def test_preview_is_redacted_too(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         c.post("/api/projects", json={"name": "Wohnung Familie Muster"})
         d = c.get("/api/diagnostics").json()
         assert "Muster" not in str(d) and "muster" not in str(d)
 
 
 def test_licenses(tmp_path):
-    with TestClient(create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")) as c:
+    with TestClient(
+        create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x"), base_url="http://127.0.0.1"
+    ) as c:
         lic = c.get("/api/licenses").json()
         names = {p["name"]: p["license"] for p in lic["python"]}
         assert "MIT" in names["fastapi"] and names["librosa"] and names["onnxruntime"]

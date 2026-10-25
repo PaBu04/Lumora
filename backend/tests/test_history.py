@@ -74,7 +74,7 @@ def test_history_limit(tmp_path, monkeypatch):
 
 def test_versions_api(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "H"}).json()["slug"]
         p = c.get(f"/api/projects/{slug}").json()
         p["room"]["height"] = 3.0

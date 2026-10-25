@@ -14,7 +14,7 @@ def png(w: int, h: int) -> bytes:
 
 def test_floorplan_upload_scale_and_delete(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "Plan"}).json()["slug"]
         r = c.post(f"/api/projects/{slug}/floorplan", files={"file": ("grundriss.png", png(800, 400), "image/png")})
         assert r.status_code == 200, r.text

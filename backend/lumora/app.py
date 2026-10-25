@@ -4,16 +4,49 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.datastructures import Headers
+from starlette.websockets import WebSocketClose
 
 from lumora import config
 from lumora.api import router, websocket_endpoint
 from lumora.mcp_server import create_mcp
 from lumora.state import AppState
+
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+class LocalOnly:
+    """Keeps other websites out of the app on localhost.
+
+    Without CORS headers a browser does not let other sites read the answers, but it still sends their form
+    posts and file uploads and opens WebSockets; DNS rebinding even makes such a site look like the same
+    origin. So a request must name a local host (while the app listens on localhost), and a browser request
+    must come from the app's own origin. Clients without an Origin header (Claude Code, scripts) pass.
+    """
+
+    def __init__(self, app, check_host: bool):
+        self.app = app
+        self.check_host = check_host
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            headers = Headers(scope=scope)
+            host = headers.get("host", "")
+            origin = headers.get("origin")
+            foreign_host = self.check_host and urlsplit(f"//{host}").hostname not in LOCAL_HOSTS
+            if foreign_host or (origin is not None and urlsplit(origin).netloc != host):
+                if scope["type"] == "websocket":
+                    await WebSocketClose(code=1008)(scope, receive, send)
+                else:
+                    await PlainTextResponse("request from another website refused", status_code=403)(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 def create_app(
@@ -50,6 +83,7 @@ def create_app(
         st.shutdown()
 
     app = FastAPI(title="Lumora", lifespan=lifespan)
+    app.add_middleware(LocalOnly, check_host=config.HOST in LOCAL_HOSTS)
     app.state.lumora = st
     app.include_router(router)
     app.add_api_websocket_route("/ws", websocket_endpoint)

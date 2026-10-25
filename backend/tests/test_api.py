@@ -21,7 +21,7 @@ FIXTURES = [
 @pytest.fixture
 def client(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "nofrontend")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         yield c
 
 
@@ -100,7 +100,7 @@ def test_song_show_playback_flow(client):
     ).content
     assert png[:4] == b"\x89PNG"
 
-    with client.websocket_connect("/ws") as ws:
+    with client.websocket_connect("ws://127.0.0.1/ws") as ws:
         state = ws.receive_json()
         assert state["type"] == "state"
         r = client.post("/api/playback/load", json={"project": slug, "show": show["id"]})
@@ -183,7 +183,7 @@ def test_export_and_import_project(client, tmp_path):
 
     # into another installation: project, show and song arrive
     other = create_app(data_dir=tmp_path / "other", audio="null", fps=50, frontend=tmp_path / "nofrontend")
-    with TestClient(other) as c2:
+    with TestClient(other, base_url="http://127.0.0.1") as c2:
         res = c2.post("/api/projects/import", files={"file": ("p.lumora.zip", r.content, "application/zip")}).json()
         assert res["name"] == "Wohnzimmer" and res["shows"] == 1 and res["songs_added"] == [song["id"]]
         new = res["slug"]
@@ -219,3 +219,28 @@ def test_creation_and_upload_dates(client, tmp_path):
     song = client.post("/api/songs/demo", params={"bpm": 120}).json()
     assert before <= song["added"] <= time.time() + 1
     assert client.get("/api/songs").json()[0]["added"] == song["added"]
+
+
+def test_other_websites_are_refused(client):
+    """Form posts and uploads from another site, DNS rebinding and foreign WebSockets get no access."""
+    from starlette.websockets import WebSocketDisconnect
+
+    evil = {"origin": "http://evil.example"}
+    assert client.post("/api/projects", json={"name": "X"}, headers=evil).status_code == 403
+    upload = {"file": ("p.lumora.zip", b"PK", "application/zip")}
+    assert client.post("/api/projects/import", files=upload, headers=evil).status_code == 403
+    assert client.post("/api/playback/play", headers={"origin": "null"}).status_code == 403
+    # rebinding: evil.example now resolves to 127.0.0.1, so the page looks like the same origin
+    rebound = {"host": "evil.example:8000", "origin": "http://evil.example:8000"}
+    assert client.get("/api/projects", headers=rebound).status_code == 403
+    with pytest.raises(WebSocketDisconnect), client.websocket_connect("ws://127.0.0.1/ws", headers=evil):
+        pass
+    assert client.get("/api/projects").json()["projects"] == []
+
+    # the app's own page, the Vite dev server and clients without an Origin header
+    assert client.post("/api/projects", json={"name": "A"}, headers={"origin": "http://127.0.0.1"}).status_code == 200
+    dev = {"host": "localhost:5173", "origin": "http://localhost:5173"}
+    assert client.get("/api/projects", headers=dev).status_code == 200
+    assert client.post("/api/playback/pause").status_code == 200
+    with client.websocket_connect("ws://127.0.0.1/ws", headers={"origin": "http://127.0.0.1"}) as ws:
+        assert ws.receive_json()["type"] == "state"

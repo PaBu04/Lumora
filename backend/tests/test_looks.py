@@ -75,7 +75,7 @@ def test_builtin_looks_render(project):
 
 def test_looks_api(tmp_path):
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "L"}).json()["slug"]
         show = c.post(f"/api/projects/{slug}/shows", json={"name": "S", "template": "empty"}).json()
         show["duration"] = 60

@@ -76,12 +76,14 @@ def test_settings_api(tmp_path):
     from lumora.app import create_app
 
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         s = c.get("/api/settings").json()
         assert s["flash_limit"] == 3.0 and s["safety_ack"] is False
         s = c.put("/api/settings", json={"flash_limit": 0, "safety_ack": True}).json()
         assert s["flash_limit"] == 0 and s["safety_ack"] and safety.LIMIT_HZ == 0
         assert c.put("/api/settings", json={"flash_limit": 50}).status_code == 422
     # remembered across a restart
-    with TestClient(create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")) as c:
+    with TestClient(
+        create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x"), base_url="http://127.0.0.1"
+    ) as c:
         assert c.get("/api/settings").json()["safety_ack"] is True

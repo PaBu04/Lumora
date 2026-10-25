@@ -50,7 +50,7 @@ def test_run_through_api_with_fake_cli(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(args_file))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-be-passed")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]
         status = c.get("/api/ai/status").json()
         assert status["claude"]["installed"] and "fake" in status["claude"]["version"]
@@ -86,7 +86,7 @@ def test_model_fallback_and_update(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(args_file))
     monkeypatch.setenv("FAKE_CLAUDE_OLD", "1")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]
         status = c.get("/api/ai/status").json()
         assert status["model"] == "claude-opus-5-5" and "claude-sonnet-5-5" in status["models"]
@@ -113,7 +113,7 @@ def test_cancel(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CLAUDE_ARGS", str(tmp_path / "a.json"))
     monkeypatch.setenv("FAKE_CLAUDE_SLOW", "1")
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]
         c.post("/api/ai/run", json={"project": slug, "prompt": "langsam bitte"})
         time.sleep(1.0)
@@ -129,7 +129,7 @@ def test_cancel(tmp_path, monkeypatch):
 def test_missing_cli(tmp_path, monkeypatch):
     monkeypatch.setattr("lumora.ai_agent.claude_command", lambda: None)
     app = create_app(data_dir=tmp_path, audio="null", fps=50, frontend=tmp_path / "x")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "KI"}).json()["slug"]
         r = c.post("/api/ai/run", json={"project": slug, "prompt": "hallo du"})
         assert r.status_code == 424 and "nicht gefunden" in r.json()["detail"]

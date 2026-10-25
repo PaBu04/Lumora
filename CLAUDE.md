@@ -68,6 +68,9 @@ starter shows from instruments + song form.
 `/api`), the WebSocket (`/ws`), the MCP server (`/mcp`) and the phone remote (`remote.py`, separate port 8010).
 After a write, call `st.project_changed(slug)` / `st.show_changed(slug, id)`. That hot-reloads the session and
 broadcasts an event, and the frontend (`ws.ts` → zustand `store.ts`) then refetches.
+The `app.LocalOnly` middleware refuses requests whose Host isn't a loopback name or whose Origin differs from the
+Host (CSRF / DNS-rebinding protection). That's why tests create `TestClient(app, base_url="http://127.0.0.1")` and
+connect WebSockets to `ws://127.0.0.1/ws`.
 
 **Storage.** Everything is JSON under `LUMORA_DATA` (default `./data`, gitignored), written with
 `atomic_write_text` (retries for files Windows locks briefly). `storage/history.py` keeps a version per save:

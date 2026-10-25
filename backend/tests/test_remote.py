@@ -19,7 +19,7 @@ def _app(tmp_path, monkeypatch):
 
 def test_remote_needs_the_key_and_controls_playback(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch)
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         slug = c.post("/api/projects", json={"name": "R"}).json()["slug"]
         project = c.get(f"/api/projects/{slug}").json()
         project["fixtures"] = [{"id": "f", "geometry": {"type": "polyline", "points": [[0, 3, 2], [4, 3, 2]]}, "led_count": 60}]
