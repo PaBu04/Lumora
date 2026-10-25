@@ -1,4 +1,4 @@
-# Starts the Lumora (builds the web UI on first run).
+# Starts Lumora (builds the web UI on first run).
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $python = Join-Path $root "backend\.venv\Scripts\python.exe"
