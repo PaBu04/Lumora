@@ -247,3 +247,8 @@ Browser-Test aus.
   ist aber keine Sicherheitsgrenze gegen absichtlich bösartigen Code.
 - Abschnittsnamen sind heuristisch; die Ähnlichkeits-Labels (A, B, C …) zeigen, welche Teile gleich klingen.
 - Die Schnittstelle für Claude Code ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).
+
+## Lizenz
+
+[MIT](LICENSE). Das mitgelieferte Notenmodell *Basic Pitch* steht unter Apache-2.0
+(`backend/lumora/audio/models/NOTICE-basic-pitch`); die Lizenzen aller Bausteine zeigt *Über diese App*.

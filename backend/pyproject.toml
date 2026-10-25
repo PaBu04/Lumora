@@ -3,6 +3,7 @@ name = "lumora"
 version = "1.0.0"
 description = "Lumora - music-synchronised LED shows for WLED controllers"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "numpy>=2.1",
     "pydantic>=2.9",
