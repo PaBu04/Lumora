@@ -229,7 +229,7 @@ def _harmony_summary(h: dict | None, start: float, end: float) -> dict | None:
 
 
 def create_mcp(st: AppState) -> MCPServer:
-    mcp = MCPServer(name="lumora", instructions=INSTRUCTIONS, version="1.0.0")
+    mcp = MCPServer(name="lumora", instructions=INSTRUCTIONS, version="1.0.1")
 
     def project_and_table(project: str | None):
         slug = st.resolve_project(project)
