@@ -248,6 +248,21 @@ Browser-Test aus.
 - Abschnittsnamen sind heuristisch; die Ähnlichkeits-Labels (A, B, C …) zeigen, welche Teile gleich klingen.
 - Die Schnittstelle für Claude Code ist nur lokal erreichbar (DNS-Rebinding-Schutz für localhost).
 
+## Mit KI entwickelt
+
+Lumora ist mit KI entstanden: Code, Tests und Dokumentation wurden mit [Claude Code](https://claude.com/claude-code)
+(Anthropic) geschrieben. Jeder Commit ist mit `Co-Authored-By: Claude` gekennzeichnet.
+
+## Sicherheit
+
+Lumora ist für den Betrieb auf dem eigenen PC gedacht; den Server bitte nicht ins Internet stellen. Sicherheitslücken
+bitte nicht als öffentliches Issue melden, sondern wie in [SECURITY.md](SECURITY.md) beschrieben.
+
+## Unterstützen
+
+Lumora ist kostenlos und bleibt es. Wer möchte, kann die Entwicklung freiwillig unterstützen, über
+[GitHub Sponsors](https://github.com/sponsors/PaBu04) oder [Ko-fi](https://ko-fi.com/paulbuda).
+
 ## Lizenz
 
 [MIT](LICENSE). Das mitgelieferte Notenmodell *Basic Pitch* steht unter Apache-2.0
