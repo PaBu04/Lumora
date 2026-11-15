@@ -13,6 +13,19 @@ THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
 const LED_RADIUS = 0.02;
 const IDLE = new THREE.Color("#4a5468");
+// first LED of a marked strip (its data input) green, the rest amber; dimmer where the LED itself is dark
+const MARK_FIRST = new THREE.Color("#33ff66");
+const MARK_REST = new THREE.Color("#ffb020");
+const MARK_DIM = 0.8;
+const DARK = 0.02 * 255; // r + g + b below this: the LED counts as off
+/** Frame byte (sRGB, boosted so lit LEDs bloom) -> the linear value three.js draws with. One lookup
+ * per channel instead of a colour conversion per LED and frame. */
+const BYTE_TO_LINEAR = (() => {
+  const lut = new Float32Array(256);
+  const c = new THREE.Color();
+  for (let v = 0; v < 256; v++) lut[v] = c.setRGB((v / 255) * 2.2, 0, 0, THREE.SRGBColorSpace).r;
+  return lut;
+})();
 
 function RoomModel({ room }: { room: Room }) {
   const floor = useMemo(() => {
@@ -73,7 +86,6 @@ function RoomModel({ room }: { room: Room }) {
 function LedInstances({ leds, highlight }: { leds: LedData; highlight: { start: number; count: number } | null }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const seen = useRef("");
-  const color = useMemo(() => new THREE.Color(), []);
 
   useEffect(() => {
     const mesh = ref.current;
@@ -96,19 +108,35 @@ function LedInstances({ leds, highlight }: { leds: LedData; highlight: { start: 
     const key = `${hasFrame ? liveFrame.version : -1}|${highlight?.start}|${highlight?.count}|${leds.count}`;
     if (key === seen.current) return;
     seen.current = key;
+    const attr = mesh.instanceColor;
+    if (!attr) return; // created by the setColorAt calls of the effect above
+    const out = attr.array as Float32Array;
     const c = liveFrame.colors;
-    for (let i = 0; i < leds.count; i++) {
-      const r = hasFrame ? c[i * 3] / 255 : 0,
-        g = hasFrame ? c[i * 3 + 1] / 255 : 0,
-        b = hasFrame ? c[i * 3 + 2] / 255 : 0;
-      if (highlight && i >= highlight.start && i < highlight.start + highlight.count) {
-        // first LED (data input) green, rest of the selected strip amber
-        color.set(i === highlight.start ? "#33ff66" : "#ffb020").multiplyScalar(r + g + b > 0.02 ? 1 : 0.8);
-      } else if (r + g + b < 0.02) color.copy(IDLE);
-      else color.setRGB(r * 2.2, g * 2.2, b * 2.2, THREE.SRGBColorSpace);
-      mesh.setColorAt(i, color);
+    const lut = BYTE_TO_LINEAR;
+    const markStart = highlight ? highlight.start : -1;
+    const markEnd = highlight ? highlight.start + highlight.count : -1;
+    for (let i = 0, o = 0; i < leds.count; i++, o += 3) {
+      const r = hasFrame ? c[o] : 0,
+        g = hasFrame ? c[o + 1] : 0,
+        b = hasFrame ? c[o + 2] : 0;
+      const dark = r + g + b < DARK;
+      if (i >= markStart && i < markEnd) {
+        const m = i === markStart ? MARK_FIRST : MARK_REST;
+        const k = dark ? MARK_DIM : 1;
+        out[o] = m.r * k;
+        out[o + 1] = m.g * k;
+        out[o + 2] = m.b * k;
+      } else if (dark) {
+        out[o] = IDLE.r;
+        out[o + 1] = IDLE.g;
+        out[o + 2] = IDLE.b;
+      } else {
+        out[o] = lut[r];
+        out[o + 1] = lut[g];
+        out[o + 2] = lut[b];
+      }
     }
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    attr.needsUpdate = true;
   });
 
   return (

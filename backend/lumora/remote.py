@@ -77,7 +77,7 @@ def create_remote_app(st: "AppState") -> FastAPI:
     def state() -> dict:
         s = st.session
         lo = s.loaded
-        shows = st.show_store(lo.project_slug).list() if lo else []
+        shows = st.show_store(lo.project_slug).names() if lo else []
         pb = s.state()
         return {
             "show": pb.get("show"),
@@ -87,7 +87,7 @@ def create_remote_app(st: "AppState") -> FastAPI:
             "duration": pb.get("duration"),
             "mode": pb.get("mode"),
             "brightness": s.output.brightness,
-            "shows": [{"id": x.id, "name": x.name} for x in shows if x.id != "__sync__"],
+            "shows": [{"id": sid, "name": name} for sid, name in shows if sid != "__sync__"],
         }
 
     @app.get("/", response_class=HTMLResponse)

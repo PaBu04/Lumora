@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import shutil
@@ -14,6 +15,8 @@ from lumora.storage.history import History, show_summary
 from lumora.storage.project_store import atomic_write_text
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# shows folder -> (name, mtime, size of its files; the (id, name) list read from them), see ShowStore.names
+_NAMES_CACHE: dict[str, tuple[dict[str, tuple[int, int]], list[tuple[str, str]]]] = {}
 
 
 class ShowStore:
@@ -38,6 +41,25 @@ class ShowStore:
         ]
         rank = {sid: i for i, sid in enumerate(self.order())}
         return sorted(shows, key=lambda s: (rank.get(s.id, len(rank)), s.name.lower()))
+
+    def names(self) -> list[tuple[str, str]]:
+        """(id, name) of every show in list order, without parsing shows that did not change.
+
+        For callers that ask often and need no more (the phone remote polls once a second):
+        parsing every show each time would take milliseconds away from the playback loop."""
+        if not self.shows_dir.exists():
+            return []
+        files = {}
+        for p in self.shows_dir.glob("*.json"):
+            with contextlib.suppress(OSError):
+                st = p.stat()
+                files[p.name] = (st.st_mtime_ns, st.st_size)
+        key = str(self.shows_dir)
+        cached = _NAMES_CACHE.get(key)
+        if cached is None or cached[0] != files:
+            cached = (files, [(s.id, s.name) for s in self.list()])
+            _NAMES_CACHE[key] = cached
+        return list(cached[1])
 
     def _order_path(self) -> Path:
         return self.shows_dir / "order.json"

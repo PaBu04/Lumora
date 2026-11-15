@@ -40,18 +40,20 @@ class History:
             source = "ui"
         entries = self._entries()
         now = int(time.time() * 1000)
+        kept = len(entries) + 1
         if entries:
             ts, src, path = entries[-1]
-            if json.loads(path.read_text(encoding="utf-8"))["content"] == content:
+            previous = json.loads(path.read_text(encoding="utf-8"))
+            if previous["content"] == content:
                 return path.stem  # nothing changed
             if src == "ui" and source == "ui" and (now - ts) / 1000 < COALESCE_SECONDS:
-                previous = json.loads(path.read_text(encoding="utf-8"))
                 summary = _merge_summary(previous.get("summary", ""), summary)
                 path.unlink()
+                kept -= 1
         now = max(now, entries[-1][0] + 1 if entries else now)
         vid = f"{now}-{source}"
         atomic_write_text(self.dir / f"{vid}.json", json.dumps({"summary": summary, "content": content}))
-        for _, _, p in self._entries()[:-MAX_VERSIONS]:
+        for _, _, p in entries[: max(0, kept - MAX_VERSIONS)]:  # the oldest ones beyond the limit
             p.unlink(missing_ok=True)
         return vid
 

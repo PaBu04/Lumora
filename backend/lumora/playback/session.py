@@ -141,7 +141,9 @@ class PlaybackSession:
         """Make a project current (keeps the show if it belongs to the project)."""
         project = self.app.projects.load(slug)
         table = await asyncio.to_thread(build_led_table, project)
-        hosts = {c.id: await asyncio.to_thread(resolve_host, c.host) for c in project.controllers}
+        # all at once: a controller that is switched off takes seconds to fail its name lookup
+        resolved = await asyncio.gather(*(asyncio.to_thread(resolve_host, c.host) for c in project.controllers))
+        hosts = {c.id: ip for c, ip in zip(project.controllers, resolved, strict=True)}
         show = self.loaded.show if self.loaded and self.loaded.project_slug == slug else None
         self.loaded = Loaded(slug, project, table, OutputPipeline(project, table), hosts, show)
         self._sync_links()
