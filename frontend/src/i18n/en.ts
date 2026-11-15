@@ -30,6 +30,8 @@ export const EN: Record<string, string> = {
   "Bilder auch an die WLED-Controller senden": "Also send frames to the WLED controllers",
   Ausgabe: "Output",
   "Backend nicht erreichbar: {0}": "Backend not reachable: {0}",
+  "Nicht übernommen, weil ihr Code die Prüfung nicht besteht: eigene Effekte {0}":
+    "Left out because their code does not pass the check: custom effects {0}",
   "Lade…": "Loading…",
   "Schließen (Esc)": "Close (Esc)",
   "Ziehen zum Ändern der Größe · Doppelklick: zurücksetzen": "Drag to resize · double-click: reset",

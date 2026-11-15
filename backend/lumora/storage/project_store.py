@@ -13,6 +13,9 @@ from lumora.model.project import Project
 
 PROJECT_FILE = "project.json"
 SUBDIRS = ("songs", "shows", "shaders")
+# a slug is a folder name under the projects folder and arrives in URLs: nothing that leaves that folder
+# (and no trailing dot or space, which Windows drops - two slugs would then name one folder)
+_SLUG_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,98}[A-Za-z0-9])?")
 
 
 def slugify(name: str) -> str:
@@ -44,12 +47,20 @@ class ProjectStore:
         self.root = Path(root)
 
     def project_dir(self, slug: str) -> Path:
+        if not _SLUG_RE.fullmatch(slug) or ".." in slug:
+            raise KeyError(slug)
         return self.root / slug
+
+    def exists(self, slug: str) -> bool:
+        try:
+            return (self.project_dir(slug) / PROJECT_FILE).is_file()
+        except KeyError:
+            return False
 
     def list(self) -> list[str]:
         if not self.root.exists():
             return []
-        return sorted(p.name for p in self.root.iterdir() if (p / PROJECT_FILE).is_file())
+        return sorted(p.name for p in self.root.iterdir() if self.exists(p.name))
 
     def create(self, project: Project) -> str:
         base = slugify(project.name)
@@ -87,6 +98,9 @@ class ProjectStore:
         return slug
 
     def load(self, slug: str) -> Project:
+        """FileNotFoundError if there is no such project."""
+        if not self.exists(slug):
+            raise FileNotFoundError(slug)
         text = (self.project_dir(slug) / PROJECT_FILE).read_text(encoding="utf-8")
         return Project.model_validate_json(text)
 

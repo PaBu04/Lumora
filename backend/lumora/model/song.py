@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from lumora.model.common import Id, new_id
+from lumora.model.common import FileName, Id, new_id
 
 AnalysisStatus = Literal["pending", "running", "done", "error"]
 
@@ -11,7 +11,7 @@ class Song(BaseModel):
     id: Id = Field(default_factory=new_id)
     title: str
     artist: str = ""
-    filename: str
+    filename: FileName
     duration: float = 0.0
     status: AnalysisStatus = "pending"
     error: str | None = None

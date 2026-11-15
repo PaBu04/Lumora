@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -11,6 +12,7 @@ import numpy as np
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field, ValidationError
+from starlette.background import BackgroundTask
 
 from lumora.audio.demo import make_demo_track
 from lumora.audio.features import AudioFeatures
@@ -53,6 +55,12 @@ def _show(st: AppState, slug: str, show_id: str) -> Show:
         return st.show_store(slug).get(show_id)
     except KeyError:
         raise _404(f"show {show_id!r}")
+
+
+def _download(path: Path, filename: str) -> FileResponse:
+    """A zip built for this one download in its own temp folder, which goes away once it is sent."""
+    cleanup = BackgroundTask(shutil.rmtree, path.parent, ignore_errors=True)
+    return FileResponse(path, media_type="application/zip", filename=filename, background=cleanup)
 
 
 # projects
@@ -103,24 +111,31 @@ async def export_project_file(request: Request, slug: str, songs: bool = True):
 
     st = state(request)
     project = _project(st, slug)
-    out_dir = st.data_dir / "exports"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(tempfile.mkdtemp(prefix="lumora-export-"))
     out = out_dir / f"{slug}.zip"
-    await asyncio.to_thread(export_project, st.projects, st.songs, slug, out, songs)
+    try:
+        await asyncio.to_thread(export_project, st.projects, st.songs, slug, out, songs)
+    except BaseException:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise
     name = re.sub(r"[^\w\- ]+", "", project.name).strip() or slug
-    return FileResponse(out, media_type="application/zip", filename=f"{name}.lumora.zip")
+    return _download(out, f"{name}.lumora.zip")
 
 
 @router.post("/projects/import")
 async def import_project_file(request: Request, file: UploadFile = File(...)):
     """A new project from an exported file; its songs join the library (and get analysed if needed)."""
-    from lumora.storage.transfer import ImportError_, import_project
+    from lumora.storage.transfer import MAX_BYTES, ImportError_, import_project
 
     st = state(request)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "import.zip"
+        size = 0
         with path.open("wb") as fh:
             while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise HTTPException(413, "Archiv zu groß")
                 fh.write(chunk)
         try:
             slug, summary = await asyncio.to_thread(import_project, st.projects, st.songs, path)
@@ -212,8 +227,6 @@ async def put_project(request: Request, slug: str, project: Project):
 
 @router.delete("/projects/{slug}")
 async def delete_project(request: Request, slug: str):
-    import shutil
-
     st = state(request)
     _project(st, slug)
     if st.session.loaded and st.session.loaded.project_slug == slug:
@@ -234,6 +247,8 @@ async def activate(request: Request, slug: str):
 
 
 FLOORPLAN_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+FLOORPLAN_MAX_BYTES = 30 * 1024 * 1024
+SHADER_MAX_BYTES = 256 * 1024
 
 
 @router.post("/projects/{slug}/floorplan")
@@ -248,8 +263,8 @@ async def upload_floorplan(request: Request, slug: str, file: UploadFile = File(
     ext = Path(file.filename or "plan.png").suffix.lower()
     if ext not in FLOORPLAN_TYPES:
         raise HTTPException(422, f"unsupported image type {ext!r}")
-    data = await file.read()
-    if len(data) > 30 * 1024 * 1024:
+    data = await file.read(FLOORPLAN_MAX_BYTES + 1)  # never more than the limit in memory
+    if len(data) > FLOORPLAN_MAX_BYTES:
         raise HTTPException(413, "image larger than 30 MB")
     try:
         import io
@@ -596,8 +611,6 @@ async def show_power(request: Request, slug: str, show_id: str, fps: float = Que
 @router.get("/projects/{slug}/shows/{show_id}/export")
 async def export_show_package(request: Request, slug: str, show_id: str, fps: int = Query(40, ge=10, le=60), audio: bool = True):
     """Zip with FSEQ v2 sequence (xLights / Falcon Player), audio and channel map."""
-    import tempfile
-
     from lumora.output.export import export_show
 
     st = state(request)
@@ -613,8 +626,12 @@ async def export_show_package(request: Request, slug: str, show_id: str, fps: in
     try:
         await asyncio.to_thread(export_show, r, out, fps, st.session.output.brightness, song_path)
     except ValueError as exc:
+        shutil.rmtree(out_dir, ignore_errors=True)
         raise HTTPException(422, str(exc))
-    return FileResponse(out, media_type="application/zip", filename=out.name)
+    except BaseException:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise
+    return _download(out, out.name)
 
 
 @router.get("/projects/{slug}/shows/{show_id}/snapshot.png")
@@ -656,9 +673,15 @@ def get_shader(request: Request, slug: str, name: str):
 async def put_shader(request: Request, slug: str, name: str):
     st = state(request)
     _project(st, slug)
-    source = (await request.body()).decode("utf-8")
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > SHADER_MAX_BYTES:
+            raise HTTPException(413, "shader source too large")
     try:
-        st.show_store(slug).save_shader(name, source)
+        st.show_store(slug).save_shader(name, body.decode("utf-8"))
+    except UnicodeDecodeError:
+        raise HTTPException(422, "shader source must be UTF-8 text")
     except (ShaderError, KeyError) as exc:
         raise HTTPException(422, str(exc))
     await st.shaders_changed(slug)
@@ -1141,7 +1164,7 @@ async def playback_output(request: Request, body: OutputBody):
     for k, v in body.model_dump(exclude_none=True).items():
         setattr(s.output, k, v)
     state(request).save_settings()
-    s._dirty = True
+    s.mark_dirty()
     return s.state()
 
 
@@ -1218,10 +1241,8 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     st.session.clients.add(ws)
     try:
-        import json
-
         await ws.send_text(json.dumps(st.session.state()))
-        st.session._dirty = True
+        st.session.mark_dirty()
         while True:
             await ws.receive_text()  # clients only listen; keep the socket open
     except WebSocketDisconnect:

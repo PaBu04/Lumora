@@ -9,8 +9,11 @@ A shader is a file with
 
 `np`, `math` and the helpers listed in SHADER_API are predefined. The code is checked
 statically (no imports besides numpy/math, no dunder access, no file/OS access,
-no `while`, capped `range`) and executed with a minimal set of builtins. This keeps
-accidental damage out; it is not a security boundary against hostile code.
+no `while`, capped `range`) and executed with a minimal set of builtins; of numpy it
+sees the functions and the submodules random, linalg and fft, not the modules numpy
+itself imports. This keeps accidental damage out and closes the known ways to real
+file or process access - but Python cannot be sandboxed completely from inside, so
+treat shaders from other people (an imported project) like any code you run.
 """
 
 import ast
@@ -18,6 +21,7 @@ import builtins
 import math
 import re
 import time
+import types
 
 import numpy as np
 
@@ -56,6 +60,11 @@ palette_at(pal, x) -> (n,3), hsv(h, s, v) -> (n,3) with h in 0..1, clamp(x, lo=0
 smoothstep(e0, e1, x).
 Return floats 0..1: rgb (n,3) and optionally alpha (n,). No imports, no while loops.
 """
+
+
+class ShaderError(ValueError):
+    pass
+
 
 _SAFE_BUILTINS = {
     name: getattr(builtins, name)
@@ -151,11 +160,66 @@ _FORBIDDEN_ATTRS = {
     "seterr",
     "show_config",
     "format_float_positional",
+    # ways from an object back to the interpreter: frames, code objects, other modules
+    "gi_frame",
+    "gi_code",
+    "cr_frame",
+    "cr_code",
+    "ag_frame",
+    "ag_code",
+    "f_back",
+    "f_globals",
+    "f_builtins",
+    "f_locals",
+    "f_code",
+    "tb_frame",
+    "tb_next",
+    "builtins",
+    "importlib",
+    "import_module",
+    "inspect",
+    "pickle",
+    "subprocess",
+    "shutil",
+    "pathlib",
+    "io",
+    "open",
+    "eval",
+    "exec",
+    "compile",
+    "system",
+    "popen",
+    "cffi",
 }
+# numpy submodules shaders may use; every other module reachable through numpy stays out of reach
+_NUMPY_SUBMODULES = ("random", "linalg", "fft")
 
 
-class ShaderError(ValueError):
-    pass
+class _SafeModule:
+    """A module as shaders see it: its functions, types and constants, but no modules behind it.
+
+    numpy's own modules import builtins, os, inspect and more, so `np.<module>.<...>.builtins.open`
+    was a way to real file access. Attributes that are modules are only handed out for the listed
+    submodules, and those are wrapped the same way."""
+
+    def __init__(self, module, submodules: tuple[str, ...] = ()):
+        object.__setattr__(self, "_module", module)
+        object.__setattr__(self, "_submodules", submodules)
+
+    def __getattr__(self, name: str):
+        value = getattr(self._module, name)
+        if isinstance(value, types.ModuleType):
+            if name not in self._submodules:
+                raise ShaderError(f"module {self._module.__name__}.{name} is not available in shaders")
+            value = _SafeModule(value)
+        object.__setattr__(self, name, value)  # next time a plain attribute lookup
+        return value
+
+    def __setattr__(self, name: str, value) -> None:
+        raise ShaderError("modules cannot be changed from a shader")
+
+    def __dir__(self):
+        return dir(self._module)
 
 
 def _capped_range(*args):
@@ -167,7 +231,7 @@ def _capped_range(*args):
 
 def _restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
     if name in ("numpy", "math"):
-        return {"numpy": np, "math": math}[name]
+        return {"numpy": _NP, "math": math}[name]
     raise ShaderError(f"import of {name!r} is not allowed")
 
 
@@ -195,6 +259,9 @@ def check_source(source: str) -> ast.Module:
     return tree
 
 
+_NP = _SafeModule(np, _NUMPY_SUBMODULES)
+
+
 def _clamp(x, lo=0.0, hi=1.0):
     return np.clip(x, lo, hi)
 
@@ -214,7 +281,7 @@ class Shader:
         self.slow_frames = 0
         self.globals = {
             "__builtins__": {**_SAFE_BUILTINS, "range": _capped_range, "__import__": _restricted_import},
-            "np": np,
+            "np": _NP,
             "math": math,
             "color": parse_color,
             "palette": parse_palette,

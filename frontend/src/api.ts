@@ -65,10 +65,14 @@ export const api = {
   importProject: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return post<{ slug: string; name: string; shows: number; songs_added: string[]; songs_present: string[] }>(
-      "/api/projects/import",
-      fd,
-    );
+    return post<{
+      slug: string;
+      name: string;
+      shows: number;
+      songs_added: string[];
+      songs_present: string[];
+      shaders_refused?: string[];
+    }>("/api/projects/import", fd);
   },
   licenses: () =>
     get<{

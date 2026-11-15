@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 
-from lumora.model.common import Vec2
+from lumora.model.common import FileName, Vec2
 
 
 class Wall(BaseModel):
@@ -35,7 +35,7 @@ def polygon_area(points: list[Vec2]) -> float:
 class FloorplanImage(BaseModel):
     """Photo / blueprint shown under the floor plan editor to trace walls."""
 
-    filename: str
+    filename: FileName
     px_width: int = Field(gt=0)
     px_height: int = Field(gt=0)
     x: float = 0.0  # world position of the image's lower left corner (metres)

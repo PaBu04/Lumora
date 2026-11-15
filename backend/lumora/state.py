@@ -83,7 +83,7 @@ class AppState:
         atomic_write_text(self._settings_file, json.dumps({**self.session.output.to_dict(), **self.settings}, indent=2))
 
     def show_store(self, slug: str) -> ShowStore:
-        if slug not in self.projects.list():
+        if not self.projects.exists(slug):
             raise KeyError(slug)
         return ShowStore(self.projects.project_dir(slug))
 
@@ -94,13 +94,13 @@ class AppState:
             return self.session.loaded.project_slug
         if self._active_file.is_file():
             slug = self._active_file.read_text(encoding="utf-8").strip()
-            if slug in self.projects.list():
+            if self.projects.exists(slug):
                 return slug
         projects = self.projects.list()
         return projects[0] if projects else None
 
     async def activate_project(self, slug: str) -> None:
-        if slug not in self.projects.list():
+        if not self.projects.exists(slug):
             raise KeyError(slug)
         atomic_write_text(self._active_file, slug)
         if not self.session.loaded or self.session.loaded.project_slug != slug:
@@ -110,7 +110,7 @@ class AppState:
         slug = slug or self.active_project
         if not slug:
             raise KeyError("no project exists yet - create one in the app first")
-        if slug not in self.projects.list():
+        if not self.projects.exists(slug):
             raise KeyError(f"unknown project {slug!r}; available: {self.projects.list()}")
         return slug
 

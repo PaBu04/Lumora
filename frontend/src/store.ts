@@ -215,6 +215,8 @@ export const useStore = create<AppStore>((set, get) => ({
         (r.songs_present.length ? `, ${r.songs_present.length} schon vorhanden` : ""),
       "success",
     );
+    if (r.shaders_refused?.length)
+      get().notify(`Nicht übernommen, weil ihr Code die Prüfung nicht besteht: eigene Effekte ${r.shaders_refused.join(", ")}`);
   },
 
   createProject: async (name, copyFrom, copyShows) => {

@@ -2,6 +2,7 @@
 
 import asyncio
 import math
+import re
 import socket
 import weakref
 
@@ -40,9 +41,25 @@ async def warm_client() -> None:
         _clients.setdefault(loop, client)
 
 
+# a host name or IPv4 address, optionally with a port - nothing that could carry a path, a query,
+# credentials or another scheme into the URL the app requests
+_HOST_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::\d{1,5})?")
+
+
+def base_url(host: str) -> str:
+    """http://<host> for a controller address; ValueError for anything that is not a plain address.
+
+    The address comes from the user, a project file or a query parameter, and the app then sends requests
+    there - so it must not be able to name a path on some other device in the network."""
+    host = host.strip().removeprefix("http://").rstrip("/")  # what people paste from the browser
+    if not _HOST_RE.fullmatch(host):
+        raise ValueError(f"not a host name or IP address: {host[:80]!r}")
+    return f"http://{host}"
+
+
 async def fetch_info(host: str, timeout: float = 2.0) -> dict:
     """Summary of a WLED device from /json/info."""
-    r = await _client().get(f"http://{host}/json/info", timeout=timeout)
+    r = await _client().get(f"{base_url(host)}/json/info", timeout=timeout)
     r.raise_for_status()
     info = r.json()
     leds = info.get("leds", {})
@@ -106,7 +123,7 @@ def estimate_fps(buses: list[dict]) -> float:
 
 async def fetch_config(host: str, timeout: float = 3.0) -> dict:
     """LED outputs and settings from /json/cfg that limit realtime output."""
-    r = await _client().get(f"http://{host}/json/cfg", timeout=timeout)
+    r = await _client().get(f"{base_url(host)}/json/cfg", timeout=timeout)
     r.raise_for_status()
     cfg = r.json()
     buses = []
@@ -170,7 +187,7 @@ async def controller_status(host: str, pixels: int, sent_fps: float, live: bool,
 
 
 async def set_state(host: str, state: dict, timeout: float = 2.0) -> dict:
-    r = await _client().post(f"http://{host}/json/state", json=state, timeout=timeout)
+    r = await _client().post(f"{base_url(host)}/json/state", json=state, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
@@ -213,7 +230,7 @@ async def discover(seconds: float = 3.0) -> list[dict]:
 
 def resolve_host(host: str) -> str:
     """IP for a host name (DDP is sent to the IP to avoid per-packet DNS lookups)."""
-    name = host.split(":")[0]
+    name = host.strip().split(":")[0]
     try:
         return socket.gethostbyname(name)
     except OSError:

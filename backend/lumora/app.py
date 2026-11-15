@@ -28,7 +28,14 @@ class LocalOnly:
     posts and file uploads and opens WebSockets; DNS rebinding even makes such a site look like the same
     origin. So a request must name a local host (while the app listens on localhost), and a browser request
     must come from the app's own origin. Clients without an Origin header (Claude Code, scripts) pass.
+
+    Plain GET requests carry no Origin header (a link, an <img> on another site), and some of the API's
+    GETs do things: /api/devices/info makes the app call a host of the caller's choice. Browsers mark
+    those requests with Sec-Fetch-Site, so the API, the MCP endpoint and the WebSocket also refuse
+    everything a browser says comes from another site. Opening the app itself from a link still works.
     """
+
+    PROTECTED = ("/api/", "/mcp", "/ws")
 
     def __init__(self, app, check_host: bool):
         self.app = app
@@ -40,7 +47,10 @@ class LocalOnly:
             host = headers.get("host", "")
             origin = headers.get("origin")
             foreign_host = self.check_host and urlsplit(f"//{host}").hostname not in LOCAL_HOSTS
-            if foreign_host or (origin is not None and urlsplit(origin).netloc != host):
+            foreign_site = headers.get("sec-fetch-site") in ("cross-site", "same-site") and scope["path"].startswith(
+                self.PROTECTED
+            )
+            if foreign_host or foreign_site or (origin is not None and urlsplit(origin).netloc != host):
                 if scope["type"] == "websocket":
                     await WebSocketClose(code=1008)(scope, receive, send)
                 else:
