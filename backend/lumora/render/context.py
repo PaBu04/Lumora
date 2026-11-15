@@ -49,6 +49,10 @@ class LedView:
         self.spatial = spatial
         self.idx = idx
         self.n = len(idx)
+        # how to address these LEDs in a frame: a slice when they are one contiguous run (a whole
+        # fixture, all LEDs) - reading and writing a slice is much cheaper than an index array
+        contiguous = self.n > 0 and int(idx[-1]) - int(idx[0]) + 1 == self.n and bool(np.all(np.diff(idx) == 1))
+        self.sel: slice | np.ndarray = slice(int(idx[0]), int(idx[-1]) + 1) if contiguous else idx
         self._coord_cache: dict = {}
 
     @cached_property

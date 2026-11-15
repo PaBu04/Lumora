@@ -47,6 +47,23 @@ def _hash01(n: int, seed: int) -> np.ndarray:
     return (x & np.uint64(0xFFFF)).astype(np.float32) / 65536.0
 
 
+@dataclass
+class _PlanLayout:
+    """What never changes between frames for one controller: its pixels grouped by LED type."""
+
+    groups: list[tuple[int, np.ndarray | None]]  # (LED type, its pixels); None = every pixel
+    white: list[tuple[int, np.ndarray]]  # (type, pixels whose white channel is extracted)
+    idle_ma: float
+
+
+def _groups(types: np.ndarray) -> list[tuple[int, np.ndarray | None]]:
+    """Pixels per LED type; a single type selects everything without an index array."""
+    present = np.unique(types)
+    if len(present) == 1:
+        return [(int(present[0]), None)]
+    return [(int(k), np.flatnonzero(types == k)) for k in present]
+
+
 class OutputPipeline:
     def __init__(self, project: Project, table: LedTable):
         self.project = project
@@ -59,59 +76,66 @@ class OutputPipeline:
             else np.zeros(0, np.int8)
         )
         self.cal: list[LedCalibration] = [project.calibration[t] for t in LED_TYPES]
+        self._dither = any(cal.dithering != "none" for cal in self.cal)
+        self._table_groups = _groups(self.led_type_idx) if table.count else []
+        self._layouts = {id(plan): self._layout(plan) for plan in self.plans}
         self._residual: dict[str, np.ndarray] = {}
         self._spatial: dict[str, np.ndarray] = {}
+
+    def _layout(self, plan: ControllerPlan) -> _PlanLayout:
+        types = np.zeros(plan.pixel_count, np.int8)  # per controller pixel; unmapped pixels count as type 0
+        if plan.pixel_count:
+            types[plan.pixel_idx] = self.led_type_idx[plan.table_idx]
+        groups = _groups(types) if plan.pixel_count else []
+        white = []
+        if plan.controller.rgbw:
+            for k in range(len(self.cal)):
+                sel = np.flatnonzero(plan.white_mask & (types == k))
+                if len(sel):
+                    white.append((k, sel))
+        idle = float(sum(int((types == k).sum()) * cal.ma_idle for k, cal in enumerate(self.cal)))
+        return _PlanLayout(groups, white, idle)
 
     # --- conversion -------------------------------------------------------------------
 
     def frame_to_pwm(self, frame: np.ndarray, brightness: float = 1.0) -> np.ndarray:
         """Perceived RGB for every LED -> PWM floats (N, 3)."""
         v = frame * brightness if brightness != 1.0 else frame
+        if len(self._table_groups) == 1:  # one LED type in the room: no selection needed
+            return to_pwm(v, self.cal[self._table_groups[0][0]])
         out = np.zeros_like(v, dtype=np.float32)
-        for k, cal in enumerate(self.cal):
-            sel = self.led_type_idx == k
-            if sel.any():
-                out[sel] = to_pwm(v[sel], cal)
+        for k, sel in self._table_groups:
+            out[sel] = to_pwm(v[sel], self.cal[k])
         return out
 
-    def _plan_pwm(self, plan: ControllerPlan, pwm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Controller pixel buffer (pixels, 3 or 4) as floats and the per-pixel LED type."""
+    def _plan_pwm(self, plan: ControllerPlan, pwm: np.ndarray) -> np.ndarray:
+        """Controller pixel buffer (pixels, 3 or 4) as floats."""
         ch = 4 if plan.controller.rgbw else 3
         buf = np.zeros((plan.pixel_count, ch), np.float32)
-        types = np.zeros(plan.pixel_count, np.int8)
         if plan.pixel_count:
             buf[plan.pixel_idx, :3] = pwm[plan.table_idx]
-            types[plan.pixel_idx] = self.led_type_idx[plan.table_idx]
-        if ch == 4 and plan.white_mask.any():
-            for k, cal in enumerate(self.cal):
-                sel = plan.white_mask & (types == k)
-                if sel.any():
-                    rgb, w = extract_white(buf[sel, :3], cal)
-                    buf[sel, :3] = rgb
-                    buf[sel, 3] = w
-        return buf, types
+        for k, sel in self._layouts[id(plan)].white:
+            rgb, w = extract_white(buf[sel, :3], self.cal[k])
+            buf[sel, :3] = rgb
+            buf[sel, 3] = w
+        return buf
 
-    def estimate_ma(self, buf: np.ndarray, types: np.ndarray) -> float:
-        ma = 0.0
-        for k, cal in enumerate(self.cal):
-            sel = types == k
-            n = int(sel.sum())
-            if n:
-                ma += n * cal.ma_idle + float(buf[sel].sum()) / 255.0 * cal.ma_per_channel
+    def _estimate_ma(self, buf: np.ndarray, layout: _PlanLayout) -> float:
+        ma = layout.idle_ma
+        for k, sel in layout.groups:
+            ma += float((buf if sel is None else buf[sel]).sum()) / 255.0 * self.cal[k].ma_per_channel
         return ma
 
-    def _idle_ma(self, types: np.ndarray) -> float:
-        return float(sum(int((types == k).sum()) * cal.ma_idle for k, cal in enumerate(self.cal)))
-
-    def _quantise(self, key: str, buf: np.ndarray, types: np.ndarray) -> bytes:
-        modes = {cal.dithering for cal in self.cal}
-        if modes == {"none"}:
+    def _quantise(self, key: str, buf: np.ndarray, layout: _PlanLayout) -> bytes:
+        if not self._dither:
             return (np.clip(buf, 0, 255) + 0.5).astype(np.uint8).tobytes()
         out = np.floor(np.clip(buf, 0, 255) + 0.5)
-        for k, cal in enumerate(self.cal):
-            sel = types == k
-            if not sel.any() or cal.dithering == "none":
+        for k, sel in layout.groups:
+            cal = self.cal[k]
+            if cal.dithering == "none":
                 continue
+            if sel is None:
+                sel = slice(None)
             vals = buf[sel]
             if cal.dithering == "spatial":
                 if key not in self._spatial or len(self._spatial[key]) != len(buf):
@@ -147,14 +171,15 @@ class OutputPipeline:
             key = id(frame)
             if key not in cache:  # keep the frame alive so its id cannot be reused
                 cache[key] = (frame, frame.astype(np.float32) if raw else self.frame_to_pwm(frame, brightness))
-            buf, types = self._plan_pwm(plan, cache[key][1])
-            ma = self.estimate_ma(buf, types)
+            layout = self._layouts[id(plan)]
+            buf = self._plan_pwm(plan, cache[key][1])
+            ma = self._estimate_ma(buf, layout)
             scale = 1.0
             budget = plan.controller.budget_ma
-            idle = self._idle_ma(types)
+            idle = layout.idle_ma
             if budget and ma > budget:
                 scale = max(0.0, (budget - idle) / max(ma - idle, 1e-6))
-            staged.append([plan, buf, types, ma, scale, idle])
+            staged.append([plan, buf, layout, ma, scale, idle])
 
         total_budget = self.project.power.total_budget_ma
         if total_budget:
@@ -166,13 +191,13 @@ class OutputPipeline:
                     s[4] *= extra
 
         outputs, stats = [], FrameStats()
-        for plan, buf, types, ma, scale, idle in staged:
+        for plan, buf, layout, ma, scale, idle in staged:
             if only is not None and plan.controller.id not in only:
                 data = b""
             else:
                 if scale < 1.0:
                     buf = buf * scale
-                data = self._quantise(plan.controller.id, buf, types)
+                data = self._quantise(plan.controller.id, buf, layout)
             limited_ma = idle + (ma - idle) * scale
             outputs.append(ControllerOutput(plan, data, limited_ma, ma, scale))
             stats.total_ma += limited_ma

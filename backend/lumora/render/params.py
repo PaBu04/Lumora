@@ -1,5 +1,6 @@
 """Effect parameter specs and the compilation of (possibly dynamic) parameter values."""
 
+import bisect
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -219,7 +220,7 @@ def compile_param(p: Param, value: Any) -> Compiled:
             return pts[0][1]
         if t >= times[-1]:
             return pts[-1][1]
-        i = int(np.searchsorted(times, t, side="right") - 1)
+        i = bisect.bisect_right(times, t) - 1
         (t0, a), (t1, b) = pts[i], pts[i + 1]
         return _interp_values(p, a, b, _ease((t - t0) / (t1 - t0), ease))
 

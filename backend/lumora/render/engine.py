@@ -165,8 +165,7 @@ class Renderer:
                 cc.disabled = True
                 self.errors[c.id] = f"runtime error at t={t:.2f}s: {exc}"
                 continue
-            a = np.full(cc.view.n, env, np.float32) if alpha is None else alpha * env
-            _blend(frame, cc.view.idx, rgb, a, c.blend)
+            _blend(frame, cc.view.sel, rgb, np.float32(env) if alpha is None else (alpha * env)[:, None], c.blend)
         np.clip(frame, 0.0, 1.0, out=frame)
         gain = self.show.master
         if self.show.dynamics > 0:
@@ -181,9 +180,9 @@ def dynamics_gain(loudness: float, amount: float) -> float:
     return 1.0 - amount * (1.0 - min(max(loudness, 0.0), 1.0) ** 2)
 
 
-def _blend(frame: np.ndarray, idx: np.ndarray, rgb: np.ndarray, a: np.ndarray, mode: str) -> None:
-    dst = frame[idx]
-    a = a[:, None]
+def _blend(frame: np.ndarray, sel: slice | np.ndarray, rgb: np.ndarray, a, mode: str) -> None:
+    """Blend `rgb` into the LEDs `sel` of the frame; `a` is one opacity or a column (n, 1) of them."""
+    dst = frame[sel]
     match mode:
         case "normal":
             dst = dst * (1 - a) + rgb * a
@@ -195,4 +194,4 @@ def _blend(frame: np.ndarray, idx: np.ndarray, rgb: np.ndarray, a: np.ndarray, m
             dst = dst * (1 - a + rgb * a)
         case "subtract":
             dst = np.maximum(dst - rgb * a, 0)
-    frame[idx] = dst
+    frame[sel] = dst

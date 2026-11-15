@@ -35,16 +35,37 @@ def _fill(color: np.ndarray, n: int) -> np.ndarray:
     return np.broadcast_to(color.astype(np.float32), (n, 3)).copy()
 
 
+_HASH_SEED = np.uint32(2166136261)
+_HASH_P1, _HASH_P2 = np.uint32(16777619), np.uint32(0x5BD1E995)
+_HASH_S1, _HASH_S2 = np.uint32(13), np.uint32(15)
+_HASH_MASK, _HASH_SCALE = np.uint32(0xFFFFFF), np.float32(0x1000000)
+
+
+def _mix(h, a):
+    """One round of the hash: fold the integers `a` into the state `h` (uint32, wrapping).
+
+    Never changes `h` itself, so a state can be reused for several continuations (see _value_noise).
+    Callers wrap it in np.errstate(over="ignore"): scalar states overflow on purpose."""
+    h = h ^ np.asarray(a).astype(np.uint32)
+    h *= _HASH_P1
+    h ^= h >> _HASH_S1
+    h *= _HASH_P2
+    h ^= h >> _HASH_S2
+    return h
+
+
+def _unit(h) -> np.ndarray:
+    """Hash state -> float 0..1."""
+    return (h & _HASH_MASK).astype(np.float32) / _HASH_SCALE
+
+
 def _hash(*arrays) -> np.ndarray:
     """Deterministic pseudo-random 0..1 from integer arrays (vectorised)."""
-    h = np.uint32(2166136261)
+    h = _HASH_SEED
     with np.errstate(over="ignore"):
         for a in arrays:
-            h = (h ^ np.asarray(a).astype(np.uint32)) * np.uint32(16777619)
-            h ^= h >> np.uint32(13)
-            h *= np.uint32(0x5BD1E995)
-            h ^= h >> np.uint32(15)
-    return (h & np.uint32(0xFFFFFF)).astype(np.float32) / np.float32(0x1000000)
+            h = _mix(h, a)
+    return _unit(h)
 
 
 def _since_trigger(ctx: RenderContext, trigger: str) -> float:
@@ -81,11 +102,16 @@ def _events(ctx: RenderContext, trigger: str, window: float) -> Events:
 def _envelope(age, duration, decay: float, sustain: bool):
     """Level of an event `age` seconds after it started: 1, then exponential decay (after the
     event's duration when sustaining)."""
+    if np.ndim(age) == 0 and np.ndim(duration) == 0:  # one event: plain floats are much faster than numpy scalars
+        hold = float(duration) if sustain else 0.0
+        return 1.0 if age < hold else math.exp(-max(float(age) - hold, 0.0) / decay)
     hold = np.where(sustain, duration, 0.0)
     return np.where(age < hold, 1.0, np.exp(-np.maximum(age - hold, 0.0) / decay))
 
 
 def _velocity(strength, amount: float):
+    if np.ndim(strength) == 0:
+        return 1.0 - amount * (1.0 - min(max(float(strength), 0.0), 1.0))
     return 1.0 - amount * (1.0 - np.clip(strength, 0.0, 1.0))
 
 
@@ -358,6 +384,7 @@ class Hits(Effect):
                 continue
             ev = round(float(tk) * 1000)
             picks = _hash(np.full(count, ev), np.arange(count), ctx.seed)
+            colour_keys = _hash(np.full(count, ev), np.arange(count), ctx.seed + 7)
             if by_pitch and pk > 0:
                 x = min(max((pk - lo) / (hi - lo), 0.0), 1.0)
                 picks = np.clip(x + (picks - 0.5) * 0.08, 0.0, 0.999)  # small spread around the note's place
@@ -375,7 +402,7 @@ class Hits(Effect):
                 sel = np.flatnonzero(inside)
                 better = lv > level[sel]
                 level[sel[better]] = lv[better]
-                key[sel[better]] = _hash(np.array([ev]), np.array([j]), ctx.seed + 7)[0]
+                key[sel[better]] = colour_keys[j]
         rgb = palette_at(p["palette"], key) * p["brightness"]
         return rgb.astype(np.float32), level
 
@@ -578,11 +605,18 @@ def _value_noise(p: np.ndarray, seed: int) -> np.ndarray:
     f = p - i
     f = f * f * (3 - 2 * f)
     out = np.zeros(len(p), np.float32)
-    for dx in (0, 1):
-        for dy in (0, 1):
-            for dz in (0, 1):
-                w = (f[:, 0] if dx else 1 - f[:, 0]) * (f[:, 1] if dy else 1 - f[:, 1]) * (f[:, 2] if dz else 1 - f[:, 2])
-                out += w * _hash(i[:, 0] + dx, i[:, 1] + dy, i[:, 2] + dz, seed)
+    # weights and lattice coordinates of both cell sides per axis; the hash of a corner is built
+    # axis by axis, so corners that share x (and y) share those rounds
+    weights = [(1 - f[:, k], f[:, k]) for k in range(3)]
+    cells = [(i[:, k], i[:, k] + 1) for k in range(3)]
+    with np.errstate(over="ignore"):
+        for dx in (0, 1):
+            hx = _mix(_HASH_SEED, cells[0][dx])
+            for dy in (0, 1):
+                hxy = _mix(hx, cells[1][dy])
+                wxy = weights[0][dx] * weights[1][dy]
+                for dz in (0, 1):
+                    out += wxy * weights[2][dz] * _unit(_mix(_mix(hxy, cells[2][dz]), seed))
     return out
 
 
